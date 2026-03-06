@@ -1,0 +1,43 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Database — async ORM + driver
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Templating
+jinja2==3.1.6
+pyyaml==6.0.3
+
+# Git integration
+gitpython==3.1.46
+
+# Configuration & validation
+pydantic-settings==2.6.1
+pydantic[email]==2.10.3
+python-dotenv==1.0.1
+
+# Auth — JWT + encryption
+python-jose[cryptography]==3.3.0
+cryptography==44.0.0
+bcrypt==5.0.0
+python-multipart==0.0.22
+
+# Rate limiting
+slowapi==0.1.9
+
+# LDAP authentication (optional — only used when LDAP_SERVER is set)
+ldap3==2.9.1
+
+# Vault integration (optional — only used when VAULT_ADDR is set)
+hvac==2.3.0
+
+# Data source / HTTP
+httpx==0.28.1
+jsonpath-ng==1.7.0
+
+# Testing
+pytest==9.0.2
+pytest-asyncio==1.3.0

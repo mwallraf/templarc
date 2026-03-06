@@ -1,0 +1,12 @@
+.venv/
+.git/
+.claude/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+tests/
+frontend/
+*.md
+.env
+.gitignore

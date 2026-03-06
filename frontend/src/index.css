@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+@theme {
+  /* Typography */
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-display: "Syne", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+
+  /* Custom dark palette */
+  --color-app-base: #080a12;
+  --color-app-surface: #0d1021;
+  --color-app-card: #141828;
+  --color-app-elevated: #1c2235;
+  --color-app-hover: #232840;
+  --color-app-border: #1e2440;
+  --color-app-border-bright: #2a3255;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #080a12;
+  color: #e2e8f4;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Custom scrollbar ────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a3255;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4470;
+}
+
+/* ── Utility classes ─────────────────────────────────────────────── */
+
+.font-display {
+  font-family: "Syne", system-ui, sans-serif;
+}
+
+/* Subtle grid background pattern */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Glow effect for accents */
+.glow-indigo {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+}
+
+/* Sidebar gradient overlay */
+.sidebar-gradient {
+  background: linear-gradient(180deg, #0d1021 0%, #0a0d1c 100%);
+}
+
+/* Card hover glow */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15), 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Active nav indicator */
+.nav-active-indicator {
+  position: relative;
+}
+
+.nav-active-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: #6366f1;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Code block styling */
+.code-block {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* Badge pill base */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+/* Animated gradient for loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #1c2235 25%, #232840 50%, #1c2235 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}

@@ -1,0 +1,140 @@
+# ─── Development overlay ──────────────────────────────────────────────────────
+#
+# Apply on top of docker-compose.yml for local development:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# What this adds over the production compose:
+#   • OpenLDAP (bitnami/openldap) with a pre-seeded admin/admin account
+#   • API built from the "dev" Dockerfile stage (--reload, source bind-mount)
+#   • Frontend built from the "dev" stage (Vite HMR dev server on :5173)
+#   • Database port 5432 exposed to the host for psql / pgAdmin / MCP tools
+#   • LDAP port 389 exposed to the host for ldapsearch / LDAP browser tools
+#   • API port 8000 exposed to the host for direct curl / Swagger access
+#   • Dev-friendly env: SEED_ON_STARTUP, ALLOW_PRIVATE_DATASOURCE_URLS, etc.
+#
+# ─── Credentials ─────────────────────────────────────────────────────────────
+#   App login (LDAP):   username=admin  password=admin
+#   JWT secret:         dev-secret-key-do-not-use-in-production
+#   DB:                 templarc / templarcpwd
+#   LDAP dir manager:   cn=manager,dc=templarc,dc=dev / manager
+#
+# ─── Endpoints ───────────────────────────────────────────────────────────────
+#   Frontend:  http://localhost:5173   (Vite dev server — HMR enabled)
+#   API:       http://localhost:8000
+#   API Docs:  http://localhost:8000/docs
+#   LDAP:      ldap://localhost:389
+#
+# ─── Quick smoke test ────────────────────────────────────────────────────────
+#   curl -s -X POST http://localhost:8000/auth/login \
+#        -H 'Content-Type: application/json' \
+#        -d '{"username":"admin","password":"admin"}' | jq .
+
+services:
+
+  # ── Postgres: expose port to host so local tools can connect ───────────────
+  db:
+    ports:
+      - "5432:5432"
+
+  # ── OpenLDAP ───────────────────────────────────────────────────────────────
+  # bitnami/openldap bootstraps the directory on first start using the env
+  # vars below. The memberOf overlay is enabled by default, so the 'admin'
+  # user will have memberOf: cn=users,ou=groups,dc=templarc,dc=dev —
+  # which matches LDAP_ADMIN_GROUP and grants is_admin=True in the API.
+  ldap:
+    image: bitnamilegacy/openldap
+    restart: unless-stopped
+    environment:
+      LDAP_ROOT: dc=templarc,dc=dev
+      # Directory manager (used for admin LDAP operations, not app login)
+      LDAP_ADMIN_USERNAME: manager
+      LDAP_ADMIN_PASSWORD: manager
+      # Application test user: uid=admin,ou=users,dc=templarc,dc=dev
+      # App authenticates as: uid=<username>,ou=users,dc=templarc,dc=dev
+      LDAP_USERS: admin
+      LDAP_PASSWORDS: admin
+      LDAP_USER_OU: users    # users live under ou=users,<root>
+      LDAP_GROUP_OU: groups  # groups live under ou=groups,<root> (matches LDAP_ADMIN_GROUP)
+      LDAP_GROUP: users    # auto-adds user to cn=users,ou=groups,<root>
+    ports:
+      # bitnami/openldap listens on 1389 internally (unprivileged).
+      - "389:1389"
+    healthcheck:
+      # Wait until slapd accepts TCP connections before declaring healthy.
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/1389"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    volumes:
+      - openldap_data:/bitnami/openldap
+    networks:
+      - backend
+
+  # ── API: dev build with hot-reload and full source bind-mount ──────────────
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: dev        # uses the dev stage (no source COPY; expects bind-mount)
+    environment:
+      # ── Database ─────────────────────────────────────────────────────────
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-templarc}:${POSTGRES_PASSWORD:-templarcpwd}@db:5432/${POSTGRES_DB:-templarc}
+
+      # ── Auth ─────────────────────────────────────────────────────────────
+      # Fixed dev secret — change this before going anywhere near production.
+      SECRET_KEY: dev-secret-key-do-not-use-in-production
+
+      # ── LDAP (points to the ldap service above) ───────────────────────────
+      LDAP_SERVER:      ldap://ldap:1389
+      LDAP_BASE_DN:     ou=users,dc=templarc,dc=dev
+      LDAP_ADMIN_GROUP: cn=users,ou=groups,dc=templarc,dc=dev
+
+      # ── Dev conveniences ──────────────────────────────────────────────────
+      SEED_ON_STARTUP:               "true"
+      ALLOW_PRIVATE_DATASOURCE_URLS: "true"
+      # Allow both the Vite dev server origin and direct API access from host.
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:8080"]'
+
+      TEMPLATES_REPO_PATH: /app/templates_repo
+
+    # Bind-mount the entire project so --reload picks up all file changes.
+    # Python packages remain in the image layer (/usr/local/lib) and are
+    # NOT overwritten by this mount.
+    volumes:
+      - .:/app
+
+    # Expose API directly so Swagger UI and curl work without the frontend proxy.
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+    depends_on:
+      ldap:
+        condition: service_healthy
+
+  # ── Frontend: Vite dev server with HMR ────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev        # Vite dev server; no nginx, no static build
+    environment:
+      # Vite reads this at server-start time (not build time) to point the
+      # /api proxy at the 'api' Docker service instead of localhost.
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      # Bind-mount source for HMR — changes on the host appear instantly.
+      - ./frontend:/app
+      # Preserve the container's node_modules; prevents the host bind-mount
+      # from shadowing the packages installed during image build.
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - backend
+
+volumes:
+  openldap_data:

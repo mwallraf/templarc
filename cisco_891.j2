@@ -1,0 +1,143 @@
+---
+# ============================================================
+# Template: Cisco 891 CPE Router Provisioning
+# Inherits: cisco_base > cpe_base
+# Project: router_provisioning
+# ============================================================
+#
+# GLOBAL PARAMETERS (injected automatically, do not define here):
+#   glob.company_name, glob.ntp_server, glob.dns_primary,
+#   glob.dns_secondary, glob.tacacs_server, glob.syslog_server
+#
+# PROJECT PARAMETERS (injected automatically for this project):
+#   proj.default_vrf, proj.as_number, proj.loopback_range,
+#   proj.mgmt_community_ro, proj.mgmt_community_rw
+#
+# TEMPLATE-LOCAL PARAMETERS (defined below):
+
+parameters:
+  - name: router.hostname
+    widget: text
+    label: "Router Hostname"
+    description: "FQDN of the router (e.g. cpe-amsterdam-01.company.com)"
+    help_text: "Use format: cpe-{city}-{seq}.{domain}"
+    required: true
+
+  - name: router.loopback_ip
+    widget: text
+    label: "Loopback IP"
+    description: "Loopback0 IP address (from proj.loopback_range)"
+    required: true
+
+  - name: core.bandwidth_mb
+    widget: number
+    label: "Bandwidth (Mbps)"
+    description: "Customer bandwidth in Megabits per second"
+    required: true
+    default_value: 100
+
+  - name: core.interface_type
+    widget: select
+    label: "WAN Interface Type"
+    required: true
+    options:
+      - value: "GigabitEthernet0"
+        label: "Gigabit Ethernet (1G)"
+      - value: "FastEthernet0"
+        label: "Fast Ethernet (100M)"
+
+  - name: router.site_id
+    widget: readonly
+    label: "Site ID (from CMDB)"
+    description: "Auto-filled from CMDB based on hostname"
+
+  - name: router.available_subnets
+    widget: select
+    label: "WAN Subnet"
+    description: "Available subnets from IPAM"
+    required: true
+
+# REMOTE DATA SOURCES
+data_sources:
+  - id: cmdb_lookup
+    url: "https://cmdb.company.com/api/devices/?hostname={{ router.hostname }}"
+    auth: "secret:cmdb_api"
+    trigger: on_change:router.hostname
+    on_error: warn
+    cache_ttl: 300
+    mapping:
+      - remote_field: "results[0].site.id"
+        to_parameter: router.site_id
+        auto_fill: true
+      - remote_field: "results[0].custom_fields.loopback_suggestion"
+        to_parameter: router.loopback_ip
+        auto_fill: false  # suggest but let user confirm
+
+  - id: ipam_subnets
+    url: "https://netbox.company.com/api/ipam/prefixes/?site_id={{ router.site_id }}&role=wan"
+    auth: "secret:netbox_api"
+    trigger: on_change:router.site_id
+    on_error: warn
+    cache_ttl: 120
+    mapping:
+      - remote_field: "results[*].prefix"
+        to_parameter: router.available_subnets
+        widget_override: select
+---
+!
+! ============================================================
+! {{ glob.company_name }} — CPE Router Configuration
+! Device: {{ router.hostname }}
+! Generated: {% now 'utc', '%Y-%m-%d %H:%M UTC' %}
+! Template: cisco_891 (inherits: cisco_base > cpe_base)
+! ============================================================
+!
+version 15.7
+hostname {{ router.hostname.split('.')[0] }}
+!
+! === MANAGEMENT ===
+ip domain-name {{ router.hostname.split('.')[1:] | join('.') }}
+!
+ntp server {{ glob.ntp_server }}
+ntp update-calendar
+!
+logging host {{ glob.syslog_server }}
+logging trap informational
+!
+! === INTERFACES ===
+interface Loopback0
+ description Management Loopback
+ ip address {{ router.loopback_ip }} 255.255.255.255
+!
+interface {{ core.interface_type }}
+ description WAN — {{ glob.company_name }} — Site {{ router.site_id }}
+ ip address {{ router.available_subnets | first_host }} {{ router.available_subnets | subnet_mask }}
+ ip access-group ACL-WAN-IN in
+ bandwidth {{ core.bandwidth_mb | mb_to_kbps }}
+ no shutdown
+!
+! === ROUTING ===
+ip vrf {{ proj.default_vrf }}
+!
+router bgp {{ proj.as_number }}
+ bgp log-neighbor-changes
+ neighbor {{ router.available_subnets | gateway }} remote-as 65000
+ !
+ address-family ipv4
+  network {{ router.loopback_ip }} mask 255.255.255.255
+  neighbor {{ router.available_subnets | gateway }} activate
+ exit-address-family
+!
+! === SNMP ===
+snmp-server community {{ proj.mgmt_community_ro }} RO
+snmp-server community {{ proj.mgmt_community_rw }} RW
+snmp-server location Site-{{ router.site_id }}
+snmp-server contact noc@{{ glob.company_name | lower | replace(' ', '') }}.com
+!
+! === AAA ===
+aaa new-model
+tacacs server PRIMARY
+ address ipv4 {{ glob.tacacs_server }}
+ key {{ proj.tacacs_key }}
+!
+end
