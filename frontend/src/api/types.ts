@@ -1,6 +1,6 @@
 // ── Enums ──────────────────────────────────────────────────────────────────
 
-export type ParameterScope = 'global' | 'project' | 'template'
+export type ParameterScope = 'global' | 'project' | 'template' | 'feature'
 
 export type WidgetType =
   | 'text'
@@ -280,14 +280,122 @@ export interface RenderPresetCreate {
   params: Record<string, unknown>
 }
 
+// ── Features ────────────────────────────────────────────────────────────────
+
+export interface FeatureParamOut {
+  name: string
+  widget_type: string
+  label?: string
+  description?: string
+  help_text?: string
+  default_value?: string
+  required: boolean
+  sort_order: number
+  options?: { value: string; label: string }[]
+}
+
+export interface AvailableFeatureOut {
+  id: number
+  name: string
+  label: string
+  description?: string
+  is_default: boolean
+  sort_order: number
+  parameters: FeatureParamOut[]
+}
+
+export interface FeatureParameterOut {
+  id: number
+  name: string
+  widget_type: string
+  label?: string
+  description?: string
+  help_text?: string
+  default_value?: string
+  required: boolean
+  sort_order: number
+  is_active: boolean
+  is_derived: boolean
+  derived_expression?: string
+  validation_regex?: string
+  options: { value: string; label: string; sort_order: number }[]
+}
+
+export interface FeatureOut {
+  id: number
+  project_id: number
+  name: string
+  label: string
+  description?: string
+  snippet_path?: string
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  parameters: FeatureParameterOut[]
+}
+
+export interface FeatureListOut {
+  items: FeatureOut[]
+  total: number
+}
+
+export interface FeatureCreate {
+  project_id: number
+  name: string
+  label: string
+  description?: string
+  sort_order?: number
+}
+
+export interface FeatureUpdate {
+  label?: string
+  description?: string
+  sort_order?: number
+  is_active?: boolean
+}
+
+export interface FeatureBodyUpdate {
+  body: string
+  commit_message?: string
+  author?: string
+}
+
+export interface FeatureParameterCreate {
+  name: string
+  widget_type?: string
+  label?: string
+  description?: string
+  help_text?: string
+  default_value?: string
+  required?: boolean
+  sort_order?: number
+}
+
+export interface TemplateFeatureOut {
+  id: number
+  template_id: number
+  feature_id: number
+  is_default: boolean
+  sort_order: number
+  feature: FeatureOut
+}
+
+export interface TemplateFeatureUpdate {
+  is_default?: boolean
+  sort_order?: number
+}
+
 export interface FormDefinitionOut {
   template_id: number
   parameters: EnrichedParameterOut[]
   inheritance_chain: string[]
+  features: AvailableFeatureOut[]
 }
 
 export interface RenderRequest {
   params?: Record<string, unknown>
+  feature_ids?: number[]
   notes?: string
 }
 

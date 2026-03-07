@@ -34,6 +34,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.secrets import SecretResolver
+from api.models.feature import Feature, TemplateFeature
+from api.models.parameter import Parameter
 from api.models.project import Project
 from api.models.render_history import RenderHistory
 from api.models.template import Template
@@ -80,11 +82,38 @@ class EnrichedParameter:
 
 
 @dataclass
+class AvailableFeatureParam:
+    """A parameter belonging to an available feature."""
+    name: str
+    widget_type: str
+    label: str | None
+    description: str | None
+    help_text: str | None
+    default_value: str | None
+    required: bool
+    sort_order: int
+    options: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class AvailableFeature:
+    """A feature available for selection in the render form."""
+    id: int
+    name: str
+    label: str
+    description: str | None
+    is_default: bool
+    sort_order: int
+    parameters: list[AvailableFeatureParam] = field(default_factory=list)
+
+
+@dataclass
 class FormDefinition:
     """Result of resolve_params_for_form — ready to drive a dynamic UI form."""
     template_id: int
     parameters: list[EnrichedParameter]
     inheritance_chain: list[str]
+    features: list[AvailableFeature] = field(default_factory=list)
 
 
 @dataclass
@@ -360,10 +389,14 @@ class TemplateRenderer:
         # 6. Build EnrichedParameter list
         enriched = _enrich_parameters(resolution.parameters, enrichments)
 
+        # 7. Load available features for this template
+        available_features = await self._load_available_features(template_id)
+
         return FormDefinition(
             template_id=template_id,
             parameters=enriched,
             inheritance_chain=resolution.inheritance_chain,
+            features=available_features,
         )
 
     async def resolve_on_change(
@@ -411,6 +444,7 @@ class TemplateRenderer:
         user: str,
         notes: str | None = None,
         persist: bool = True,
+        feature_ids: list[int] | None = None,
     ) -> RenderResult:
         """
         Render a template and optionally persist the result to render_history.
@@ -473,6 +507,12 @@ class TemplateRenderer:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Jinja2 rendering failed: {exc}",
             )
+
+        # 7b. Render and append selected features
+        if feature_ids:
+            feature_blocks = await self._render_features(template_id, feature_ids, env, local_ctx)
+            if feature_blocks:
+                rendered_body = rendered_body + "\n" + "\n".join(feature_blocks)
 
         # 8. Metadata header
         rendered_at = datetime.now(timezone.utc).isoformat()
@@ -577,6 +617,101 @@ class TemplateRenderer:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    async def _load_available_features(self, template_id: int) -> list[AvailableFeature]:
+        """
+        Load features attached to this template (via template_features) and build
+        AvailableFeature dataclasses for the FormDefinition.
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self._db.execute(
+            select(TemplateFeature)
+            .where(TemplateFeature.template_id == template_id)
+            .options(
+                selectinload(TemplateFeature.feature).selectinload(Feature.parameters).selectinload(Parameter.options)
+            )
+            .order_by(TemplateFeature.sort_order, TemplateFeature.id)
+        )
+        tfs = list(result.scalars().all())
+
+        available: list[AvailableFeature] = []
+        for tf in tfs:
+            feat = tf.feature
+            if not feat.is_active:
+                continue
+            params = [
+                AvailableFeatureParam(
+                    name=p.name,
+                    widget_type=p.widget_type,
+                    label=p.label,
+                    description=p.description,
+                    help_text=p.help_text,
+                    default_value=p.default_value,
+                    required=p.required,
+                    sort_order=p.sort_order,
+                    options=[
+                        {"value": o.value, "label": o.label}
+                        for o in sorted(p.options, key=lambda o: o.sort_order)
+                    ],
+                )
+                for p in sorted(feat.parameters, key=lambda p: (p.sort_order, p.name))
+                if p.is_active
+            ]
+            available.append(AvailableFeature(
+                id=feat.id,
+                name=feat.name,
+                label=feat.label,
+                description=feat.description,
+                is_default=tf.is_default,
+                sort_order=tf.sort_order,
+                parameters=params,
+            ))
+        return available
+
+    async def _render_features(
+        self,
+        template_id: int,
+        feature_ids: list[int],
+        env: jinja2.Environment,
+        local_ctx: dict[str, Any],
+    ) -> list[str]:
+        """
+        Render each selected feature snippet and return the rendered blocks.
+        Features not attached to this template are silently skipped (security guard).
+        """
+        from sqlalchemy.orm import selectinload
+
+        result = await self._db.execute(
+            select(TemplateFeature)
+            .where(
+                TemplateFeature.template_id == template_id,
+                TemplateFeature.feature_id.in_(feature_ids),
+            )
+            .options(selectinload(TemplateFeature.feature))
+            .order_by(TemplateFeature.sort_order, TemplateFeature.feature_id)
+        )
+        tfs = list(result.scalars().all())
+
+        blocks: list[str] = []
+        for tf in tfs:
+            feat = tf.feature
+            if not feat.is_active or not feat.snippet_path:
+                continue
+            try:
+                content = self._git.read_template(feat.snippet_path)
+                _, snippet_body = parse_frontmatter(content)
+            except TemplateNotFoundError:
+                logger.warning("Feature snippet missing from git: %s", feat.snippet_path)
+                continue
+            try:
+                rendered = env.from_string(snippet_body).render(**_to_nested(local_ctx))
+                if rendered.strip():
+                    blocks.append(rendered)
+            except jinja2.TemplateError as exc:
+                logger.warning("Feature '%s' rendering failed: %s", feat.name, exc)
+
+        return blocks
 
     async def _load_template_and_project(
         self, template_id: int

@@ -25,12 +25,14 @@ if TYPE_CHECKING:
     from api.models.project import Project
     from api.models.template import Template
     from api.models.parameter_option import ParameterOption
+    from api.models.feature import Feature
 
 
 class ParameterScope(str, enum.Enum):
     global_ = "global"    # trailing underscore: 'global' is a Python keyword
     project = "project"
     template = "template"
+    feature = "feature"
 
 
 class WidgetType(str, enum.Enum):
@@ -45,7 +47,7 @@ class WidgetType(str, enum.Enum):
 
 # PostgreSQL native ENUM types — create_type=True so Alembic emits CREATE TYPE
 _scope_enum = PgEnum(
-    "global", "project", "template",
+    "global", "project", "template", "feature",
     name="parameterscope",
     create_type=True,
 )
@@ -61,9 +63,10 @@ class Parameter(Base):
     __table_args__ = (
         # --- Scope ↔ FK mutual exclusivity -----------------------------------
         CheckConstraint(
-            "(scope = 'global'   AND organization_id IS NOT NULL AND project_id IS NULL    AND template_id IS NULL)  OR "
-            "(scope = 'project'  AND project_id IS NOT NULL       AND organization_id IS NULL AND template_id IS NULL)  OR "
-            "(scope = 'template' AND template_id IS NOT NULL       AND organization_id IS NULL AND project_id IS NULL)",
+            "(scope = 'global'   AND organization_id IS NOT NULL AND project_id IS NULL    AND template_id IS NULL  AND feature_id IS NULL) OR "
+            "(scope = 'project'  AND project_id IS NOT NULL       AND organization_id IS NULL AND template_id IS NULL AND feature_id IS NULL) OR "
+            "(scope = 'template' AND template_id IS NOT NULL       AND organization_id IS NULL AND project_id IS NULL  AND feature_id IS NULL) OR "
+            "(scope = 'feature'  AND feature_id IS NOT NULL        AND organization_id IS NULL AND project_id IS NULL  AND template_id IS NULL)",
             name="scope_fk_mutual_exclusivity",
         ),
         # --- Derived parameter must have an expression ----------------------
@@ -86,6 +89,9 @@ class Parameter(Base):
     )
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("templates.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    feature_id: Mapped[int | None] = mapped_column(
+        ForeignKey("features.id", ondelete="CASCADE"), nullable=True, index=True
     )
 
     widget_type: Mapped[str] = mapped_column(_widget_enum, nullable=False, server_default="text")
@@ -125,6 +131,12 @@ class Parameter(Base):
         "Template",
         back_populates="parameters",
         foreign_keys=[template_id],
+        lazy="raise",
+    )
+    feature: Mapped["Feature | None"] = relationship(
+        "Feature",
+        back_populates="parameters",
+        foreign_keys=[feature_id],
         lazy="raise",
     )
     options: Mapped[List["ParameterOption"]] = relationship(
@@ -167,4 +179,12 @@ Index(
     Parameter.template_id,
     unique=True,
     postgresql_where=(Parameter.scope == "template"),
+)
+
+Index(
+    "uix_parameters_name_feature",
+    Parameter.name,
+    Parameter.feature_id,
+    unique=True,
+    postgresql_where=(Parameter.scope == "feature"),
 )

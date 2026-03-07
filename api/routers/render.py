@@ -32,7 +32,9 @@ from api.dependencies import get_git_service
 from api.models.render_history import RenderHistory
 from api.models.template import Template
 from api.schemas.render import (
+    AvailableFeatureOut,
     EnrichedParameterOut,
+    FeatureParamOut,
     FormDefinitionOut,
     OnChangeRequest,
     ReRenderRequest,
@@ -116,6 +118,31 @@ async def resolve_params(
             for p in form_def.parameters
         ],
         inheritance_chain=form_def.inheritance_chain,
+        features=[
+            AvailableFeatureOut(
+                id=f.id,
+                name=f.name,
+                label=f.label,
+                description=f.description,
+                is_default=f.is_default,
+                sort_order=f.sort_order,
+                parameters=[
+                    FeatureParamOut(
+                        name=fp.name,
+                        widget_type=fp.widget_type,
+                        label=fp.label,
+                        description=fp.description,
+                        help_text=fp.help_text,
+                        default_value=fp.default_value,
+                        required=fp.required,
+                        sort_order=fp.sort_order,
+                        options=fp.options,
+                    )
+                    for fp in f.parameters
+                ],
+            )
+            for f in form_def.features
+        ],
     )
 
 
@@ -155,6 +182,7 @@ async def render_template(
         user=token.sub,
         notes=body.notes,
         persist=persist,
+        feature_ids=body.feature_ids or [],
     )
     return RenderOut(
         output=result.output,

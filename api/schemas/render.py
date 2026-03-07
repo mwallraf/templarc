@@ -28,9 +28,13 @@ class RenderRequest(BaseModel):
     params: dict[str, Any] = Field(
         default_factory=dict,
         description=(
-            "Template-local parameter values keyed by flat dot-notation name "
+            "Template-local and feature parameter values keyed by flat dot-notation name "
             "(e.g. 'router.hostname'). glob.* and proj.* keys are ignored."
         ),
+    )
+    feature_ids: list[int] = Field(
+        default_factory=list,
+        description="IDs of features to include in this render (must be attached to the template)",
     )
     notes: str | None = Field(None, description="Optional freeform render notes stored in history")
 
@@ -89,6 +93,34 @@ class EnrichedParameterOut(BaseModel):
 # Form definition (resolve-params response)
 # ---------------------------------------------------------------------------
 
+class FeatureParamOut(BaseModel):
+    """A parameter belonging to an available feature (embedded in FormDefinitionOut)."""
+    model_config = ConfigDict(from_attributes=False)
+
+    name: str
+    widget_type: str
+    label: str | None
+    description: str | None
+    help_text: str | None
+    default_value: str | None
+    required: bool
+    sort_order: int
+    options: list[dict] = Field(default_factory=list)
+
+
+class AvailableFeatureOut(BaseModel):
+    """A feature available for selection in the render form."""
+    model_config = ConfigDict(from_attributes=False)
+
+    id: int
+    name: str
+    label: str
+    description: str | None
+    is_default: bool
+    sort_order: int
+    parameters: list[FeatureParamOut] = Field(default_factory=list)
+
+
 class FormDefinitionOut(BaseModel):
     """Response from GET /templates/{id}/resolve-params."""
     model_config = ConfigDict(from_attributes=False)
@@ -96,6 +128,10 @@ class FormDefinitionOut(BaseModel):
     template_id: int
     parameters: list[EnrichedParameterOut]
     inheritance_chain: list[str]
+    features: list[AvailableFeatureOut] = Field(
+        default_factory=list,
+        description="Features attached to this template, available for selection at render time",
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from api.models.organization import Organization
     from api.models.template import Template
     from api.models.parameter import Parameter
+    from api.models.feature import Feature
 
 
 class Project(Base):
@@ -51,6 +52,9 @@ class Project(Base):
         foreign_keys="Parameter.project_id",
         cascade="all, delete-orphan",
         lazy="raise",
+    )
+    features: Mapped[List["Feature"]] = relationship(
+        "Feature", back_populates="project", cascade="all, delete-orphan", lazy="raise"
     )
 
     def __repr__(self) -> str:

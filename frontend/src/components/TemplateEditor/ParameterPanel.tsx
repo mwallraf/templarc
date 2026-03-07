@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDraggable } from '@dnd-kit/core'
 import { listParameters } from '../../api/parameters'
 import { listTemplates } from '../../api/templates'
 import { getInheritanceChain } from '../../api/templates'
-import type { ParameterOut, TemplateOut } from '../../api/types'
+import { attachFeature, detachFeature, listFeatures, listTemplateFeatures, updateTemplateFeature } from '../../api/features'
+import type { FeatureOut, ParameterOut, TemplateFeatureOut, TemplateOut } from '../../api/types'
 import type { DataSourceDef } from './DataSourceForm'
 import { DataSourceForm, DataSourceItem } from './DataSourceForm'
 import type { SecretOut } from '../../api/types'
@@ -151,11 +152,12 @@ export function ParameterPanel({
   onRemoveDataSource,
   onUpdateDataSource,
 }: ParameterPanelProps) {
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const [showDsForm, setShowDsForm] = useState(false)
   const [editingDs, setEditingDs] = useState<DataSourceDef | null>(null)
-  const [activeSection, setActiveSection] = useState<'params' | 'datasources' | 'parent' | 'metadata'>('params')
+  const [activeSection, setActiveSection] = useState<'params' | 'datasources' | 'features' | 'parent' | 'metadata'>('params')
 
   // Search all parameters in the registry — always enabled so results appear on focus
   const { data: searchResults } = useQuery({
@@ -189,6 +191,37 @@ export function ParameterPanel({
     (t) => t.id !== templateId && !t.is_snippet && t.is_active,
   )
 
+  // Features data
+  const { data: allFeaturesData } = useQuery({
+    queryKey: ['features', projectId],
+    queryFn: () => listFeatures(projectId),
+    enabled: activeSection === 'features',
+  })
+  const allFeatures: FeatureOut[] = (allFeaturesData?.items ?? []).filter((f) => f.is_active)
+
+  const { data: attachedFeatures = [] } = useQuery<TemplateFeatureOut[]>({
+    queryKey: ['template-features', templateId],
+    queryFn: () => listTemplateFeatures(templateId),
+    enabled: activeSection === 'features',
+  })
+  const attachedFeatureIds = new Set(attachedFeatures.map((tf) => tf.feature_id))
+
+  const attachMut = useMutation({
+    mutationFn: ({ featureId }: { featureId: number }) => attachFeature(templateId, featureId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['template-features', templateId] }),
+  })
+
+  const detachMut = useMutation({
+    mutationFn: ({ featureId }: { featureId: number }) => detachFeature(templateId, featureId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['template-features', templateId] }),
+  })
+
+  const toggleDefaultMut = useMutation({
+    mutationFn: ({ featureId, isDefault }: { featureId: number; isDefault: boolean }) =>
+      updateTemplateFeature(templateId, featureId, { is_default: isDefault }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['template-features', templateId] }),
+  })
+
   return (
     <div className="h-full flex flex-col bg-white border-l border-gray-200">
       {/* Section tabs */}
@@ -197,6 +230,7 @@ export function ParameterPanel({
           [
             { key: 'params', label: 'Parameters' },
             { key: 'datasources', label: 'Data Sources' },
+            { key: 'features', label: 'Features' },
             { key: 'parent', label: 'Parent' },
             { key: 'metadata', label: 'Metadata' },
           ] as const
@@ -219,6 +253,11 @@ export function ParameterPanel({
             {key === 'datasources' && dataSources.length > 0 && (
               <span className="ml-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full text-xs">
                 {dataSources.length}
+              </span>
+            )}
+            {key === 'features' && attachedFeatures.length > 0 && (
+              <span className="ml-1 bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-xs">
+                {attachedFeatures.length}
               </span>
             )}
           </button>
@@ -350,6 +389,87 @@ export function ParameterPanel({
               </button>
             )}
           </>
+        )}
+
+        {/* ── Features section ─────────────────────────────────────────── */}
+        {activeSection === 'features' && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400 pb-1">
+              Attach features to this template. When rendering, users can toggle attached features
+              on/off. Features marked as <strong>default</strong> are pre-checked.
+            </p>
+
+            {allFeatures.length === 0 && (
+              <p className="text-xs text-gray-400 italic text-center py-6">
+                No features defined for this project yet.{' '}
+                <a href="/admin/features" className="text-indigo-600 hover:underline">
+                  Create features →
+                </a>
+              </p>
+            )}
+
+            {allFeatures.map((feature) => {
+              const isAttached = attachedFeatureIds.has(feature.id)
+              const attachedRecord = attachedFeatures.find((tf) => tf.feature_id === feature.id)
+              const isDefault = attachedRecord?.is_default ?? false
+              const isBusy =
+                attachMut.isPending || detachMut.isPending || toggleDefaultMut.isPending
+
+              return (
+                <div
+                  key={feature.id}
+                  className={`rounded-lg border p-3 transition-colors ${
+                    isAttached
+                      ? 'border-emerald-200 bg-emerald-50'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isAttached}
+                      disabled={isBusy}
+                      onChange={() => {
+                        if (isAttached) {
+                          detachMut.mutate({ featureId: feature.id })
+                        } else {
+                          attachMut.mutate({ featureId: feature.id })
+                        }
+                      }}
+                      className="mt-0.5 accent-emerald-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold ${isAttached ? 'text-emerald-800' : 'text-gray-700'}`}>
+                        {feature.label}
+                      </p>
+                      {feature.description && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{feature.description}</p>
+                      )}
+                      {isAttached && (
+                        <label className="flex items-center gap-1.5 mt-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isDefault}
+                            disabled={isBusy}
+                            onChange={() =>
+                              toggleDefaultMut.mutate({ featureId: feature.id, isDefault: !isDefault })
+                            }
+                            className="accent-indigo-600"
+                          />
+                          <span className="text-xs text-gray-500">Pre-checked by default</span>
+                        </label>
+                      )}
+                    </div>
+                    {isAttached && (
+                      <span className="shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                        on
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
 
         {/* ── Metadata section ────────────────────────────────────────── */}

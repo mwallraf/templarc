@@ -47,6 +47,9 @@ from api.models.custom_macro import CustomMacro  # noqa: F401
 # Tier 9: FK → Organization + FK → User (SET NULL)
 from api.models.api_key import ApiKey  # noqa: F401
 
+# Tier 10: FK → Project (features) + FK → Template + Feature (template_features)
+from api.models.feature import Feature, TemplateFeature  # noqa: F401
+
 __all__ = [
     "Base",
     "Organization",
@@ -66,4 +69,6 @@ __all__ = [
     "CustomObject",
     "CustomMacro",
     "ApiKey",
+    "Feature",
+    "TemplateFeature",
 ]

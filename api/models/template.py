@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from api.models.parameter import Parameter
     from api.models.render_history import RenderHistory
     from api.models.render_preset import RenderPreset
+    from api.models.feature import TemplateFeature
 
 
 class Template(Base):
@@ -83,6 +84,9 @@ class Template(Base):
     )
     render_presets: Mapped[List["RenderPreset"]] = relationship(
         "RenderPreset", back_populates="template", cascade="all, delete-orphan", lazy="raise"
+    )
+    template_features: Mapped[List["TemplateFeature"]] = relationship(
+        "TemplateFeature", back_populates="template", cascade="all, delete-orphan", lazy="raise"
     )
 
     def __repr__(self) -> str:

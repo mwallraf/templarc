@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation } from '@tanstack/react-query'
-import type { EnrichedParameterOut, FormDefinitionOut, RenderOut, VisibleWhenCondition } from '../../api/types'
+import type { AvailableFeatureOut, EnrichedParameterOut, FeatureParamOut, FormDefinitionOut, RenderOut, VisibleWhenCondition } from '../../api/types'
 import { onChangeParam, renderTemplate } from '../../api/render'
 import { ParameterField } from './ParameterField'
 
@@ -73,9 +73,19 @@ interface SectionGroup {
   initialOpen: boolean
 }
 
+/** Returns true if every param in the list has a non-empty default/prefill value. */
+function allFilled(params: EnrichedParameterOut[]): boolean {
+  return params.every((p) => {
+    const v = p.prefill ?? p.default_value
+    if (Array.isArray(v)) return v.length > 0
+    return v !== undefined && v !== null && String(v).trim() !== ''
+  })
+}
+
 /**
  * Group params by their `section` field if any param has one.
  * Falls back to scope-based grouping (Global / Project / Template) otherwise.
+ * Global and Project sections collapse only when all their fields are pre-filled.
  */
 function groupParams(params: EnrichedParameterOut[]): SectionGroup[] {
   const sort = (a: EnrichedParameterOut, b: EnrichedParameterOut) => a.sort_order - b.sort_order
@@ -86,8 +96,8 @@ function groupParams(params: EnrichedParameterOut[]): SectionGroup[] {
     const project = params.filter((p) => p.scope === 'project').sort(sort)
     const template = params.filter((p) => p.scope === 'template').sort(sort)
     const groups: SectionGroup[] = []
-    if (global.length) groups.push({ title: 'Global Parameters', params: global, accent: '#fbbf24', initialOpen: false })
-    if (project.length) groups.push({ title: 'Project Parameters', params: project, accent: '#60a5fa', initialOpen: false })
+    if (global.length) groups.push({ title: 'Global Parameters', params: global, accent: '#fbbf24', initialOpen: !allFilled(global) })
+    if (project.length) groups.push({ title: 'Project Parameters', params: project, accent: '#60a5fa', initialOpen: !allFilled(project) })
     if (template.length) groups.push({ title: 'Template Parameters', params: template, accent: '#6366f1', initialOpen: true })
     return groups
   }
@@ -314,6 +324,159 @@ function RenderOutput({ result }: { result: RenderOut }) {
   )
 }
 
+// ── Features Section ──────────────────────────────────────────────────────────
+
+interface FeaturesSectionProps {
+  features: AvailableFeatureOut[]
+  enabledIds: Set<number>
+  onToggle: (id: number, enabled: boolean) => void
+  register: ReturnType<typeof useForm<Record<string, unknown>>>['register']
+  getValues: ReturnType<typeof useForm<Record<string, unknown>>>['getValues']
+}
+
+function FeatureField({ param, register }: { param: FeatureParamOut; register: FeaturesSectionProps['register'] }) {
+  const inputCls = 'w-full rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 border'
+  const inputSty = { backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)', color: 'var(--c-muted-1)' }
+
+  return (
+    <div>
+      <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-3)' }}>
+        {param.label || param.name}
+        {param.required && <span className="ml-1 text-red-400">*</span>}
+      </label>
+      {param.widget_type === 'textarea' ? (
+        <textarea
+          {...register(param.name)}
+          rows={3}
+          defaultValue={param.default_value ?? ''}
+          placeholder={param.description ?? ''}
+          className={`${inputCls} resize-none`}
+          style={inputSty}
+        />
+      ) : param.widget_type === 'select' && param.options?.length ? (
+        <select {...register(param.name)} defaultValue={param.default_value ?? ''} className={inputCls} style={inputSty}>
+          <option value="">— select —</option>
+          {param.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input
+          {...register(param.name)}
+          type={param.widget_type === 'number' ? 'number' : 'text'}
+          defaultValue={param.default_value ?? ''}
+          placeholder={param.description ?? param.name}
+          className={inputCls}
+          style={inputSty}
+        />
+      )}
+      {param.description && (
+        <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>{param.description}</p>
+      )}
+    </div>
+  )
+}
+
+function FeaturesSection({ features, enabledIds, onToggle, register }: FeaturesSectionProps) {
+  const [open, setOpen] = useState(true)
+  if (features.length === 0) return null
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden"
+      style={{ backgroundColor: 'var(--c-surface)', borderColor: 'rgba(99,102,241,0.25)' }}
+    >
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 border-b text-left transition-colors"
+        style={{ borderColor: 'rgba(99,102,241,0.15)', backgroundColor: 'rgba(99,102,241,0.05)' }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#818cf8' }}>
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+        </svg>
+        <h3 className="text-xs font-semibold uppercase tracking-widest flex-1" style={{ color: '#818cf8' }}>
+          Optional Features
+        </h3>
+        <span
+          className="text-xs px-2 py-0.5 rounded-full border font-mono"
+          style={{ color: '#818cf8', borderColor: 'rgba(99,102,241,0.25)', backgroundColor: 'rgba(99,102,241,0.1)' }}
+        >
+          {enabledIds.size}/{features.length}
+        </span>
+        <span className="text-xs ml-1" style={{ color: 'var(--c-dim)', transition: 'transform 200ms', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', display: 'inline-block' }}>▾</span>
+      </button>
+
+      {open && (
+        <div className="p-4 space-y-4">
+          {/* Feature toggle cards */}
+          <div className="grid gap-2">
+            {features.map((f) => {
+              const enabled = enabledIds.has(f.id)
+              return (
+                <div key={f.id}>
+                  {/* Toggle card */}
+                  <button
+                    type="button"
+                    onClick={() => onToggle(f.id, !enabled)}
+                    className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all border"
+                    style={{
+                      backgroundColor: enabled ? 'rgba(99,102,241,0.08)' : 'var(--c-surface-alt)',
+                      borderColor: enabled ? 'rgba(99,102,241,0.35)' : 'var(--c-border)',
+                    }}
+                  >
+                    {/* Checkbox indicator */}
+                    <div
+                      className="w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all"
+                      style={{
+                        borderColor: enabled ? '#6366f1' : 'var(--c-border-bright)',
+                        backgroundColor: enabled ? '#6366f1' : 'transparent',
+                      }}
+                    >
+                      {enabled && (
+                        <svg viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5" className="w-2.5 h-2.5">
+                          <polyline points="2 6 5 9 10 3" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium" style={{ color: enabled ? '#a5b4fc' : 'var(--c-muted-1)' }}>
+                        {f.label}
+                        {f.is_default && !enabled && (
+                          <span className="ml-2 text-xs opacity-60" style={{ color: 'var(--c-muted-4)' }}>(default: on)</span>
+                        )}
+                      </p>
+                      {f.description && (
+                        <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)' }}>{f.description}</p>
+                      )}
+                    </div>
+                    {f.parameters.length > 0 && (
+                      <span className="text-xs shrink-0" style={{ color: 'var(--c-muted-4)' }}>
+                        {f.parameters.length} param{f.parameters.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Inline params when enabled */}
+                  {enabled && f.parameters.length > 0 && (
+                    <div
+                      className="mt-1 ml-7 rounded-lg p-3 space-y-3 border-l-2"
+                      style={{ backgroundColor: 'rgba(99,102,241,0.04)', borderLeftColor: '#6366f1' }}
+                    >
+                      {f.parameters.map((p) => (
+                        <FeatureField key={p.name} param={p} register={register} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main DynamicForm ──────────────────────────────────────────────────────────
 
 export default function DynamicForm({
@@ -327,6 +490,20 @@ export default function DynamicForm({
   const [loadingFields, setLoadingFields] = useState<Set<string>>(new Set())
   const [renderResult, setRenderResult] = useState<RenderOut | null>(null)
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  // Features — initialize default-on features
+  const [enabledFeatureIds, setEnabledFeatureIds] = useState<Set<number>>(
+    () => new Set((definition.features ?? []).filter((f) => f.is_default).map((f) => f.id))
+  )
+
+  function toggleFeature(id: number, enabled: boolean) {
+    setEnabledFeatureIds((prev) => {
+      const next = new Set(prev)
+      if (enabled) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
 
   const effectiveParams: EnrichedParameterOut[] = definition.parameters.map((p) => ({
     ...p,
@@ -410,7 +587,11 @@ export default function DynamicForm({
 
   const renderMut = useMutation({
     mutationFn: (params: Record<string, unknown>) =>
-      renderTemplate(templateId, { params }, { persist, user }),
+      renderTemplate(
+        templateId,
+        { params, feature_ids: [...enabledFeatureIds] },
+        { persist, user },
+      ),
     onSuccess: (result) => setRenderResult(result),
   })
 
@@ -421,6 +602,15 @@ export default function DynamicForm({
       const param = effectiveParams.find((p) => p.name === name)
       if (!param || isVisible(param, values)) {
         filteredValues[name] = value
+      }
+    }
+    // Also include values for enabled feature parameters
+    for (const f of (definition.features ?? [])) {
+      if (!enabledFeatureIds.has(f.id)) continue
+      for (const fp of f.parameters) {
+        if (values[fp.name] !== undefined) {
+          filteredValues[fp.name] = values[fp.name]
+        }
       }
     }
     renderMut.mutate(filteredValues)
@@ -458,6 +648,17 @@ export default function DynamicForm({
             />
           )
         })}
+
+        {/* Feature toggle cards */}
+        {(definition.features ?? []).length > 0 && (
+          <FeaturesSection
+            features={definition.features ?? []}
+            enabledIds={enabledFeatureIds}
+            onToggle={toggleFeature}
+            register={register}
+            getValues={getValues}
+          />
+        )}
 
         {renderMut.error && (
           <div

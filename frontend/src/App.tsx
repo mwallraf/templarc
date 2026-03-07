@@ -14,6 +14,7 @@ import AdminFilters from './pages/admin/AdminFilters'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminProjects from './pages/admin/AdminProjects'
 import AdminApiKeys from './pages/admin/AdminApiKeys'
+import AdminFeatures from './pages/admin/AdminFeatures'
 import TemplateEditorPage from './pages/admin/TemplateEditorPage'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/admin/filters" element={<AdminFilters />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/api-keys" element={<AdminApiKeys />} />
+          <Route path="/admin/features" element={<AdminFeatures />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Route>
