@@ -48,9 +48,12 @@ from api.core.auth import (
     TokenData,
     UserInfo,
     _upsert_user,
+    generate_api_key,
     get_current_user,
     require_admin,
 )
+from api.models.api_key import ApiKey
+from api.schemas.api_key import ApiKeyCreate, ApiKeyCreatedOut, ApiKeyOut
 from api.core.secrets import encrypt_secret
 from api.database import get_db
 from api.models.secret import Secret, SecretType
@@ -571,4 +574,105 @@ async def delete_secret(
 ) -> None:
     secret = await _get_secret_or_404(db, secret_id, token.org_id)
     await db.delete(secret)
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# API key management
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/api-keys",
+    response_model=ApiKeyCreatedOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an API key",
+    description=(
+        "Generate a new API key for the caller's organization. "
+        "The raw key is returned **once** — it cannot be retrieved again. "
+        "Store it securely. Admin only."
+    ),
+)
+async def create_api_key(
+    body: ApiKeyCreate,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> ApiKeyCreatedOut:
+    raw_key, key_prefix, key_hash = generate_api_key()
+    api_key = ApiKey(
+        organization_id=token.org_id,
+        created_by=None,  # resolved below
+        name=body.name,
+        key_prefix=key_prefix,
+        key_hash=key_hash,
+        is_admin=body.is_admin,
+        expires_at=body.expires_at,
+    )
+    # Resolve the user ID for created_by
+    from sqlalchemy import select as _select
+    from api.models.user import User as _User
+    user_result = await db.execute(_select(_User).where(_User.username == token.sub))
+    user = user_result.scalar_one_or_none()
+    if user:
+        api_key.created_by = user.id
+
+    db.add(api_key)
+    await db.flush()
+    await db.refresh(api_key)
+    await db.commit()
+
+    return ApiKeyCreatedOut(
+        id=api_key.id,
+        name=api_key.name,
+        key_prefix=api_key.key_prefix,
+        is_admin=api_key.is_admin,
+        created_by=api_key.created_by,
+        last_used_at=api_key.last_used_at,
+        expires_at=api_key.expires_at,
+        created_at=api_key.created_at,
+        raw_key=raw_key,
+    )
+
+
+@router.get(
+    "/api-keys",
+    response_model=list[ApiKeyOut],
+    summary="List API keys",
+    description="Return all API keys for the caller's organization. Admin only.",
+)
+async def list_api_keys(
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> list[ApiKeyOut]:
+    from sqlalchemy import select as _select
+    result = await db.execute(
+        _select(ApiKey)
+        .where(ApiKey.organization_id == token.org_id)
+        .order_by(ApiKey.created_at.desc())
+    )
+    return [ApiKeyOut.model_validate(k) for k in result.scalars().all()]
+
+
+@router.delete(
+    "/api-keys/{key_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Revoke an API key",
+    description="Permanently delete (revoke) an API key by ID. Admin only.",
+)
+async def delete_api_key(
+    key_id: int,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> None:
+    from sqlalchemy import select as _select
+    result = await db.execute(
+        _select(ApiKey).where(
+            ApiKey.id == key_id,
+            ApiKey.organization_id == token.org_id,
+        )
+    )
+    api_key = result.scalar_one_or_none()
+    if api_key is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    await db.delete(api_key)
     await db.commit()

@@ -18,6 +18,8 @@ Auth: all endpoints require admin privileges.
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,23 +31,37 @@ from api.core.sandbox import SandboxError, sandbox_test, validate_and_compile
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.audit_log import AuditLog
+from api.models.parameter import Parameter
+from api.models.parameter_option import ParameterOption
+from api.models.project import Project
+from api.models.template import Template
 from api.schemas.admin import (
     AuditLogListOut,
     AuditLogOut,
     CustomFilterCreate,
     CustomFilterDeleteOut,
     CustomFilterOut,
+    CustomMacroCreate,
+    CustomMacroDeleteOut,
+    CustomMacroOut,
     CustomObjectCreate,
     CustomObjectDeleteOut,
     CustomObjectOut,
+    DuplicateParameterGroup,
+    DuplicateTemplateRef,
+    DuplicatesReport,
     FilterTestRequest,
     FilterTestResult,
+    GitSyncRequest,
+    PromoteReport,
+    PromoteRequest,
+    PromoteTemplateRewrite,
     SyncReport,
     SyncStatusReport,
 )
 from api.services import custom_filter_service, git_sync_service
 from api.services.audit_log_service import log_write
-from api.services.git_service import GitService
+from api.services.git_service import GitService, parse_frontmatter
 
 router = APIRouter()
 
@@ -68,11 +84,18 @@ router = APIRouter()
 )
 async def run_git_sync(
     project_id: int,
+    body: GitSyncRequest = GitSyncRequest(),
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     _token: TokenData = Depends(require_admin),
 ) -> SyncReport:
-    report = await git_sync_service.run_git_sync(db, project_id, git_svc)
+    report = await git_sync_service.run_git_sync(
+        db,
+        project_id,
+        git_svc,
+        import_paths=body.import_paths,
+        delete_paths=body.delete_paths,
+    )
     await db.commit()
     return report
 
@@ -315,3 +338,389 @@ async def delete_object(
     await log_write(db, token.sub, "delete", "custom_object", object_id)
     await db.commit()
     return CustomObjectDeleteOut(id=object_id)
+
+
+# ---------------------------------------------------------------------------
+# Custom Macros
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/macros",
+    response_model=CustomMacroOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register custom Jinja2 macro",
+    description=(
+        "Register a reusable Jinja2 macro. The body must contain a complete "
+        "``{%% macro <name>(...) %%}...{%% endmacro %%}`` definition where the "
+        "macro name matches the ``name`` field. The macro is compiled and validated "
+        "before storing, then becomes immediately available as a global callable in "
+        "the relevant project environment(s)."
+    ),
+)
+async def create_macro(
+    data: CustomMacroCreate,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> CustomMacroOut:
+    import jinja2 as _jinja2
+
+    # Validate that the body compiles and contains a macro with the given name
+    try:
+        env = _jinja2.Environment(undefined=_jinja2.Undefined, autoescape=False)
+        tmpl = env.from_string(data.body)
+        if not hasattr(tmpl.module, data.name):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Macro body does not define a macro named '{data.name}'. "
+                    f"Make sure the {{% macro {data.name}(...) %}} ... {{% endmacro %}} block is present."
+                ),
+            )
+    except _jinja2.exceptions.TemplateSyntaxError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Jinja2 syntax error: {exc}",
+        ) from exc
+
+    cm = await custom_filter_service.create_macro(db, data, token.sub)
+    await log_write(db, token.sub, "create", "custom_macro", cm.id, {"name": data.name, "scope": data.scope})
+    await db.commit()
+    return CustomMacroOut.model_validate(cm)
+
+
+@router.get(
+    "/macros",
+    response_model=list[CustomMacroOut],
+    summary="List custom macros",
+    description="Return all active custom macros. Optionally filter by scope or project.",
+)
+async def list_macros(
+    scope: str | None = Query(None, description="Filter by scope: 'global' or 'project'"),
+    project_id: int | None = Query(None, description="Filter by project ID"),
+    db: AsyncSession = Depends(get_db),
+    _token: TokenData = Depends(require_admin),
+) -> list[CustomMacroOut]:
+    macros = await custom_filter_service.list_macros(db, scope=scope, project_id=project_id)
+    return [CustomMacroOut.model_validate(m) for m in macros]
+
+
+@router.delete(
+    "/macros/{macro_id}",
+    response_model=CustomMacroDeleteOut,
+    summary="Delete custom macro",
+    description="Soft-delete a custom macro and invalidate the environment cache.",
+)
+async def delete_macro(
+    macro_id: int,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> CustomMacroDeleteOut:
+    await custom_filter_service.delete_macro(db, macro_id)
+    await log_write(db, token.sub, "delete", "custom_macro", macro_id)
+    await db.commit()
+    return CustomMacroDeleteOut(id=macro_id)
+
+
+# ---------------------------------------------------------------------------
+# Duplicate parameter detection
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/parameters/duplicates",
+    response_model=DuplicatesReport,
+    summary="Find duplicate template-scope parameters",
+    description=(
+        "Scans all active template-scope parameters within a project (or across all "
+        "projects if no project_id is given) and returns groups of parameter names "
+        "that appear in more than one template. Each group flags whether the definitions "
+        "are consistent (same widget_type, required flag) or conflicting."
+    ),
+    tags=["Admin"],
+)
+async def find_duplicate_parameters(
+    project_id: int | None = Query(None, description="Limit scan to a single project"),
+    db: AsyncSession = Depends(get_db),
+    _token: TokenData = Depends(require_admin),
+) -> DuplicatesReport:
+    # Load all active template-scope parameters joined to template + project
+    stmt = (
+        select(
+            Parameter.id,
+            Parameter.name,
+            Parameter.widget_type,
+            Parameter.label,
+            Parameter.required,
+            Template.id.label("template_id"),
+            Template.name.label("template_name"),
+            Template.display_name.label("template_display_name"),
+            Template.project_id,
+            Project.display_name.label("project_display_name"),
+        )
+        .join(Template, Parameter.template_id == Template.id)
+        .join(Project, Template.project_id == Project.id)
+        .where(Parameter.scope == "template")
+        .where(Parameter.is_active.is_(True))
+        .order_by(Template.project_id, Parameter.name, Template.display_name)
+    )
+    if project_id is not None:
+        stmt = stmt.where(Template.project_id == project_id)
+
+    rows = (await db.execute(stmt)).all()
+
+    # Group by (project_id, param_name) in Python
+    key_to_rows: dict[tuple[int, str], list] = defaultdict(list)
+    for row in rows:
+        key_to_rows[(row.project_id, row.name)].append(row)
+
+    groups: list[DuplicateParameterGroup] = []
+    for (proj_id, name), occurrences in sorted(key_to_rows.items()):
+        if len(occurrences) < 2:
+            continue
+
+        widget_types = {r.widget_type for r in occurrences}
+        required_flags = {r.required for r in occurrences}
+        has_conflicts = len(widget_types) > 1 or len(required_flags) > 1
+
+        groups.append(DuplicateParameterGroup(
+            name=name,
+            project_id=proj_id,
+            project_display_name=occurrences[0].project_display_name,
+            count=len(occurrences),
+            has_conflicts=has_conflicts,
+            templates=[
+                DuplicateTemplateRef(
+                    param_id=r.id,
+                    template_id=r.template_id,
+                    template_name=r.template_name,
+                    template_display_name=r.template_display_name,
+                    widget_type=r.widget_type,
+                    label=r.label,
+                    required=r.required,
+                )
+                for r in occurrences
+            ],
+        ))
+
+    total_redundant = sum(g.count - 1 for g in groups)
+    return DuplicatesReport(
+        groups=groups,
+        total_duplicate_names=len(groups),
+        total_redundant_params=total_redundant,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Parameter promote
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/parameters/promote",
+    response_model=PromoteReport,
+    status_code=status.HTTP_200_OK,
+    summary="Promote template parameters to project/global scope",
+    description=(
+        "Promote a duplicate template-scope parameter to project or global scope.\n\n"
+        "**Steps performed atomically:**\n"
+        "1. Validate all occurrences are consistent (same widget_type and required flag).\n"
+        "2. Create a new parameter with the promoted name and scope.\n"
+        "3. Copy parameter options from the first occurrence.\n"
+        "4. Soft-delete all template-scope copies.\n"
+        "5. Rewrite each affected `.j2` file body, replacing `{{ from_name }}` with "
+        "`{{ to_name }}` (including filter chains).\n\n"
+        "The `to_name` must start with `proj.` (project scope) or `glob.` (global scope)."
+    ),
+    tags=["Admin"],
+)
+async def promote_parameter(
+    data: PromoteRequest,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    token: TokenData = Depends(require_admin),
+) -> PromoteReport:
+    # 1. Find all matching template-scope parameters in the project
+    stmt = (
+        select(
+            Parameter.id,
+            Parameter.widget_type,
+            Parameter.label,
+            Parameter.description,
+            Parameter.help_text,
+            Parameter.default_value,
+            Parameter.required,
+            Parameter.validation_regex,
+            Parameter.is_derived,
+            Parameter.derived_expression,
+            Template.id.label("template_id"),
+            Template.name.label("template_name"),
+            Template.git_path,
+        )
+        .join(Template, Parameter.template_id == Template.id)
+        .where(Parameter.scope == "template")
+        .where(Parameter.is_active.is_(True))
+        .where(Parameter.name == data.from_name)
+        .where(Template.project_id == data.project_id)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No active template-scope parameters named {data.from_name!r} found in project {data.project_id}.",
+        )
+
+    # 2. Reject if definitions conflict
+    widget_types = {r.widget_type for r in rows}
+    required_flags = {r.required for r in rows}
+    if len(widget_types) > 1 or len(required_flags) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Parameter definitions have conflicts (different widget_type or required flag). "
+                "Resolve conflicts manually before promoting."
+            ),
+        )
+
+    # 3. Determine new scope from name prefix
+    if data.to_name.startswith("proj."):
+        new_scope = "project"
+    elif data.to_name.startswith("glob."):
+        new_scope = "global"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Promoted parameter name must start with 'proj.' (project scope) or 'glob.' (global scope).",
+        )
+
+    # 4. Load project to get organization_id
+    project_obj = (
+        await db.execute(select(Project).where(Project.id == data.project_id))
+    ).scalar_one_or_none()
+    if not project_obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project {data.project_id} not found.")
+
+    first = rows[0]
+
+    # 5. Create promoted parameter
+    new_param = Parameter(
+        name=data.to_name,
+        scope=new_scope,
+        organization_id=project_obj.organization_id if new_scope == "global" else None,
+        project_id=data.project_id if new_scope == "project" else None,
+        widget_type=first.widget_type,
+        label=first.label,
+        description=first.description,
+        help_text=first.help_text,
+        default_value=first.default_value,
+        required=first.required,
+        validation_regex=first.validation_regex,
+        is_derived=first.is_derived,
+        derived_expression=first.derived_expression,
+        sort_order=0,
+        is_active=True,
+    )
+    db.add(new_param)
+    await db.flush()
+    await db.refresh(new_param)
+
+    # 6. Copy options from first occurrence
+    source_options = (
+        await db.execute(
+            select(ParameterOption)
+            .where(ParameterOption.parameter_id == first.id)
+            .order_by(ParameterOption.sort_order)
+        )
+    ).scalars().all()
+    for opt in source_options:
+        db.add(ParameterOption(
+            parameter_id=new_param.id,
+            value=opt.value,
+            label=opt.label,
+            condition_param=opt.condition_param,
+            condition_value=opt.condition_value,
+            sort_order=opt.sort_order,
+        ))
+    await db.flush()
+
+    # 7. Soft-delete old template-scope parameters
+    param_ids = [r.id for r in rows]
+    for pid in param_ids:
+        p = (await db.execute(select(Parameter).where(Parameter.id == pid))).scalar_one()
+        p.is_active = False
+    await db.flush()
+
+    # 8. Rewrite .j2 files — replace {{ from_name }} with {{ to_name }} in body only
+    #    Pattern: word-boundary match so "service_id" ≠ "some_service_id"
+    escaped = re.escape(data.from_name)
+    var_pattern = re.compile(
+        r"(?<![a-zA-Z0-9_.])" + escaped + r"(?![a-zA-Z0-9_.])"
+    )
+    fm_re = re.compile(r"^(---\r?\n.*?\r?\n---\r?\n?)", re.DOTALL)
+
+    seen_paths: set[str] = set()
+    template_rewrites: list[PromoteTemplateRewrite] = []
+    git_files_rewritten = 0
+
+    for row in rows:
+        if not row.git_path or row.git_path in seen_paths:
+            continue
+        seen_paths.add(row.git_path)
+
+        try:
+            content = git_svc.read_template(row.git_path)
+            _, body = parse_frontmatter(content)
+            new_body, count = var_pattern.subn(data.to_name, body)
+
+            if count > 0:
+                # Preserve raw frontmatter block, swap in updated body
+                fm_match = fm_re.match(content)
+                raw_fm = fm_match.group(1) if fm_match else ""
+                new_content = raw_fm + new_body
+                git_svc.write_template(
+                    row.git_path,
+                    new_content,
+                    message=f"promote: {data.from_name} → {data.to_name}",
+                    author=token.sub,
+                )
+                git_files_rewritten += 1
+                template_rewrites.append(PromoteTemplateRewrite(
+                    template_id=row.template_id,
+                    template_name=row.template_name,
+                    git_path=row.git_path,
+                    rewritten=True,
+                    replacements=count,
+                ))
+            else:
+                template_rewrites.append(PromoteTemplateRewrite(
+                    template_id=row.template_id,
+                    template_name=row.template_name,
+                    git_path=row.git_path,
+                    rewritten=False,
+                    replacements=0,
+                ))
+        except Exception as exc:
+            template_rewrites.append(PromoteTemplateRewrite(
+                template_id=row.template_id,
+                template_name=row.template_name,
+                git_path=row.git_path,
+                rewritten=False,
+                replacements=0,
+                error=str(exc),
+            ))
+
+    await log_write(db, token.sub, "create", "parameter", new_param.id, {
+        "action": "promote",
+        "from_name": data.from_name,
+        "to_name": data.to_name,
+        "project_id": data.project_id,
+        "deleted_param_ids": param_ids,
+        "git_files_rewritten": git_files_rewritten,
+    })
+    await db.commit()
+
+    return PromoteReport(
+        created_param_id=new_param.id,
+        deleted_param_ids=param_ids,
+        templates_updated=len(rows),
+        git_files_rewritten=git_files_rewritten,
+        template_rewrites=template_rewrites,
+    )

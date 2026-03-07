@@ -36,6 +36,10 @@ export async function getProjectTemplates(projectId: number): Promise<TemplateTr
   return res.data
 }
 
+export async function deleteProject(projectId: number): Promise<void> {
+  await apiClient.delete(`/catalog/projects/${projectId}`)
+}
+
 export async function getCatalog(projectSlug: string): Promise<CatalogResponse> {
   const res = await apiClient.get<CatalogResponse>(`/catalog/${projectSlug}`)
   return res.data

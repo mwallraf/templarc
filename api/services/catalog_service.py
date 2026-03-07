@@ -87,7 +87,10 @@ def _build_tree(templates: list[Template]) -> list[TemplateTreeNode]:
             id=t.id,
             name=t.name,
             display_name=t.display_name,
+            git_path=t.git_path,
             is_active=t.is_active,
+            is_snippet=t.is_snippet,
+            is_hidden=t.is_hidden,
             sort_order=t.sort_order,
             children=[build_node(c) for c in children_map.get(t.id, [])],
         )
@@ -162,6 +165,13 @@ async def create_project(
     return proj
 
 
+async def delete_project(db: AsyncSession, project_id: int) -> None:
+    """Hard-delete a project and all its templates/parameters (cascade)."""
+    proj = await _get_project_or_404(db, project_id)
+    await db.delete(proj)
+    await db.flush()
+
+
 async def update_project(
     db: AsyncSession,
     project_id: int,
@@ -233,7 +243,7 @@ async def create_template(
     """
     proj = await _get_project_or_404(db, data.project_id)
 
-    # Validate parent is in the same project
+    # Validate parent is in the same project and is not a snippet
     if data.parent_template_id is not None:
         parent = await db.get(Template, data.parent_template_id)
         if parent is None or parent.project_id != data.project_id:
@@ -244,9 +254,14 @@ async def create_template(
                     "or belongs to a different project."
                 ),
             )
+        if parent.is_snippet:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A snippet template cannot be used as a parent.",
+            )
 
     project_dir = proj.git_path or proj.name
-    git_path = f"{project_dir}/{data.name}.j2"
+    git_path = data.git_path or f"{project_dir}/{data.name}.j2"
 
     initial_content = data.content if data.content.strip() else _build_initial_content(data.name)
 
@@ -265,6 +280,8 @@ async def create_template(
         git_path=git_path,
         parent_template_id=data.parent_template_id,
         sort_order=data.sort_order,
+        is_snippet=data.is_snippet,
+        is_hidden=data.is_hidden,
     )
     db.add(tmpl)
     await db.flush()
@@ -285,8 +302,8 @@ async def update_template(
     """
     tmpl = await _get_template_or_404(db, template_id)
 
-    # Apply metadata updates
-    for field in ("display_name", "description", "sort_order"):
+    # Apply metadata updates (including new flags)
+    for field in ("display_name", "description", "sort_order", "is_active", "is_snippet", "is_hidden"):
         value = getattr(data, field)
         if value is not None:
             setattr(tmpl, field, value)
@@ -521,10 +538,15 @@ async def get_product_catalog(
             detail=f"Project {project_slug!r} not found.",
         )
 
-    # --- 2. Load all active templates ---------------------------------------
+    # --- 2. Load active, non-snippet, non-hidden templates (catalog view) ---
     stmt = (
         select(Template)
-        .where(Template.project_id == proj.id, Template.is_active == True)
+        .where(
+            Template.project_id == proj.id,
+            Template.is_active == True,
+            Template.is_snippet == False,
+            Template.is_hidden == False,
+        )
         .order_by(Template.sort_order, Template.name)
     )
     result = await db.execute(stmt)

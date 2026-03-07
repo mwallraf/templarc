@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from api.models.organization import Organization
     from api.models.template import Template
     from api.models.render_history import RenderHistory
+    from api.models.render_preset import RenderPreset
 
 
 class User(Base):
@@ -45,6 +46,12 @@ class User(Base):
         "RenderHistory",
         back_populates="rendered_by_user",
         foreign_keys="RenderHistory.rendered_by",
+        lazy="raise",
+    )
+    render_presets: Mapped[List["RenderPreset"]] = relationship(
+        "RenderPreset",
+        back_populates="created_by_user",
+        foreign_keys="RenderPreset.created_by",
         lazy="raise",
     )
 

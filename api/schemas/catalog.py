@@ -94,7 +94,10 @@ class TemplateTreeNode(BaseModel):
     id: int
     name: str
     display_name: str
+    git_path: str | None
     is_active: bool
+    is_snippet: bool
+    is_hidden: bool
     sort_order: int
     children: list[TemplateTreeNode] = []
 
@@ -131,10 +134,17 @@ class TemplateCreate(BaseModel):
     )
     display_name: str = Field(..., max_length=255)
     description: str | None = None
+    git_path: str | None = Field(
+        None, max_length=500,
+        description="Path within the templates repo (e.g. 'project/snippets/foo.j2'). "
+                    "Defaults to '{project_git_path}/{name}.j2' if omitted.",
+    )
     parent_template_id: int | None = Field(
         None, description="Must belong to the same project if provided"
     )
     sort_order: int = 0
+    is_snippet: bool = Field(False, description="Mark as include-only snippet (hidden from catalog, not directly renderable)")
+    is_hidden: bool = Field(False, description="Hide from catalog without deactivating")
     content: str = Field(
         "",
         max_length=512_000,  # 500 KB max
@@ -147,6 +157,9 @@ class TemplateUpdate(BaseModel):
     display_name: str | None = Field(None, max_length=255)
     description: str | None = None
     sort_order: int | None = None
+    is_active: bool | None = None
+    is_snippet: bool | None = None
+    is_hidden: bool | None = None
     content: str | None = Field(
         None,
         max_length=512_000,  # 500 KB max
@@ -184,6 +197,8 @@ class TemplateOut(BaseModel):
     git_path: str | None
     parent_template_id: int | None
     is_active: bool
+    is_snippet: bool
+    is_hidden: bool
     sort_order: int
     created_at: datetime
     updated_at: datetime

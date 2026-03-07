@@ -11,7 +11,7 @@ const SECRET_TYPE_LABELS: Record<SecretType, string> = {
 }
 
 const inputClass = 'w-full rounded-lg px-3 py-2 text-sm text-slate-100 border transition-colors focus:outline-none'
-const inputStyle = { backgroundColor: '#141828', borderColor: '#2a3255' }
+const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }
 
 export default function AdminSecrets() {
   const [showForm, setShowForm] = useState(false)
@@ -46,7 +46,7 @@ export default function AdminSecrets() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white font-display">Secrets</h1>
-          <p className="text-sm mt-1" style={{ color: '#546485' }}>API keys, tokens, and credentials</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--c-muted-3)' }}>API keys, tokens, and credentials</p>
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -54,8 +54,8 @@ export default function AdminSecrets() {
           style={{
             background: showForm ? 'transparent' : 'linear-gradient(135deg, #6366f1, #818cf8)',
             boxShadow: showForm ? 'none' : '0 4px 14px rgba(99,102,241,0.3)',
-            border: showForm ? '1px solid #2a3255' : 'none',
-            color: showForm ? '#8892b0' : 'white',
+            border: showForm ? '1px solid var(--c-border-bright)' : 'none',
+            color: showForm ? 'var(--c-muted-2)' : 'white',
           }}
         >
           {showForm ? 'Cancel' : 'New Secret'}
@@ -66,13 +66,13 @@ export default function AdminSecrets() {
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
           className="rounded-xl border p-5 mb-6 space-y-4"
-          style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
           <h2 className="font-semibold text-slate-100 font-display">New Secret</h2>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Name</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Name</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -81,22 +81,22 @@ export default function AdminSecrets() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Type</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Type</label>
               <select
                 className={inputClass}
-                style={{ ...inputStyle, color: '#e2e8f4' }}
+                style={{ ...inputStyle, color: 'var(--c-text)' }}
                 {...register('secret_type')}
               >
-                <option value="env" style={{ backgroundColor: '#141828' }}>Environment variable</option>
-                <option value="vault" style={{ backgroundColor: '#141828' }}>HashiCorp Vault</option>
-                <option value="db" style={{ backgroundColor: '#141828' }}>Database (plaintext)</option>
+                <option value="env" style={{ backgroundColor: 'var(--c-card)' }}>Environment variable</option>
+                <option value="vault" style={{ backgroundColor: 'var(--c-card)' }}>HashiCorp Vault</option>
+                <option value="db" style={{ backgroundColor: 'var(--c-card)' }}>Database (plaintext)</option>
               </select>
             </div>
           </div>
 
           {secretType === 'env' && (
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Environment variable name</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Environment variable name</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -108,7 +108,7 @@ export default function AdminSecrets() {
 
           {secretType === 'vault' && (
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Vault path</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Vault path</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -120,7 +120,7 @@ export default function AdminSecrets() {
 
           {secretType === 'db' && (
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Secret value (stored in DB)</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Secret value (stored in DB)</label>
               <input
                 type="password"
                 className={inputClass}
@@ -131,7 +131,7 @@ export default function AdminSecrets() {
           )}
 
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Description (optional)</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description (optional)</label>
             <input
               className={inputClass}
               style={inputStyle}
@@ -158,18 +158,18 @@ export default function AdminSecrets() {
           {[1, 2, 3].map((i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
         </div>
       ) : (
-        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}>
+        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
           {secrets?.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm" style={{ color: '#546485' }}>
+            <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>
               No secrets configured.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead style={{ backgroundColor: '#0a0d1a', borderBottom: '1px solid #1e2440' }}>
+              <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Type</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Description</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Type</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Description</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -177,13 +177,13 @@ export default function AdminSecrets() {
                 {secrets?.map((s, idx) => (
                   <tr
                     key={s.id}
-                    style={{ borderBottom: idx < (secrets.length - 1) ? '1px solid #1e2440' : 'none' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)')}
+                    style={{ borderBottom: idx < (secrets.length - 1) ? '1px solid var(--c-border)' : 'none' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
-                    <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: '#8892b0' }}>{s.name}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#546485' }}>{SECRET_TYPE_LABELS[s.secret_type]}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#3d4777' }}>{s.description ?? '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{s.name}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{SECRET_TYPE_LABELS[s.secret_type]}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{s.description ?? '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => {

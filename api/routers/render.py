@@ -30,6 +30,7 @@ from api.core.auth import TokenData, get_current_user
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.render_history import RenderHistory
+from api.models.template import Template
 from api.schemas.render import (
     EnrichedParameterOut,
     FormDefinitionOut,
@@ -55,6 +56,16 @@ def _make_renderer(db: AsyncSession, git_service: GitService) -> TemplateRendere
     return TemplateRenderer(db=db, git_service=git_service, env_factory=EnvironmentFactory(db))
 
 
+async def _require_not_snippet(db: AsyncSession, template_id: int) -> None:
+    """Raise 422 if the template is a snippet (include-only fragment)."""
+    tmpl = await db.get(Template, template_id)
+    if tmpl is not None and tmpl.is_snippet:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This template is a snippet (include-only) and cannot be rendered directly.",
+        )
+
+
 # ---------------------------------------------------------------------------
 # resolve-params
 # ---------------------------------------------------------------------------
@@ -77,6 +88,7 @@ async def resolve_params(
     git_service: GitService = Depends(get_git_service),
     _token: TokenData = Depends(get_current_user),
 ) -> FormDefinitionOut:
+    await _require_not_snippet(db, template_id)
     renderer = _make_renderer(db, git_service)
     form_def = await renderer.resolve_params_for_form(template_id)
     return FormDefinitionOut(
@@ -93,6 +105,9 @@ async def resolve_params(
                 required=p.required,
                 sort_order=p.sort_order,
                 is_derived=p.is_derived,
+                validation_regex=p.validation_regex,
+                section=p.section,
+                visible_when=p.visible_when,
                 prefill=p.prefill,
                 options=p.options,
                 readonly=p.readonly,
@@ -132,6 +147,7 @@ async def render_template(
     git_service: GitService = Depends(get_git_service),
     token: TokenData = Depends(get_current_user),
 ) -> RenderOut:
+    await _require_not_snippet(db, template_id)
     renderer = _make_renderer(db, git_service)
     result = await renderer.render(
         template_id=template_id,

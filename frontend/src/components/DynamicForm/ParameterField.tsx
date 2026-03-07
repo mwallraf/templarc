@@ -109,7 +109,7 @@ export function ParameterField({
     <div className="space-y-1.5">
       {/* Label row */}
       <div className="flex items-center gap-2">
-        <label className="text-xs font-medium" style={{ color: '#94a3b8' }}>
+        <label className="text-xs font-medium" style={{ color: 'var(--c-muted-1)' }}>
           {labelText}
           {param.required && !isReadonly && (
             <span className="ml-0.5 text-red-400" title="Required">*</span>
@@ -119,7 +119,7 @@ export function ParameterField({
         {isLoading && <LoadingSpinner />}
 
         {isReadonly && (
-          <span className="text-xs italic" style={{ color: '#3d4777' }}>
+          <span className="text-xs italic" style={{ color: 'var(--c-muted-4)' }}>
             {param.is_derived ? 'derived' : 'auto-filled'}
           </span>
         )}
@@ -138,7 +138,7 @@ export function ParameterField({
 
       {/* Help text */}
       {param.help_text && (
-        <p className="text-xs" style={{ color: '#3d4777' }}>{param.help_text}</p>
+        <p className="text-xs" style={{ color: 'var(--c-muted-4)' }}>{param.help_text}</p>
       )}
 
       {/* Widget */}

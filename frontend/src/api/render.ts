@@ -7,6 +7,8 @@ import type {
   RenderHistoryOut,
   RenderHistoryListOut,
   ReRenderRequest,
+  RenderPresetOut,
+  RenderPresetCreate,
 } from './types'
 
 export async function resolveParams(templateId: number): Promise<FormDefinitionOut> {
@@ -64,4 +66,21 @@ export async function reRender(
     { params: { user } },
   )
   return res.data
+}
+
+export async function listPresets(templateId: number): Promise<RenderPresetOut[]> {
+  const res = await apiClient.get<RenderPresetOut[]>(`/templates/${templateId}/presets`)
+  return res.data
+}
+
+export async function createPreset(
+  templateId: number,
+  data: RenderPresetCreate,
+): Promise<RenderPresetOut> {
+  const res = await apiClient.post<RenderPresetOut>(`/templates/${templateId}/presets`, data)
+  return res.data
+}
+
+export async function deletePreset(templateId: number, presetId: number): Promise<void> {
+  await apiClient.delete(`/templates/${templateId}/presets/${presetId}`)
 }

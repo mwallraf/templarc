@@ -1,12 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useLocation, Link } from 'react-router-dom'
-import { resolveParams } from '../api/render'
+import { resolveParams, listPresets, createPreset } from '../api/render'
 import { getTemplate } from '../api/templates'
+import type { RenderPresetOut } from '../api/types'
 import DynamicForm from '../components/DynamicForm'
+import ApiCodePanel, { getApiBase } from '../components/ApiCodePanel'
 
 function Spinner() {
   return (
-    <div className="flex items-center gap-2.5 text-sm py-12" style={{ color: '#546485' }}>
+    <div className="flex items-center gap-2.5 text-sm py-12" style={{ color: 'var(--c-muted-3)' }}>
       <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -16,12 +19,199 @@ function Spinner() {
   )
 }
 
+// ── Save Preset Dialog ────────────────────────────────────────────────────────
+
+interface SavePresetDialogProps {
+  onSave: (name: string, description: string) => void
+  onCancel: () => void
+  isPending: boolean
+  error: string | null
+}
+
+function SavePresetDialog({ onSave, onCancel, isPending, error }: SavePresetDialogProps) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+    >
+      <div
+        className="rounded-2xl border w-full max-w-md p-6 space-y-4"
+        style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
+      >
+        <h2 className="text-base font-semibold text-white">Save as Preset</h2>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-1)' }}>
+              Preset name <span className="text-red-400">*</span>
+            </label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. C891F DirectFiber test"
+              className="w-full text-sm rounded-lg px-3 py-2 border outline-none"
+              style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)', color: 'var(--c-text)' }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-1)' }}>
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder="Optional notes about this preset"
+              className="w-full text-sm rounded-lg px-3 py-2 border outline-none resize-none"
+              style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)', color: 'var(--c-text)' }}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-400">{error}</p>
+        )}
+
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm px-4 py-2 rounded-lg border transition-colors"
+            style={{ color: 'var(--c-muted-3)', borderColor: 'var(--c-border)' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!name.trim() || isPending}
+            onClick={() => onSave(name.trim(), description.trim())}
+            className="text-sm px-4 py-2 rounded-lg text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)' }}
+          >
+            {isPending ? 'Saving…' : 'Save Preset'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Preset toolbar ─────────────────────────────────────────────────────────────
+
+interface PresetToolbarProps {
+  presets: RenderPresetOut[]
+  onLoadPreset: (preset: RenderPresetOut) => void
+  onSavePreset: () => void
+}
+
+function PresetToolbar({ presets, onLoadPreset, onSavePreset }: PresetToolbarProps) {
+  const [selected, setSelected] = useState('')
+
+  function handleSelect(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value
+    setSelected(val)
+    if (val) {
+      const preset = presets.find((p) => String(p.id) === val)
+      if (preset) {
+        onLoadPreset(preset)
+        setSelected('')
+      }
+    }
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+      style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--c-muted-3)' }}>
+        <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+      <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--c-muted-3)' }}>Presets</span>
+
+      {presets.length === 0 ? (
+        <span className="flex-1 text-xs italic" style={{ color: 'var(--c-dim)' }}>No presets saved yet</span>
+      ) : (
+        <select
+          value={selected}
+          onChange={handleSelect}
+          className="flex-1 text-xs rounded-lg px-3 py-1.5 border appearance-none outline-none"
+          style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)', color: 'var(--c-muted-1)' }}
+        >
+          <option value="">Load a preset…</option>
+          {presets.map((p) => (
+            <option key={p.id} value={String(p.id)}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <button
+        type="button"
+        onClick={onSavePreset}
+        className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors"
+        style={{ color: '#818cf8', borderColor: 'rgba(99,102,241,0.25)', backgroundColor: 'rgba(99,102,241,0.07)' }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+          <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+          <polyline points="17 21 17 13 7 13 7 21" />
+          <polyline points="7 3 7 8 15 8" />
+        </svg>
+        Save preset
+      </button>
+    </div>
+  )
+}
+
+// ── API example builders ──────────────────────────────────────────────────────
+
+function buildRenderExamples(templateId: number, params: { name: string }[]) {
+  const base = getApiBase()
+  const paramsObj = Object.fromEntries(params.map((p) => [p.name, '']))
+  const body = JSON.stringify({ params: paramsObj }, null, 2)
+
+  const curl = `curl -s -X POST "${base}/templates/${templateId}/render" \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '${body}'`
+
+  const python = `import requests
+
+response = requests.post(
+    "${base}/templates/${templateId}/render",
+    headers={"Authorization": "Bearer $TOKEN"},
+    json=${JSON.stringify({ params: paramsObj }, null, 4).replace(/^/gm, '    ').trimStart()},
+)
+print(response.json()["output"])`
+
+  return [
+    { lang: 'curl' as const, code: curl },
+    { lang: 'python' as const, code: python },
+  ]
+}
+
+// ── RenderPage ────────────────────────────────────────────────────────────────
+
 export default function RenderPage() {
   const { templateId } = useParams<{ templateId: string }>()
   const location = useLocation()
-  const prefillValues = (location.state as { prefill?: Record<string, unknown> })?.prefill
+  const queryClient = useQueryClient()
 
   const id = Number(templateId)
+
+  // Key to force DynamicForm re-mount when a preset is loaded (resets form values)
+  const [formKey, setFormKey] = useState(0)
+  const [activePrefill, setActivePrefill] = useState<Record<string, unknown> | undefined>(
+    (location.state as { prefill?: Record<string, unknown> })?.prefill,
+  )
+
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const {
     data: template,
@@ -43,6 +233,34 @@ export default function RenderPage() {
     enabled: !!id,
   })
 
+  const { data: presets = [] } = useQuery({
+    queryKey: ['presets', id],
+    queryFn: () => listPresets(id),
+    enabled: !!id,
+  })
+
+  const saveMut = useMutation({
+    mutationFn: (data: { name: string; description: string }) =>
+      createPreset(id, {
+        name: data.name,
+        description: data.description || undefined,
+        params: activePrefill ?? {},
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['presets', id] })
+      setShowSaveDialog(false)
+      setSaveError(null)
+    },
+    onError: (err) => {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save preset')
+    },
+  })
+
+  function handleLoadPreset(preset: RenderPresetOut) {
+    setActivePrefill(preset.params)
+    setFormKey((k) => k + 1)
+  }
+
   const isLoading = templateLoading || defLoading
   const error = templateError || defError
 
@@ -63,24 +281,41 @@ export default function RenderPage() {
     <div className="max-w-3xl">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-2 text-xs mb-3" style={{ color: '#3d4777' }}>
+        <div className="flex items-center gap-2 text-xs mb-3" style={{ color: 'var(--c-muted-4)' }}>
           <Link to="/catalog" className="hover:text-indigo-400 transition-colors">
             Catalog
           </Link>
           <span>›</span>
-          <span className="font-mono" style={{ color: '#546485' }}>{template.name}</span>
+          <span className="font-mono" style={{ color: 'var(--c-muted-3)' }}>{template.name}</span>
           <span
             className="ml-auto font-mono text-xs px-2 py-0.5 rounded border"
-            style={{ backgroundColor: '#141828', borderColor: '#2a3255', color: '#546485' }}
+            style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)', color: 'var(--c-muted-3)' }}
           >
             {definition.parameters.length} param{definition.parameters.length !== 1 ? 's' : ''}
           </span>
         </div>
 
-        <h1 className="text-2xl font-bold text-white font-display">{template.display_name}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-bold text-white font-display">{template.display_name}</h1>
+          <div className="shrink-0 mt-1">
+            <ApiCodePanel examples={buildRenderExamples(id, definition.parameters)} />
+          </div>
+        </div>
         {template.description && (
-          <p className="text-sm mt-1.5" style={{ color: '#546485' }}>{template.description}</p>
+          <p className="text-sm mt-1.5" style={{ color: 'var(--c-muted-3)' }}>{template.description}</p>
         )}
+      </div>
+
+      {/* Preset toolbar */}
+      <div className="mb-5">
+        <PresetToolbar
+          presets={presets}
+          onLoadPreset={handleLoadPreset}
+          onSavePreset={() => {
+            setSaveError(null)
+            setShowSaveDialog(true)
+          }}
+        />
       </div>
 
       {definition.parameters.length === 0 ? (
@@ -105,9 +340,20 @@ export default function RenderPage() {
         </div>
       ) : (
         <DynamicForm
+          key={formKey}
           templateId={id}
           definition={definition}
-          prefillValues={prefillValues}
+          prefillValues={activePrefill}
+        />
+      )}
+
+      {/* Save preset dialog */}
+      {showSaveDialog && (
+        <SavePresetDialog
+          onSave={(name, description) => saveMut.mutate({ name, description })}
+          onCancel={() => setShowSaveDialog(false)}
+          isPending={saveMut.isPending}
+          error={saveError}
         />
       )}
     </div>

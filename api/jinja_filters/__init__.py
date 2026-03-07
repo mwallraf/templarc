@@ -17,6 +17,7 @@ from api.jinja_filters.network import (
     cidr_to_wildcard,
     int_to_ip,
     ip_to_int,
+    ipaddr,
     mb_to_bps,
     mb_to_kbps,
 )
@@ -27,4 +28,5 @@ BUILTIN_FILTERS: dict[str, object] = {
     "cidr_to_wildcard": cidr_to_wildcard,
     "ip_to_int": ip_to_int,
     "int_to_ip": int_to_ip,
+    "ipaddr": ipaddr,
 }

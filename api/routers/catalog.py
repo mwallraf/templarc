@@ -6,6 +6,7 @@ Mounted at /catalog in main.py. All project routes are therefore:
   POST   /catalog/projects
   GET    /catalog/projects/{id}
   PUT    /catalog/projects/{id}
+  DELETE /catalog/projects/{id}
   GET    /catalog/projects/{id}/templates
   GET    /catalog/{slug}
 
@@ -134,6 +135,30 @@ async def update_project(
     await log_write(db, token.sub, "update", "project", project_id, data.model_dump(exclude_none=True))
     await db.commit()
     return out
+
+
+# ---------------------------------------------------------------------------
+# Project delete
+# ---------------------------------------------------------------------------
+
+@router.delete(
+    "/projects/{project_id}",
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete project",
+    description=(
+        "Hard-delete a project and all its templates and parameters. "
+        "This action is irreversible. Git files are NOT removed from the repository."
+    ),
+)
+async def delete_project(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> None:
+    await log_write(db, token.sub, "delete", "project", project_id)
+    await catalog_service.delete_project(db, project_id)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------

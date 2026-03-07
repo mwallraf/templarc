@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 
 const NAV_LINKS = [
   {
@@ -24,9 +25,28 @@ const NAV_LINKS = [
       </svg>
     ),
   },
+  {
+    to: '/quickpads',
+    label: 'Quickpads',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0">
+        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    ),
+  },
 ]
 
 const ADMIN_LINKS = [
+  {
+    to: '/admin/projects',
+    label: 'Projects',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0">
+        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+      </svg>
+    ),
+  },
   {
     to: '/admin/templates',
     label: 'Templates',
@@ -87,6 +107,15 @@ const ADMIN_LINKS = [
       </svg>
     ),
   },
+  {
+    to: '/admin/api-keys',
+    label: 'API Keys',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0">
+        <path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+      </svg>
+    ),
+  },
 ]
 
 function Breadcrumbs() {
@@ -95,7 +124,7 @@ function Breadcrumbs() {
   if (segments.length === 0) return null
 
   return (
-    <nav className="flex items-center gap-1.5 text-xs mb-5" style={{ color: '#546485' }}>
+    <nav className="flex items-center gap-1.5 text-xs mb-5" style={{ color: 'var(--c-muted-3)' }}>
       <Link to="/" className="hover:text-slate-300 transition-colors">
         Home
       </Link>
@@ -104,7 +133,7 @@ function Breadcrumbs() {
         const isLast = i === segments.length - 1
         return (
           <span key={to} className="flex items-center gap-1.5">
-            <span style={{ color: '#2a3255' }}>/</span>
+            <span style={{ color: 'var(--c-border-bright)' }}>/</span>
             {isLast ? (
               <span className="text-slate-300 font-medium capitalize">{decodeURIComponent(seg)}</span>
             ) : (
@@ -150,6 +179,7 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: React.R
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
   function handleLogout() {
@@ -162,17 +192,17 @@ export default function Layout() {
     : '??'
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: '#080a12' }}>
+    <div className="flex min-h-screen" style={{ backgroundColor: 'var(--c-base)' }}>
       {/* Sidebar */}
       <aside
         className="w-56 shrink-0 flex flex-col border-r"
         style={{
-          background: 'linear-gradient(180deg, #0d1021 0%, #0a0d1c 100%)',
-          borderColor: '#1e2440',
+          background: 'linear-gradient(180deg, var(--c-surface) 0%, var(--c-surface-alt) 100%)',
+          borderColor: 'var(--c-border)',
         }}
       >
         {/* Logo */}
-        <div className="px-4 py-5 border-b" style={{ borderColor: '#1e2440' }}>
+        <div className="px-4 py-5 border-b" style={{ borderColor: 'var(--c-border)' }}>
           <Link to="/" className="flex items-center gap-2.5">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
@@ -199,7 +229,7 @@ export default function Layout() {
 
           {/* Admin section divider */}
           <div className="pt-5 pb-2 px-2">
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#2d3665' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--c-dim)' }}>
               Admin
             </p>
           </div>
@@ -210,7 +240,7 @@ export default function Layout() {
         </nav>
 
         {/* User section */}
-        <div className="px-3 py-3 border-t" style={{ borderColor: '#1e2440' }}>
+        <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--c-border)' }}>
           {user ? (
             <div className="flex items-center gap-2.5">
               <Link to="/profile" className="flex items-center gap-2.5 flex-1 min-w-0 group">
@@ -225,12 +255,40 @@ export default function Layout() {
                 </span>
               </Link>
               <button
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                className="transition-colors shrink-0"
+                style={{ color: 'var(--c-muted-4)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-1)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-4)')}
+              >
+                {theme === 'dark' ? (
+                  /* Sun icon */
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4">
+                    <circle cx="12" cy="12" r="4" />
+                    <line x1="12" y1="2" x2="12" y2="4" />
+                    <line x1="12" y1="20" x2="12" y2="22" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="2" y1="12" x2="4" y2="12" />
+                    <line x1="20" y1="12" x2="22" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                ) : (
+                  /* Moon icon */
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4">
+                    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                  </svg>
+                )}
+              </button>
+              <button
                 onClick={handleLogout}
                 title="Sign out"
                 className="transition-colors shrink-0"
-                style={{ color: '#3d4777' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#3d4777')}
+                style={{ color: 'var(--c-muted-4)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-1)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-4)')}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4">
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
@@ -248,7 +306,7 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto" style={{ backgroundColor: '#080a12' }}>
+      <main className="flex-1 overflow-auto" style={{ backgroundColor: 'var(--c-base)' }}>
         <div className="max-w-6xl mx-auto px-6 py-6">
           <Breadcrumbs />
           <Outlet />

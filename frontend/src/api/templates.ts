@@ -7,6 +7,7 @@ import type {
   TemplateUploadOut,
   VariableRefOut,
   InheritanceChainItem,
+  GitSyncRequest,
   SyncReport,
   SyncStatusReport,
 } from './types'
@@ -73,12 +74,12 @@ export async function uploadTemplate(
   return res.data
 }
 
-export async function gitSync(projectId: number): Promise<SyncReport> {
-  const res = await apiClient.post<SyncReport>(`/admin/git-sync/${projectId}`)
+export async function gitSyncStatus(projectId: number): Promise<SyncStatusReport> {
+  const res = await apiClient.get<SyncStatusReport>(`/admin/git-sync/${projectId}/status`)
   return res.data
 }
 
-export async function gitSyncStatus(projectId: number): Promise<SyncStatusReport> {
-  const res = await apiClient.get<SyncStatusReport>(`/admin/git-sync/${projectId}/status`)
+export async function gitSyncApply(projectId: number, request: GitSyncRequest): Promise<SyncReport> {
+  const res = await apiClient.post<SyncReport>(`/admin/git-sync/${projectId}`, request)
   return res.data
 }

@@ -1,5 +1,49 @@
 @import "tailwindcss";
 
+/* ── Color tokens — dark (default) ───────────────────────────────── */
+:root {
+  --c-base: #080a12;
+  --c-surface: #0d1021;
+  --c-surface-alt: #0a0d1a;
+  --c-card: #141828;
+  --c-elevated: #1c2235;
+  --c-hover: #232840;
+  --c-border: #1e2440;
+  --c-border-bright: #2a3255;
+  --c-dim: #2d3665;
+  --c-muted-4: #3d4777;
+  --c-muted-3: #546485;
+  --c-muted-2: #8892b0;
+  --c-muted-1: #94a3b8;
+  --c-text: #e2e8f4;
+  --c-text-strong: #ffffff;
+  --c-row-hover: rgba(255, 255, 255, 0.02);
+  --c-grid-line: rgba(255, 255, 255, 0.015);
+  --c-sidebar-grad: linear-gradient(180deg, #0d1021 0%, #0a0d1a 100%);
+}
+
+/* ── Color tokens — light override ───────────────────────────────── */
+html.light {
+  --c-base: #f0f4f8;
+  --c-surface: #ffffff;
+  --c-surface-alt: #f8fafc;
+  --c-card: #f1f5f9;
+  --c-elevated: #e8edf5;
+  --c-hover: #e2e8f0;
+  --c-border: #dde3ee;
+  --c-border-bright: #c4cedc;
+  --c-dim: #b4c4d4;
+  --c-muted-4: #94a3b8;
+  --c-muted-3: #64748b;
+  --c-muted-2: #475569;
+  --c-muted-1: #334155;
+  --c-text: #1e2d4a;
+  --c-text-strong: #0f172a;
+  --c-row-hover: rgba(0, 0, 0, 0.02);
+  --c-grid-line: rgba(0, 0, 0, 0.05);
+  --c-sidebar-grad: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
 @theme {
   /* Typography */
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -7,13 +51,13 @@
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
 
   /* Custom dark palette */
-  --color-app-base: #080a12;
-  --color-app-surface: #0d1021;
-  --color-app-card: #141828;
-  --color-app-elevated: #1c2235;
-  --color-app-hover: #232840;
-  --color-app-border: #1e2440;
-  --color-app-border-bright: #2a3255;
+  --color-app-base: var(--c-base);
+  --color-app-surface: var(--c-surface);
+  --color-app-card: var(--c-card);
+  --color-app-elevated: var(--c-elevated);
+  --color-app-hover: var(--c-hover);
+  --color-app-border: var(--c-border);
+  --color-app-border-bright: var(--c-border-bright);
 }
 
 /* ── Base ─────────────────────────────────────────────────────────── */
@@ -29,8 +73,8 @@ html {
 }
 
 body {
-  background-color: #080a12;
-  color: #e2e8f4;
+  background-color: var(--c-base);
+  color: var(--c-text);
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.6;
@@ -50,12 +94,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2a3255;
+  background: var(--c-border-bright);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a4470;
+  background: var(--c-muted-4);
 }
 
 /* ── Utility classes ─────────────────────────────────────────────── */
@@ -79,7 +123,69 @@ body {
 
 /* Sidebar gradient overlay */
 .sidebar-gradient {
-  background: linear-gradient(180deg, #0d1021 0%, #0a0d1c 100%);
+  background: var(--c-sidebar-grad);
+}
+
+/* ── Light-mode Tailwind text overrides ──────────────────────────── */
+html.light .text-white {
+  color: var(--c-text-strong) !important;
+}
+html.light .text-slate-100 {
+  color: var(--c-muted-1) !important;
+}
+html.light .text-slate-200 {
+  color: var(--c-muted-2) !important;
+}
+html.light .text-slate-300 {
+  color: var(--c-muted-2) !important;
+}
+html.light .text-slate-400 {
+  color: var(--c-muted-3) !important;
+}
+html.light .text-slate-500 {
+  color: var(--c-muted-3) !important;
+}
+html.light .hover\:text-slate-200:hover {
+  color: var(--c-text-strong) !important;
+}
+html.light .hover\:text-white:hover {
+  color: var(--c-text-strong) !important;
+}
+/* Keep white text on colored buttons (indigo, green, red, etc.) */
+html.light .bg-indigo-600 .text-white,
+html.light .bg-indigo-600,
+html.light [class*="bg-indigo-"] .text-white,
+html.light button.bg-indigo-600,
+html.light button[class*="bg-indigo-"] {
+  color: #ffffff !important;
+}
+html.light .bg-green-600,
+html.light button.bg-green-600,
+html.light [class*="bg-green-6"],
+html.light [class*="bg-red-6"],
+html.light [class*="bg-rose-6"] {
+  color: #ffffff !important;
+}
+
+/* Placeholder text */
+html.light ::placeholder {
+  color: var(--c-muted-3) !important;
+  opacity: 1;
+}
+
+/* Input / select / textarea */
+html.light input,
+html.light select,
+html.light textarea {
+  color: var(--c-text);
+}
+
+/* Scrollbar for light mode */
+html.light ::-webkit-scrollbar-thumb {
+  background: var(--c-border-bright);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: var(--c-muted-4);
 }
 
 /* Card hover glow */
@@ -135,7 +241,7 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #1c2235 25%, #232840 50%, #1c2235 75%);
+  background: linear-gradient(90deg, var(--c-elevated) 25%, var(--c-hover) 50%, var(--c-elevated) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 6px;

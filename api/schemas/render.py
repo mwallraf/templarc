@@ -74,6 +74,9 @@ class EnrichedParameterOut(BaseModel):
     required: bool
     sort_order: int
     is_derived: bool
+    validation_regex: str | None = None
+    section: str | None = None
+    visible_when: dict | None = None
 
     # Enrichments from data sources
     prefill: Any | None = None

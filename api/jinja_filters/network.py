@@ -64,3 +64,47 @@ def int_to_ip(n: int) -> str:
         167772161  → "10.0.0.1"
     """
     return str(ipaddress.IPv4Address(n))
+
+
+def ipaddr(value: str, query: str = "") -> str:
+    """Ansible-compatible ipaddr filter for IPv4 CIDR manipulation.
+
+    Supported queries::
+        ipaddr('address')   → extract IP address without prefix  ("10.1.1.1")
+        ipaddr('netmask')   → extract subnet mask                ("255.255.255.252")
+        ipaddr('network')   → extract network address            ("192.168.0.0")
+        ipaddr('prefix')    → extract prefix length              ("30")
+        ipaddr('broadcast') → extract broadcast address          ("192.168.0.3")
+        ipaddr('1')         → Nth host in the network with prefix ("192.168.0.1/30")
+        ipaddr('2')         → 2nd host in the network with prefix ("192.168.0.2/30")
+
+    Examples::
+        "10.1.1.1/32"       | ipaddr('address') → "10.1.1.1"
+        "192.168.100.0/30"  | ipaddr('2')       → "192.168.100.2/30"
+        "192.168.100.2/30"  | ipaddr('address') → "192.168.100.2"
+        "192.168.100.0/30"  | ipaddr('netmask') → "255.255.255.252"
+    """
+    try:
+        interface = ipaddress.IPv4Interface(value)
+    except (ValueError, TypeError):
+        return value
+
+    network = interface.network
+    prefix = network.prefixlen
+
+    if query == "address":
+        return str(interface.ip)
+    elif query == "netmask":
+        return str(network.netmask)
+    elif query == "network":
+        return str(network.network_address)
+    elif query == "prefix":
+        return str(prefix)
+    elif query == "broadcast":
+        return str(network.broadcast_address)
+    elif query.isdigit():
+        n = int(query)
+        host_ip = network.network_address + n
+        return f"{host_ip}/{prefix}"
+    else:
+        return value

@@ -142,6 +142,9 @@ class EnvironmentFactory:
         # Custom context objects from DB (global + project-scoped)
         await self._load_project_objects(env, project)
 
+        # Custom macros from DB (global + project-scoped)
+        await self._load_project_macros(env, project)
+
         # Parameter globals
         env.globals["glob"] = await self._load_glob_params(project.organization_id)
         env.globals["proj"] = await self._load_proj_params(project.id)
@@ -259,6 +262,51 @@ class EnvironmentFactory:
                     "Skipping invalid custom object %r (id=%d) — sandbox rejected the code",
                     co.name,
                     co.id,
+                )
+
+    async def _load_project_macros(self, env: jinja2.Environment, project: Project) -> None:
+        """
+        Compile custom Jinja2 macros from the DB and register them in *env.globals*.
+
+        Each macro body must contain a ``{% macro <name>(...) %}...{% endmacro %}``
+        definition.  The compiled callable is registered as ``env.globals[name]``
+        so templates can call it directly without an import statement.
+
+        Loads all active global macros plus any project-scoped macros for this project.
+        Invalid macro bodies are skipped with a warning.
+        """
+        from api.models.custom_macro import CustomMacro
+
+        result = await self._db.execute(
+            select(CustomMacro).where(
+                CustomMacro.is_active.is_(True),
+                or_(
+                    CustomMacro.scope == "global",
+                    and_(
+                        CustomMacro.scope == "project",
+                        CustomMacro.project_id == project.id,
+                    ),
+                ),
+            )
+        )
+        for cm in result.scalars().all():
+            try:
+                tmpl = env.from_string(cm.body)
+                fn = getattr(tmpl.module, cm.name, None)
+                if fn is not None:
+                    env.globals[cm.name] = fn
+                else:
+                    logger.warning(
+                        "Custom macro %r (id=%d) body does not define a macro named %r — skipping",
+                        cm.name,
+                        cm.id,
+                        cm.name,
+                    )
+            except jinja2.exceptions.TemplateSyntaxError:
+                logger.warning(
+                    "Skipping invalid custom macro %r (id=%d) — Jinja2 syntax error",
+                    cm.name,
+                    cm.id,
                 )
 
     # ------------------------------------------------------------------

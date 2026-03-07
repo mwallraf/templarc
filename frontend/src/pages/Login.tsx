@@ -28,7 +28,7 @@ export default function Login() {
   return (
     <div
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ backgroundColor: '#080a12' }}
+      style={{ backgroundColor: 'var(--c-base)' }}
     >
       {/* Background radial glow */}
       <div
@@ -56,7 +56,7 @@ export default function Login() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-white font-display tracking-tight">Templarc</h1>
-          <p className="text-sm mt-1" style={{ color: '#546485' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--c-muted-3)' }}>
             Template Engine Platform
           </p>
         </div>
@@ -65,8 +65,8 @@ export default function Login() {
         <div
           className="rounded-2xl border p-7"
           style={{
-            backgroundColor: '#0d1021',
-            borderColor: '#1e2440',
+            backgroundColor: 'var(--c-surface)',
+            borderColor: 'var(--c-border)',
             boxShadow: '0 24px 48px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)',
           }}
         >
@@ -74,20 +74,20 @@ export default function Login() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Username
               </label>
               <input
                 type="text"
                 autoComplete="username"
                 className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 border transition-all duration-150 focus:outline-none placeholder:text-slate-600"
-                style={{ backgroundColor: '#141828', borderColor: '#2a3255' }}
+                style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#6366f1'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#2a3255'
+                  e.currentTarget.style.borderColor = 'var(--c-border-bright)'
                   e.currentTarget.style.boxShadow = 'none'
                 }}
                 placeholder="your-username"
@@ -99,20 +99,20 @@ export default function Login() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Password
               </label>
               <input
                 type="password"
                 autoComplete="current-password"
                 className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 border transition-all duration-150 focus:outline-none placeholder:text-slate-600"
-                style={{ backgroundColor: '#141828', borderColor: '#2a3255' }}
+                style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#6366f1'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#2a3255'
+                  e.currentTarget.style.borderColor = 'var(--c-border-bright)'
                   e.currentTarget.style.boxShadow = 'none'
                 }}
                 placeholder="••••••••"
@@ -159,7 +159,7 @@ export default function Login() {
           </form>
         </div>
 
-        <p className="text-center text-xs mt-5" style={{ color: '#2d3665' }}>
+        <p className="text-center text-xs mt-5" style={{ color: 'var(--c-dim)' }}>
           Templarc Template Engine · v1.0
         </p>
       </div>

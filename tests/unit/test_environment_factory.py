@@ -119,7 +119,7 @@ class TestIntToIp:
 
 class TestBuiltinFilters:
     def test_all_keys_present(self):
-        expected = {"mb_to_kbps", "mb_to_bps", "cidr_to_wildcard", "ip_to_int", "int_to_ip"}
+        expected = {"mb_to_kbps", "mb_to_bps", "cidr_to_wildcard", "ip_to_int", "int_to_ip", "ipaddr"}
         assert set(BUILTIN_FILTERS.keys()) == expected
 
     def test_all_callable(self):
@@ -172,30 +172,27 @@ def _make_param(name: str, default_value: str | None = None) -> MagicMock:
 def _make_db(project: MagicMock, glob_params: list, proj_params: list) -> AsyncMock:
     """
     Build an AsyncSession mock that returns the right results for each execute() call:
-      call 0 → project query
-      call 1 → glob params query
-      call 2 → proj params query
-      call 3 → custom filters query (always empty in unit tests)
-      call 4 → custom objects query (always empty in unit tests)
+      call 0 → project query         (_load_project in get_environment)
+      call 1 → custom filters query  (_load_project_filters)
+      call 2 → custom objects query  (_load_project_objects)
+      call 3 → custom macros query   (_load_project_macros)
+      call 4 → glob params query     (_load_glob_params)
+      call 5 → proj params query     (_load_proj_params)
     """
     db = AsyncMock(spec=AsyncSession)
 
-    def _scalars_result(items):
-        r = MagicMock()
-        r.scalars.return_value.all.return_value = items
-        r.scalar_one_or_none.return_value = project if items is project else None
-        return r
-
     results = [
-        # project (_load_project in get_environment)
+        # project
         _scalar_one_result(project),
-        # custom filters (_load_project_filters, first in _build_environment)
+        # custom filters (always empty in unit tests)
         _scalars_all_result([]),
-        # custom objects (_load_project_objects, second in _build_environment)
+        # custom objects (always empty in unit tests)
         _scalars_all_result([]),
-        # glob params (_load_glob_params, third in _build_environment)
+        # custom macros (always empty in unit tests)
+        _scalars_all_result([]),
+        # glob params
         _scalars_all_result(glob_params),
-        # proj params (_load_proj_params, fourth in _build_environment)
+        # proj params
         _scalars_all_result(proj_params),
     ]
     db.execute = AsyncMock(side_effect=results)

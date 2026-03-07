@@ -9,7 +9,7 @@ import {
   deleteParameterOption,
 } from '../../api/parameters'
 import { listProjects } from '../../api/catalog'
-import { listTemplates } from '../../api/templates'
+import { getTemplate, listTemplates } from '../../api/templates'
 import type { ParameterOut, ParameterScope, WidgetType } from '../../api/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -76,9 +76,9 @@ const inputClass =
   'w-full rounded-lg px-3 py-2 text-sm border transition-colors duration-150 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed'
 
 const inputStyle = {
-  backgroundColor: '#141828',
-  borderColor: '#2a3255',
-  color: '#e2e8f4',
+  backgroundColor: 'var(--c-card)',
+  borderColor: 'var(--c-border-bright)',
+  color: 'var(--c-text)',
 }
 
 const smallInputClass =
@@ -102,7 +102,7 @@ function OptionRow({
   return (
     <div
       className="rounded-lg p-3 space-y-2 text-xs border"
-      style={{ backgroundColor: '#0a0d1a', borderColor: '#2a3255' }}
+      style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border-bright)' }}
     >
       <div className="flex gap-2 items-start">
         <div className="flex-1 grid grid-cols-2 gap-2">
@@ -156,7 +156,7 @@ function OptionRow({
       {showCondition && (
         <div
           className="grid grid-cols-2 gap-2 pt-2 border-t"
-          style={{ borderColor: '#1e2440' }}
+          style={{ borderColor: 'var(--c-border)' }}
         >
           <div>
             <label className="block mb-0.5 font-medium" style={{ color: '#64748b' }}>When parameter</label>
@@ -166,9 +166,9 @@ function OptionRow({
               className={smallInputClass}
               style={inputStyle}
             >
-              <option value="" style={{ backgroundColor: '#141828' }}>— select —</option>
+              <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select —</option>
               {allParams.map((p) => (
-                <option key={p.id} value={p.name} style={{ backgroundColor: '#141828' }}>
+                <option key={p.id} value={p.name} style={{ backgroundColor: 'var(--c-card)' }}>
                   {p.name}
                 </option>
               ))}
@@ -233,6 +233,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
   const widgetType = watch('widget_type')
   const isDerived = watch('is_derived')
   const projectId = watch('project_id')
+  const templateId = watch('template_id')
 
   // Auto-apply name prefix when scope changes
   useEffect(() => {
@@ -257,6 +258,18 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
     queryFn: () => listTemplates({ project_id: Number(projectId), active_only: false }),
     enabled: scope === 'template' && !!projectId,
   })
+
+  // For template-scope edit: derive project_id from the template (it's not on the parameter)
+  const { data: bootstrapTemplate } = useQuery({
+    queryKey: ['template', parameter?.template_id],
+    queryFn: () => getTemplate(parameter!.template_id!),
+    enabled: isEdit && parameter?.scope === 'template' && !!parameter?.template_id,
+  })
+
+  useEffect(() => {
+    if (!bootstrapTemplate) return
+    setValue('project_id', String(bootstrapTemplate.project_id), { shouldDirty: false })
+  }, [bootstrapTemplate, setValue])
 
   // All parameters (for condition selectors in OptionRow)
   const { data: allParamsData } = useQuery({
@@ -364,15 +377,15 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
       <div
         className="rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border"
         style={{
-          backgroundColor: '#0d1021',
-          borderColor: '#1e2440',
+          backgroundColor: 'var(--c-surface)',
+          borderColor: 'var(--c-border)',
           boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
         }}
       >
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b rounded-t-2xl shrink-0"
-          style={{ backgroundColor: '#0a0d1a', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
         >
           <div className="flex items-center gap-3">
             <div
@@ -390,9 +403,9 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           <button
             onClick={onClose}
             className="text-2xl leading-none transition-colors"
-            style={{ color: '#3d4777' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#94a3b8' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#3d4777' }}
+            style={{ color: 'var(--c-muted-4)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--c-muted-1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--c-muted-4)' }}
           >
             ×
           </button>
@@ -407,7 +420,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {/* Scope + Name row */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Scope <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
@@ -415,13 +428,13 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
                 style={inputStyle}
                 {...register('scope', { required: true })}
               >
-                <option value="global" style={{ backgroundColor: '#141828' }}>Global (glob.*)</option>
-                <option value="project" style={{ backgroundColor: '#141828' }}>Project (proj.*)</option>
-                <option value="template" style={{ backgroundColor: '#141828' }}>Template</option>
+                <option value="global" style={{ backgroundColor: 'var(--c-card)' }}>Global (glob.*)</option>
+                <option value="project" style={{ backgroundColor: 'var(--c-card)' }}>Project (proj.*)</option>
+                <option value="template" style={{ backgroundColor: 'var(--c-card)' }}>Template</option>
               </select>
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
@@ -452,15 +465,17 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {scope !== 'global' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Project</label>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Project</label>
                 <select
                   className={inputClass}
                   style={inputStyle}
+                  value={projectId ?? ''}
                   {...register('project_id')}
+                  onChange={(e) => setValue('project_id', e.target.value, { shouldDirty: true })}
                 >
-                  <option value="" style={{ backgroundColor: '#141828' }}>— select project —</option>
+                  <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
                   {projects?.map((p) => (
-                    <option key={p.id} value={p.id} style={{ backgroundColor: '#141828' }}>
+                    <option key={p.id} value={p.id} style={{ backgroundColor: 'var(--c-card)' }}>
                       {p.display_name}
                     </option>
                   ))}
@@ -468,7 +483,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
               </div>
               {scope === 'template' && (
                 <div>
-                  <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Template</label>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Template</label>
                   <select
                     className={inputClass}
                     style={{
@@ -476,11 +491,13 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
                       opacity: !projectId ? 0.5 : 1,
                     }}
                     disabled={!projectId}
+                    value={templateId ?? ''}
                     {...register('template_id')}
+                    onChange={(e) => setValue('template_id', e.target.value, { shouldDirty: true })}
                   >
-                    <option value="" style={{ backgroundColor: '#141828' }}>— select template —</option>
+                    <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select template —</option>
                     {(templateList ?? []).map((t) => (
-                      <option key={t.id} value={t.id} style={{ backgroundColor: '#141828' }}>
+                      <option key={t.id} value={t.id} style={{ backgroundColor: 'var(--c-card)' }}>
                         {t.display_name}
                       </option>
                     ))}
@@ -492,14 +509,14 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
 
           {/* Widget type */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Widget type</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Widget type</label>
             <select
               className={inputClass}
               style={inputStyle}
               {...register('widget_type')}
             >
               {WIDGET_OPTIONS.map((w) => (
-                <option key={w.value} value={w.value} style={{ backgroundColor: '#141828' }}>
+                <option key={w.value} value={w.value} style={{ backgroundColor: 'var(--c-card)' }}>
                   {w.label}
                 </option>
               ))}
@@ -509,7 +526,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {/* Label + help_text */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Label</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Label</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -518,7 +535,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Help text</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Help text</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -530,7 +547,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Description</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
             <textarea
               rows={2}
               className={inputClass}
@@ -543,7 +560,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {/* Default value + required */}
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Default value</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Default value</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -557,7 +574,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
                 {...register('required')}
                 style={{ accentColor: '#6366f1', width: '14px', height: '14px' }}
               />
-              <label htmlFor="req" className="text-sm cursor-pointer" style={{ color: '#94a3b8' }}>
+              <label htmlFor="req" className="text-sm cursor-pointer" style={{ color: 'var(--c-muted-1)' }}>
                 Required
               </label>
             </div>
@@ -566,7 +583,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {/* Validation regex (not for select/checkbox/readonly) */}
           {!['select', 'multiselect', 'checkbox', 'readonly'].includes(widgetType) && (
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Validation regex</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Validation regex</label>
               <input
                 className={inputClass + ' font-mono'}
                 style={inputStyle}
@@ -579,7 +596,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {/* Derived parameter */}
           <div
             className="rounded-xl p-4 space-y-3 border"
-            style={{ backgroundColor: '#0a0d1a', borderColor: '#1e2440' }}
+            style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
           >
             <div className="flex items-center gap-2.5">
               <input
@@ -588,17 +605,17 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
                 {...register('is_derived')}
                 style={{ accentColor: '#6366f1', width: '14px', height: '14px' }}
               />
-              <label htmlFor="derived" className="text-sm font-medium cursor-pointer" style={{ color: '#94a3b8' }}>
+              <label htmlFor="derived" className="text-sm font-medium cursor-pointer" style={{ color: 'var(--c-muted-1)' }}>
                 Derived parameter
               </label>
-              <span className="text-xs" style={{ color: '#3d4777' }}>
+              <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>
                 — value is computed from other parameters
               </span>
             </div>
 
             {isDerived && (
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Expression</label>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Expression</label>
                 <textarea
                   rows={3}
                   className={inputClass + ' font-mono'}
@@ -606,18 +623,18 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
                   placeholder={'{{ router.hostname }}.{{ proj.domain }}'}
                   {...register('derived_expression')}
                 />
-                <p className="text-xs mt-2" style={{ color: '#3d4777' }}>
+                <p className="text-xs mt-2" style={{ color: 'var(--c-muted-4)' }}>
                   Use Jinja2 syntax referencing other parameter names.{' '}
                   <span
                     className="font-mono px-1 py-0.5 rounded text-xs"
-                    style={{ backgroundColor: '#141828', color: '#22d3ee', border: '1px solid #2a3255' }}
+                    style={{ backgroundColor: 'var(--c-card)', color: '#22d3ee', border: '1px solid var(--c-border-bright)' }}
                   >
                     {'{{ glob.domain }}'}
                   </span>{' '}
                   is a global param,{' '}
                   <span
                     className="font-mono px-1 py-0.5 rounded text-xs"
-                    style={{ backgroundColor: '#141828', color: '#22d3ee', border: '1px solid #2a3255' }}
+                    style={{ backgroundColor: 'var(--c-card)', color: '#22d3ee', border: '1px solid var(--c-border-bright)' }}
                   >
                     {'{{ proj.vrf }}'}
                   </span>{' '}
@@ -631,9 +648,9 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
           {showOptions && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium" style={{ color: '#94a3b8' }}>
+                <label className="text-sm font-medium" style={{ color: 'var(--c-muted-1)' }}>
                   Options{' '}
-                  <span className="text-xs font-normal" style={{ color: '#3d4777' }}>
+                  <span className="text-xs font-normal" style={{ color: 'var(--c-muted-4)' }}>
                     ({visibleOptions.length} defined)
                   </span>
                 </label>
@@ -658,7 +675,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
               {visibleOptions.length === 0 && (
                 <p
                   className="text-xs italic text-center py-5 rounded-lg border border-dashed"
-                  style={{ color: '#3d4777', borderColor: '#2a3255' }}
+                  style={{ color: 'var(--c-muted-4)', borderColor: 'var(--c-border-bright)' }}
                 >
                   No options yet — click "Add option"
                 </p>
@@ -695,20 +712,20 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
         {/* Footer */}
         <div
           className="flex items-center justify-end gap-3 px-6 py-4 border-t rounded-b-2xl shrink-0"
-          style={{ backgroundColor: '#0a0d1a', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
         >
           <button
             type="button"
             onClick={onClose}
             className="px-4 py-2 text-sm rounded-lg border transition-colors"
-            style={{ color: '#8892b0', borderColor: '#2a3255', backgroundColor: 'transparent' }}
+            style={{ color: 'var(--c-muted-2)', borderColor: 'var(--c-border-bright)', backgroundColor: 'transparent' }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#141828'
+              e.currentTarget.style.backgroundColor = 'var(--c-card)'
               e.currentTarget.style.color = '#cbd5e1'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent'
-              e.currentTarget.style.color = '#8892b0'
+              e.currentTarget.style.color = 'var(--c-muted-2)'
             }}
           >
             Cancel

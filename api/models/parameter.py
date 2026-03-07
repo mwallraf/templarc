@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ENUM as PgEnum
+from sqlalchemy.dialects.postgresql import ENUM as PgEnum, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base
@@ -99,6 +99,8 @@ class Parameter(Base):
     derived_expression: Mapped[str | None] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    section: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    visible_when: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

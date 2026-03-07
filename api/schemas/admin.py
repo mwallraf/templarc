@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,40 @@ class SyncImportedTemplate(BaseModel):
     id: int
     name: str
     git_path: str
+
+
+class SyncDeletedTemplate(BaseModel):
+    """Summary of a template removed from the DB during a sync run."""
+    id: int
+    name: str
+    git_path: str
+
+
+class GitSyncRequest(BaseModel):
+    """
+    Optional request body for POST /admin/git-sync/{project_id}.
+
+    When omitted, the default behaviour is:
+      - import_paths=None → import ALL new git files
+      - delete_paths=None → do not delete anything
+
+    Supply explicit lists to apply only the selected actions from the
+    review modal.
+    """
+    import_paths: list[str] | None = Field(
+        None,
+        description=(
+            "Specific git paths to import into the DB. "
+            "When None all new (in_git_only) files are imported."
+        ),
+    )
+    delete_paths: list[str] | None = Field(
+        None,
+        description=(
+            "git_paths of DB records to remove. "
+            "When None no deletions are performed."
+        ),
+    )
 
 
 class SyncReport(BaseModel):
@@ -60,6 +94,7 @@ class SyncReport(BaseModel):
             "listed but not imported as catalog templates."
         ),
     )
+    deleted: int = Field(0, description="DB records removed in this run.")
     errors: list[SyncErrorItem] = Field(
         default_factory=list,
         description="Per-file errors (invalid frontmatter, DB constraint violations, etc.).",
@@ -67,6 +102,10 @@ class SyncReport(BaseModel):
     imported_templates: list[SyncImportedTemplate] = Field(
         default_factory=list,
         description="Templates successfully imported in this run.",
+    )
+    deleted_templates: list[SyncDeletedTemplate] = Field(
+        default_factory=list,
+        description="Templates removed from the DB in this run.",
     )
 
 
@@ -78,6 +117,14 @@ class SyncStatusItem(BaseModel):
     """Status of a single path in the drift comparison."""
     git_path: str
     status: Literal["in_sync", "in_db_only", "in_git_only", "fragment"]
+    template_name: str | None = Field(
+        None,
+        description="DB template name — populated only for in_db_only entries.",
+    )
+    template_id: int | None = Field(
+        None,
+        description="DB template id — populated only for in_db_only entries.",
+    )
 
 
 class SyncStatusReport(BaseModel):
@@ -251,6 +298,7 @@ class CustomObjectCreate(BaseModel):
             "name": "Defaults",
             "code": "class Defaults:\n    ntp_server = 'ntp.company.com'\n    dns_server = '8.8.8.8'\n",
             "description": "Company-wide default values available in all templates",
+            "scope": "global",
             "project_id": None,
         }]
     })
@@ -268,10 +316,22 @@ class CustomObjectCreate(BaseModel):
         description="Python source code: one class or factory function.",
     )
     description: str | None = Field(None, max_length=500)
+    scope: Literal["global", "project"] = Field(
+        "global",
+        description="'global' = available in all projects; 'project' = one project only.",
+    )
     project_id: int | None = Field(
         None,
-        description="Restrict to one project. None = available in all projects.",
+        description="Required when scope='project'; must be None for scope='global'.",
     )
+
+    @model_validator(mode="after")
+    def check_scope_consistency(self) -> "CustomObjectCreate":
+        if self.scope == "project" and not self.project_id:
+            raise ValueError("project_id is required when scope is 'project'")
+        if self.scope == "global" and self.project_id is not None:
+            raise ValueError("project_id must be None when scope is 'global'")
+        return self
 
 
 class CustomObjectOut(BaseModel):
@@ -288,8 +348,163 @@ class CustomObjectOut(BaseModel):
     created_at: datetime
     created_by: str | None
 
+    @computed_field  # type: ignore[misc]
+    @property
+    def scope(self) -> str:
+        return "project" if self.project_id is not None else "global"
+
 
 class CustomObjectDeleteOut(BaseModel):
     """Response for DELETE /admin/objects/{id}."""
+
+    id: int
+
+
+# ---------------------------------------------------------------------------
+# Duplicate parameter detection
+# ---------------------------------------------------------------------------
+
+class DuplicateTemplateRef(BaseModel):
+    """One occurrence of a duplicated parameter inside a specific template."""
+
+    param_id: int
+    template_id: int
+    template_name: str
+    template_display_name: str
+    widget_type: str
+    label: str | None
+    required: bool
+
+
+class DuplicateParameterGroup(BaseModel):
+    """A parameter name that appears in more than one template within the same project."""
+
+    name: str
+    project_id: int
+    project_display_name: str
+    count: int
+    has_conflicts: bool  # True when widget_type or required differs across occurrences
+    templates: list[DuplicateTemplateRef]
+
+
+class DuplicatesReport(BaseModel):
+    groups: list[DuplicateParameterGroup]
+    total_duplicate_names: int
+    total_redundant_params: int  # sum of (count - 1) across all groups
+
+
+# ---------------------------------------------------------------------------
+# Parameter promote
+# ---------------------------------------------------------------------------
+
+class PromoteRequest(BaseModel):
+    """Request body for POST /admin/parameters/promote."""
+
+    from_name: str = Field(
+        ...,
+        max_length=200,
+        description="Current template-scope parameter name (e.g. 'service_id').",
+    )
+    to_name: str = Field(
+        ...,
+        max_length=200,
+        description="New promoted name — must start with 'proj.' or 'glob.' (e.g. 'proj.service_id').",
+    )
+    project_id: int = Field(
+        ...,
+        description="Project ID that owns the duplicate template parameters.",
+    )
+
+
+class PromoteTemplateRewrite(BaseModel):
+    """Result of attempting to rewrite one .j2 file during a promote operation."""
+
+    template_id: int
+    template_name: str
+    git_path: str | None
+    rewritten: bool
+    replacements: int = 0
+    error: str | None = None
+
+
+class PromoteReport(BaseModel):
+    """Response for POST /admin/parameters/promote."""
+
+    created_param_id: int
+    deleted_param_ids: list[int]
+    templates_updated: int
+    git_files_rewritten: int
+    template_rewrites: list[PromoteTemplateRewrite]
+
+
+# ---------------------------------------------------------------------------
+# Custom Macros
+# ---------------------------------------------------------------------------
+
+class CustomMacroCreate(BaseModel):
+    """Request body for POST /admin/macros."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [{
+            "name": "interface_block",
+            "body": "{% macro interface_block(name, ip) %}\ninterface {{ name }}\n  ip address {{ ip }}\n{% endmacro %}",
+            "description": "Render a standard interface block",
+            "scope": "global",
+        }]
+    })
+
+    name: str = Field(
+        ...,
+        max_length=100,
+        pattern=r"^[a-z][a-z0-9_]*$",
+        description="Macro name — must match the macro name defined in the body.",
+    )
+    body: str = Field(
+        ...,
+        min_length=10,
+        max_length=65_536,
+        description=(
+            "Complete Jinja2 macro definition. Must contain a "
+            "``{%% macro <name>(...) %%}...{%% endmacro %%}`` block "
+            "where the macro name matches the ``name`` field."
+        ),
+    )
+    description: str | None = Field(None, max_length=500)
+    scope: Literal["global", "project"] = Field(
+        "global",
+        description="'global' = available in all projects; 'project' = one project only.",
+    )
+    project_id: int | None = Field(
+        None,
+        description="Required when scope='project'; must be None for scope='global'.",
+    )
+
+    @model_validator(mode="after")
+    def check_scope_consistency(self) -> "CustomMacroCreate":
+        if self.scope == "project" and not self.project_id:
+            raise ValueError("project_id is required when scope is 'project'")
+        if self.scope == "global" and self.project_id is not None:
+            raise ValueError("project_id must be None when scope is 'global'")
+        return self
+
+
+class CustomMacroOut(BaseModel):
+    """A single custom macro entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    body: str
+    description: str | None
+    scope: str
+    project_id: int | None
+    is_active: bool
+    created_at: datetime
+    created_by: str | None
+
+
+class CustomMacroDeleteOut(BaseModel):
+    """Response for DELETE /admin/macros/{id}."""
 
     id: int

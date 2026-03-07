@@ -46,6 +46,7 @@ from api.services.environment_factory import EnvironmentFactory
 from api.services.git_service import GitService, TemplateNotFoundError, parse_frontmatter
 from api.services.parameter_resolver import (
     ResolvedParameter,
+    re_evaluate_derived_params,
     resolve_template_parameters,
 )
 
@@ -69,6 +70,9 @@ class EnrichedParameter:
     required: bool
     sort_order: int
     is_derived: bool
+    validation_regex: str | None = None
+    section: str | None = None
+    visible_when: dict | None = None
     prefill: Any | None = None
     options: list[dict] = field(default_factory=list)
     readonly: bool = False
@@ -368,27 +372,37 @@ class TemplateRenderer:
         changed_param: str,
         current_params: dict[str, Any],
     ) -> dict:
-        """Resolve datasources triggered by a param change; return enrichments."""
+        """Resolve datasources and re-evaluate derived params after a param change."""
         template, project = await self._load_template_and_project(template_id)
 
-        if not template.git_path:
-            return {}
+        result: dict = {}
 
-        try:
-            raw = self._git.read_template(template.git_path)
-        except TemplateNotFoundError:
-            return {}
+        # 1. Datasource triggers
+        if template.git_path:
+            try:
+                raw = self._git.read_template(template.git_path)
+                fm, _ = parse_frontmatter(raw)
+                data_sources = _parse_data_sources(fm.get("data_sources") or [])
+                if data_sources:
+                    secret_resolver = SecretResolver(self._db, project.organization_id)
+                    ds_resolver = DataSourceResolver(secret_resolver=secret_resolver)
+                    ds_enrichments = await ds_resolver.resolve_on_change(
+                        data_sources, changed_param, current_params
+                    )
+                    result.update(ds_enrichments)
+            except TemplateNotFoundError:
+                pass
 
-        fm, _ = parse_frontmatter(raw)
-        data_sources = _parse_data_sources(fm.get("data_sources") or [])
-        if not data_sources:
-            return {}
-
-        secret_resolver = SecretResolver(self._db, project.organization_id)
-        ds_resolver = DataSourceResolver(secret_resolver=secret_resolver)
-        return await ds_resolver.resolve_on_change(
-            data_sources, changed_param, current_params
+        # 2. Re-evaluate derived parameters against the updated context
+        derived_values = await re_evaluate_derived_params(
+            self._db, template_id, current_params
         )
+        for name, value in derived_values.items():
+            if name not in result:
+                result[name] = {}
+            result[name]["prefill"] = value
+
+        return result
 
     async def render(
         self,
@@ -606,6 +620,16 @@ def _enrich_parameters(
     result: list[EnrichedParameter] = []
     for rp in resolved:
         enrichment = enrichments.get(rp.name, {})
+        # DB options converted to dicts (base); datasource enrichment can append/replace
+        db_options = [
+            {
+                "value": o.value,
+                "label": o.label,
+                "condition_param": o.condition_param,
+                "condition_value": o.condition_value,
+            }
+            for o in rp.options
+        ]
         result.append(EnrichedParameter(
             name=rp.name,
             scope=rp.scope,
@@ -617,9 +641,12 @@ def _enrich_parameters(
             required=rp.required,
             sort_order=rp.sort_order,
             is_derived=rp.is_derived,
+            validation_regex=rp.validation_regex,
+            section=rp.section,
+            visible_when=rp.visible_when,
             # Derived param prefill (from parameter_resolver) wins unless overridden
             prefill=enrichment.get("prefill") if enrichment else rp.prefill,
-            options=enrichment.get("options", []) if enrichment else [],
+            options=enrichment.get("options", db_options) if enrichment else db_options,
             readonly=enrichment.get("readonly", False) if enrichment else False,
             source_id=enrichment.get("source_id") if enrichment else None,
         ))

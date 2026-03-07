@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getRenderHistory, reRender } from '../api/render'
 import { getTemplate, listTemplates, getInheritanceChain } from '../api/templates'
 import type { RenderOut } from '../api/types'
+import ApiCodePanel, { getApiBase } from '../components/ApiCodePanel'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -51,26 +52,26 @@ function CollapsibleSection({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}>
+    <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors"
-        style={{ backgroundColor: open ? '#0a0d1a' : undefined }}
+        style={{ backgroundColor: open ? 'var(--c-surface-alt)' : undefined }}
       >
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm text-slate-200">{title}</span>
           {badge && (
             <span
               className="text-xs px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: '#141828', color: '#546485', border: '1px solid #2a3255' }}
+              style={{ backgroundColor: 'var(--c-card)', color: 'var(--c-muted-3)', border: '1px solid var(--c-border-bright)' }}
             >
               {badge}
             </span>
           )}
         </div>
-        <span className="text-xs" style={{ color: '#3d4777' }}>{open ? '▲ collapse' : '▼ expand'}</span>
+        <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>{open ? '▲ collapse' : '▼ expand'}</span>
       </button>
-      {open && <div className="border-t" style={{ borderColor: '#1e2440' }}>{children}</div>}
+      {open && <div className="border-t" style={{ borderColor: 'var(--c-border)' }}>{children}</div>}
     </div>
   )
 }
@@ -89,18 +90,18 @@ function OutputBlock({ output, label = 'Output' }: { output: string; label?: str
 
   return (
     <CollapsibleSection title={label} defaultOpen>
-      <div className="flex justify-end px-4 py-2 border-b" style={{ borderColor: '#1e2440', backgroundColor: '#0a0d1a' }}>
+      <div className="flex justify-end px-4 py-2 border-b" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface-alt)' }}>
         <button
           onClick={copy}
           className="text-xs px-3 py-1 rounded-lg border transition-all"
-          style={{ color: '#546485', borderColor: '#2a3255' }}
+          style={{ color: 'var(--c-muted-3)', borderColor: 'var(--c-border-bright)' }}
         >
           {copied ? '✓ Copied' : 'Copy'}
         </button>
       </div>
       <pre
         className="p-4 text-xs code-block overflow-x-auto whitespace-pre leading-relaxed overflow-y-auto"
-        style={{ backgroundColor: '#060810', color: '#a5f3c8', maxHeight: '500px' }}
+        style={{ backgroundColor: 'var(--c-base)', color: '#a5f3c8', maxHeight: '500px' }}
       >
         {output}
       </pre>
@@ -116,11 +117,11 @@ function ParametersTable({ params }: { params: Record<string, unknown> }) {
   return (
     <CollapsibleSection title="Parameters Used" badge={`${entries.length}`}>
       <table className="w-full text-xs">
-        <thead style={{ backgroundColor: '#0a0d1a', borderBottom: '1px solid #1e2440' }}>
+        <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
           <tr>
-            <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Name</th>
-            <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Scope</th>
-            <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Value</th>
+            <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+            <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
+            <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Value</th>
           </tr>
         </thead>
         <tbody>
@@ -130,9 +131,9 @@ function ParametersTable({ params }: { params: Record<string, unknown> }) {
             return (
               <tr
                 key={name}
-                style={{ borderBottom: idx < entries.length - 1 ? '1px solid #1e2440' : 'none' }}
+                style={{ borderBottom: idx < entries.length - 1 ? '1px solid var(--c-border)' : 'none' }}
               >
-                <td className="px-4 py-2 font-mono" style={{ color: '#8892b0' }}>{name}</td>
+                <td className="px-4 py-2 font-mono" style={{ color: 'var(--c-muted-2)' }}>{name}</td>
                 <td className="px-4 py-2">
                   <span
                     className="text-xs px-2 py-0.5 rounded-full border font-medium"
@@ -141,11 +142,11 @@ function ParametersTable({ params }: { params: Record<string, unknown> }) {
                     {scope}
                   </span>
                 </td>
-                <td className="px-4 py-2 font-mono max-w-sm truncate" style={{ color: '#e2e8f4' }}>
+                <td className="px-4 py-2 font-mono max-w-sm truncate" style={{ color: 'var(--c-text)' }}>
                   {Array.isArray(value)
                     ? value.join(', ')
                     : value === null || value === undefined
-                    ? <span className="italic" style={{ color: '#3d4777' }}>null</span>
+                    ? <span className="italic" style={{ color: 'var(--c-muted-4)' }}>null</span>
                     : String(value)}
                 </td>
               </tr>
@@ -199,12 +200,43 @@ function ReRenderResult({ result, label }: { result: RenderOut; label: string })
       </div>
       <pre
         className="p-4 text-xs code-block overflow-x-auto whitespace-pre leading-relaxed overflow-y-auto"
-        style={{ backgroundColor: '#060810', color: '#a5f3c8', maxHeight: '500px' }}
+        style={{ backgroundColor: 'var(--c-base)', color: '#a5f3c8', maxHeight: '500px' }}
       >
         {result.output}
       </pre>
     </div>
   )
+}
+
+// ── API example builder ───────────────────────────────────────────────────────
+
+function buildHistoryExamples(renderId: number, resolvedParams: Record<string, unknown>) {
+  const base = getApiBase()
+  const body = JSON.stringify({ params: resolvedParams }, null, 2)
+
+  const curl = `# Fetch stored render
+curl -s "${base}/render-history/${renderId}" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Re-render with same parameters
+curl -s -X POST "${base}/render-history/${renderId}/re-render" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{\persist\: false}'`
+
+  const python = `import requests
+
+# Fetch stored render
+r = requests.get(
+    f"${base}/render-history/${renderId}",
+    headers={"Authorization": "Bearer $TOKEN"},
+)
+print(r.json()["raw_output"])`
+
+  return [
+    { lang: 'curl' as const, code: curl },
+    { lang: 'python' as const, code: python },
+  ]
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -254,7 +286,7 @@ export default function HistoryDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2.5 text-sm py-12" style={{ color: '#546485' }}>
+      <div className="flex items-center gap-2.5 text-sm py-12" style={{ color: 'var(--c-muted-3)' }}>
         <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -284,17 +316,17 @@ export default function HistoryDetail() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div>
         {breadcrumb.length > 0 && (
-          <div className="flex items-center gap-1.5 text-xs mb-2 flex-wrap" style={{ color: '#3d4777' }}>
+          <div className="flex items-center gap-1.5 text-xs mb-2 flex-wrap" style={{ color: 'var(--c-muted-4)' }}>
             {breadcrumb.map((name, i) => (
               <span key={i} className="flex items-center gap-1.5">
-                {i > 0 && <span style={{ color: '#2a3255' }}>›</span>}
+                {i > 0 && <span style={{ color: 'var(--c-border-bright)' }}>›</span>}
                 <span>{name}</span>
               </span>
             ))}
             {breadcrumb.length > 0 && (
               <>
-                <span style={{ color: '#2a3255' }}>›</span>
-                <span style={{ color: '#546485' }}>{currentTemplateName}</span>
+                <span style={{ color: 'var(--c-border-bright)' }}>›</span>
+                <span style={{ color: 'var(--c-muted-3)' }}>{currentTemplateName}</span>
               </>
             )}
           </div>
@@ -304,8 +336,8 @@ export default function HistoryDetail() {
 
         {/* Meta row */}
         <div className="flex flex-wrap items-center gap-3 mt-2.5">
-          <span className="text-xs" style={{ color: '#546485' }}>{formatDate(history.rendered_at)}</span>
-          <span style={{ color: '#2a3255' }}>·</span>
+          <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>{formatDate(history.rendered_at)}</span>
+          <span style={{ color: 'var(--c-border-bright)' }}>·</span>
           <span
             className="font-mono text-xs px-2 py-0.5 rounded border"
             style={{ color: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.06)', borderColor: 'rgba(34,211,238,0.15)' }}
@@ -314,12 +346,12 @@ export default function HistoryDetail() {
           </span>
           {history.rendered_by && (
             <>
-              <span style={{ color: '#2a3255' }}>·</span>
-              <span className="text-xs" style={{ color: '#546485' }}>user #{history.rendered_by}</span>
+              <span style={{ color: 'var(--c-border-bright)' }}>·</span>
+              <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>user #{history.rendered_by}</span>
             </>
           )}
-          <span style={{ color: '#2a3255' }}>·</span>
-          <span className="text-xs" style={{ color: '#3d4777' }}>render #{history.id}</span>
+          <span style={{ color: 'var(--c-border-bright)' }}>·</span>
+          <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>render #{history.id}</span>
         </div>
 
         {history.notes && (
@@ -346,9 +378,9 @@ export default function HistoryDetail() {
               })
             }
             className="px-4 py-2 text-sm rounded-lg border transition-colors font-medium"
-            style={{ color: '#8892b0', borderColor: '#2a3255', backgroundColor: '#141828' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3d4777'; e.currentTarget.style.color = '#e2e8f4' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a3255'; e.currentTarget.style.color = '#8892b0' }}
+            style={{ color: 'var(--c-muted-2)', borderColor: 'var(--c-border-bright)', backgroundColor: 'var(--c-card)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--c-muted-4)'; e.currentTarget.style.color = 'var(--c-text)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--c-border-bright)'; e.currentTarget.style.color = 'var(--c-muted-2)' }}
           >
             Re-open form
           </button>
@@ -379,18 +411,18 @@ export default function HistoryDetail() {
         {alternatives.length > 0 && (
           <div
             className="flex items-center gap-2 rounded-lg px-3 py-2 border"
-            style={{ backgroundColor: '#141828', borderColor: '#2a3255' }}
+            style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }}
           >
-            <span className="text-xs shrink-0" style={{ color: '#546485' }}>Re-render on:</span>
+            <span className="text-xs shrink-0" style={{ color: 'var(--c-muted-3)' }}>Re-render on:</span>
             <select
               value={altTemplateId}
               onChange={(e) => setAltTemplateId(e.target.value)}
               className="bg-transparent text-sm focus:outline-none border-0"
-              style={{ color: '#e2e8f4' }}
+              style={{ color: 'var(--c-text)' }}
             >
-              <option value="" style={{ backgroundColor: '#141828' }}>Select template…</option>
+              <option value="" style={{ backgroundColor: 'var(--c-card)' }}>Select template…</option>
               {alternatives.map((t) => (
-                <option key={t.id} value={String(t.id)} style={{ backgroundColor: '#141828' }}>
+                <option key={t.id} value={String(t.id)} style={{ backgroundColor: 'var(--c-card)' }}>
                   {t.display_name}
                 </option>
               ))}
@@ -405,6 +437,9 @@ export default function HistoryDetail() {
             </button>
           </div>
         )}
+        <div className="ml-auto shrink-0">
+          <ApiCodePanel examples={buildHistoryExamples(id, history.resolved_parameters)} />
+        </div>
       </div>
 
       {/* ── Sections ─────────────────────────────────────────────────────── */}

@@ -34,6 +34,7 @@ from api.models.parameter_option import ParameterOption  # noqa: F401
 
 # Tier 6: FK → Template + FK → User (both nullable / SET NULL)
 from api.models.render_history import RenderHistory  # noqa: F401
+from api.models.render_preset import RenderPreset  # noqa: F401
 
 # Tier 7: No FKs (standalone audit log — user_sub is a denormalized string, not a FK)
 from api.models.audit_log import AuditLog  # noqa: F401
@@ -41,6 +42,10 @@ from api.models.audit_log import AuditLog  # noqa: F401
 # Tier 8: FK → Project (nullable — None means global scope)
 from api.models.custom_filter import CustomFilter  # noqa: F401
 from api.models.custom_object import CustomObject  # noqa: F401
+from api.models.custom_macro import CustomMacro  # noqa: F401
+
+# Tier 9: FK → Organization + FK → User (SET NULL)
+from api.models.api_key import ApiKey  # noqa: F401
 
 __all__ = [
     "Base",
@@ -55,7 +60,10 @@ __all__ = [
     "WidgetType",
     "ParameterOption",
     "RenderHistory",
+    "RenderPreset",
     "AuditLog",
     "CustomFilter",
     "CustomObject",
+    "CustomMacro",
+    "ApiKey",
 ]

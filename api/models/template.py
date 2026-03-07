@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from api.models.user import User
     from api.models.parameter import Parameter
     from api.models.render_history import RenderHistory
+    from api.models.render_preset import RenderPreset
 
 
 class Template(Base):
@@ -33,6 +34,8 @@ class Template(Base):
         ForeignKey("templates.id", ondelete="SET NULL"), nullable=True, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    is_snippet: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -77,6 +80,9 @@ class Template(Base):
     )
     render_history: Mapped[List["RenderHistory"]] = relationship(
         "RenderHistory", back_populates="template", lazy="raise"
+    )
+    render_presets: Mapped[List["RenderPreset"]] = relationship(
+        "RenderPreset", back_populates="template", cascade="all, delete-orphan", lazy="raise"
     )
 
     def __repr__(self) -> str:

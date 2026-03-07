@@ -111,6 +111,8 @@ class ParameterCreate(BaseModel):
     is_derived: bool = False
     derived_expression: str | None = None
     sort_order: int = 0
+    section: str | None = Field(None, max_length=100)
+    visible_when: dict | None = None
 
 
 class ParameterUpdate(BaseModel):
@@ -125,6 +127,8 @@ class ParameterUpdate(BaseModel):
     is_derived: bool | None = None
     derived_expression: str | None = None
     sort_order: int | None = None
+    section: str | None = Field(None, max_length=100)
+    visible_when: dict | None = None
 
 
 class ParameterOut(BaseModel):
@@ -171,6 +175,8 @@ class ParameterOut(BaseModel):
     derived_expression: str | None
     sort_order: int
     is_active: bool
+    section: str | None
+    visible_when: dict | None
 
     created_at: datetime
     updated_at: datetime

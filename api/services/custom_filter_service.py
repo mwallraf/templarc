@@ -27,10 +27,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.custom_filter import CustomFilter
+from api.models.custom_macro import CustomMacro
 from api.models.custom_object import CustomObject
 from api.models.project import Project
 from api.models.template import Template
-from api.schemas.admin import CustomFilterCreate, CustomObjectCreate
+from api.schemas.admin import CustomFilterCreate, CustomMacroCreate, CustomObjectCreate
 from api.services.environment_factory import EnvironmentFactory
 from api.services.git_service import GitService, parse_frontmatter
 from api.services.jinja_parser import extract_filters_used
@@ -205,6 +206,65 @@ async def delete_object(db: AsyncSession, object_id: int) -> CustomObject:
     scope = "project" if co.project_id else "global"
     await _invalidate_caches(db, scope, co.project_id)
     return co
+
+
+# ---------------------------------------------------------------------------
+# Custom Macros
+# ---------------------------------------------------------------------------
+
+async def list_macros(
+    db: AsyncSession,
+    scope: str | None = None,
+    project_id: int | None = None,
+) -> list[CustomMacro]:
+    """Return all active custom macros, optionally filtered by scope / project."""
+    q = select(CustomMacro).where(CustomMacro.is_active.is_(True))
+    if scope is not None:
+        q = q.where(CustomMacro.scope == scope)
+    if project_id is not None:
+        q = q.where(CustomMacro.project_id == project_id)
+    result = await db.execute(q.order_by(CustomMacro.name))
+    return list(result.scalars().all())
+
+
+async def create_macro(
+    db: AsyncSession,
+    data: CustomMacroCreate,
+    user_sub: str,
+) -> CustomMacro:
+    """Persist a new custom Jinja2 macro."""
+    cm = CustomMacro(
+        name=data.name,
+        body=data.body,
+        description=data.description,
+        scope=data.scope,
+        project_id=data.project_id,
+        created_by=user_sub,
+    )
+    db.add(cm)
+    await db.flush()
+    await _invalidate_caches(db, data.scope, data.project_id)
+    return cm
+
+
+async def delete_macro(db: AsyncSession, macro_id: int) -> CustomMacro:
+    """Soft-delete a custom macro. Raises 404 if not found."""
+    result = await db.execute(
+        select(CustomMacro).where(
+            CustomMacro.id == macro_id,
+            CustomMacro.is_active.is_(True),
+        )
+    )
+    cm = result.scalar_one_or_none()
+    if cm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Custom macro {macro_id} not found",
+        )
+    cm.is_active = False
+    await db.flush()
+    await _invalidate_caches(db, cm.scope, cm.project_id)
+    return cm
 
 
 # ---------------------------------------------------------------------------

@@ -17,8 +17,8 @@ const inputClass =
   'w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 border transition-colors duration-150 focus:outline-none placeholder:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed'
 
 const inputStyle = {
-  backgroundColor: '#141828',
-  borderColor: '#2a3255',
+  backgroundColor: 'var(--c-card)',
+  borderColor: 'var(--c-border-bright)',
 }
 
 function applyFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
@@ -27,7 +27,7 @@ function applyFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement |
 }
 
 function removeFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = '#2a3255'
+  e.currentTarget.style.borderColor = 'var(--c-border-bright)'
   e.currentTarget.style.boxShadow = 'none'
 }
 
@@ -125,16 +125,16 @@ export function SelectWidget({ param, register, currentValues }: SelectWidgetPro
   return (
     <select
       className={inputClass}
-      style={{ ...inputStyle, color: '#e2e8f4' }}
+      style={{ ...inputStyle, color: 'var(--c-text)' }}
       onFocus={applyFocus}
       onBlur={removeFocus}
       {...register(param.name, {
         required: param.required ? `${param.label ?? param.name} is required` : false,
       })}
     >
-      <option value="" style={{ backgroundColor: '#141828' }}>— select —</option>
+      <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select —</option>
       {opts.map((o) => (
-        <option key={o.value} value={o.value} style={{ backgroundColor: '#141828' }}>
+        <option key={o.value} value={o.value} style={{ backgroundColor: 'var(--c-card)' }}>
           {o.label}
         </option>
       ))}
@@ -180,8 +180,8 @@ export function MultiSelectWidget({ param, control, currentValues }: MultiSelect
                 <span
                   className="w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all duration-150"
                   style={{
-                    backgroundColor: selected.includes(o.value) ? '#6366f1' : '#141828',
-                    borderColor: selected.includes(o.value) ? '#6366f1' : '#2a3255',
+                    backgroundColor: selected.includes(o.value) ? '#6366f1' : 'var(--c-card)',
+                    borderColor: selected.includes(o.value) ? '#6366f1' : 'var(--c-border-bright)',
                   }}
                 >
                   {selected.includes(o.value) && (
@@ -200,7 +200,7 @@ export function MultiSelectWidget({ param, control, currentValues }: MultiSelect
               </label>
             ))}
             {opts.length === 0 && (
-              <p className="text-xs italic" style={{ color: '#3d4777' }}>No options available</p>
+              <p className="text-xs italic" style={{ color: 'var(--c-muted-4)' }}>No options available</p>
             )}
           </div>
         )
@@ -235,7 +235,7 @@ export function ReadonlyWidget({ value }: ReadonlyWidgetProps) {
       disabled
       value={value === undefined || value === null ? '' : String(value)}
       className={inputClass}
-      style={{ backgroundColor: '#0d1021', borderColor: '#1e2440', color: '#546485' }}
+      style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)', color: 'var(--c-muted-3)' }}
     />
   )
 }

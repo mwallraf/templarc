@@ -2,9 +2,21 @@ import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { listTemplates, createTemplate, uploadTemplate } from '../../api/templates'
+import {
+  listTemplates,
+  createTemplate,
+  uploadTemplate,
+  deleteTemplate,
+  updateTemplate,
+} from '../../api/templates'
 import { listProjects } from '../../api/catalog'
-import type { ProjectOut, TemplateCreate, TemplateOut, TemplateUploadOut } from '../../api/types'
+import type {
+  ProjectOut,
+  TemplateCreate,
+  TemplateOut,
+  TemplateUpdate,
+  TemplateUploadOut,
+} from '../../api/types'
 
 // ── Tree helpers ─────────────────────────────────────────────────────────────
 
@@ -58,7 +70,7 @@ function buildProjectTree(templates: TemplateOut[], projectId: number): TreeRow[
 function TreePrefix({ depth, isLast, continuations }: Pick<TreeRow, 'depth' | 'isLast' | 'continuations'>) {
   if (depth === 0) return null
   return (
-    <span className="font-mono select-none text-xs shrink-0" style={{ color: '#2a3255', whiteSpace: 'pre' }}>
+    <span className="font-mono select-none text-xs shrink-0" style={{ color: 'var(--c-border-bright)', whiteSpace: 'pre' }}>
       {continuations.slice(1).map((cont, i) => (
         <span key={i}>{cont ? '│  ' : '   '}</span>
       ))}
@@ -70,7 +82,7 @@ function TreePrefix({ depth, isLast, continuations }: Pick<TreeRow, 'depth' | 'i
 // ── Form styling ─────────────────────────────────────────────────────────────
 
 const inputClass = 'w-full rounded-lg px-3 py-2 text-sm text-slate-100 border transition-colors focus:outline-none'
-const inputStyle = { backgroundColor: '#141828', borderColor: '#2a3255' }
+const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +93,7 @@ export default function AdminTemplates() {
   const [showImport, setShowImport] = useState(false)
   const [search, setSearch] = useState('')
   const [filterProjectId, setFilterProjectId] = useState<number | ''>('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
   // Import state
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -105,6 +118,19 @@ export default function AdminTemplates() {
       qc.invalidateQueries({ queryKey: ['templates'] })
       navigate(`/admin/templates/${tmpl.id}/edit`)
     },
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => deleteTemplate(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['templates'] })
+      setConfirmDeleteId(null)
+    },
+  })
+
+  const toggleFlagMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: TemplateUpdate }) => updateTemplate(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['templates'] }),
   })
 
   const uploadMut = useMutation({
@@ -151,6 +177,10 @@ export default function AdminTemplates() {
       uploadMut.reset()
     }
     e.target.value = ''
+  }
+
+  function onToggleFlag(id: number, data: TemplateUpdate) {
+    toggleFlagMut.mutate({ id, data })
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -205,19 +235,19 @@ export default function AdminTemplates() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white font-display">Templates</h1>
-          <p className="text-sm mt-1" style={{ color: '#546485' }}>Manage template catalog entries</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--c-muted-3)' }}>Manage template catalog entries</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setShowImport((v) => !v); if (!showImport) { setShowForm(false); handleCancel() } }}
             className="px-4 py-2 text-sm font-semibold rounded-lg transition-all"
             style={{
-              background: showImport ? 'transparent' : 'transparent',
-              border: '1px solid #2a3255',
-              color: showImport ? '#8892b0' : '#8892b0',
+              background: 'transparent',
+              border: '1px solid var(--c-border-bright)',
+              color: 'var(--c-muted-2)',
             }}
-            onMouseEnter={(e) => { if (!showImport) { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#818cf8' } }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a3255'; e.currentTarget.style.color = '#8892b0' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#818cf8' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--c-border-bright)'; e.currentTarget.style.color = 'var(--c-muted-2)' }}
           >
             {showImport ? 'Cancel Import' : 'Import .j2'}
           </button>
@@ -227,8 +257,8 @@ export default function AdminTemplates() {
             style={{
               background: showForm ? 'transparent' : 'linear-gradient(135deg, #6366f1, #818cf8)',
               boxShadow: showForm ? 'none' : '0 4px 14px rgba(99,102,241,0.3)',
-              border: showForm ? '1px solid #2a3255' : 'none',
-              color: showForm ? '#8892b0' : 'white',
+              border: showForm ? '1px solid var(--c-border-bright)' : 'none',
+              color: showForm ? 'var(--c-muted-2)' : 'white',
             }}
           >
             {showForm ? 'Cancel' : 'New Template'}
@@ -241,13 +271,13 @@ export default function AdminTemplates() {
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
           className="rounded-xl border p-5 mb-6 space-y-4"
-          style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
           <h2 className="font-semibold text-slate-100 font-display">New Template</h2>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
@@ -259,10 +289,10 @@ export default function AdminTemplates() {
                   pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Only letters, digits, underscores' },
                 })}
               />
-              <p className="text-xs mt-1" style={{ color: '#3d4777' }}>Letters, digits, underscores only</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>Letters, digits, underscores only</p>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Display Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
@@ -276,43 +306,76 @@ export default function AdminTemplates() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
                 Project <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 className={inputClass}
-                style={{ ...inputStyle, color: '#e2e8f4' }}
+                style={{ ...inputStyle, color: 'var(--c-text)' }}
                 {...register('project_id', { required: true, setValueAs: (v) => v === '' ? undefined : Number(v) })}
               >
-                <option value="" style={{ backgroundColor: '#141828' }}>— select project —</option>
+                <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
                 {projects?.map((p) => (
-                  <option key={p.id} value={p.id} style={{ backgroundColor: '#141828' }}>{p.display_name}</option>
+                  <option key={p.id} value={p.id} style={{ backgroundColor: 'var(--c-card)' }}>{p.display_name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Parent Template</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Parent Template</label>
               <select
                 className={inputClass}
-                style={{ ...inputStyle, color: '#e2e8f4' }}
+                style={{ ...inputStyle, color: 'var(--c-text)' }}
                 {...register('parent_template_id', { setValueAs: (v) => v === '' ? undefined : Number(v) })}
               >
-                <option value="" style={{ backgroundColor: '#141828' }}>— none (root template) —</option>
+                <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— none (root template) —</option>
                 {templates?.map((t) => (
-                  <option key={t.id} value={t.id} style={{ backgroundColor: '#141828' }}>{t.display_name}</option>
+                  <option key={t.id} value={t.id} style={{ backgroundColor: 'var(--c-card)' }}>{t.display_name}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Description</label>
-            <input
-              className={inputClass}
-              style={inputStyle}
-              placeholder="Optional description"
-              {...register('description')}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
+              <input
+                className={inputClass}
+                style={inputStyle}
+                placeholder="Optional description"
+                {...register('description')}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
+                Git path
+              </label>
+              <input
+                className={inputClass}
+                style={inputStyle}
+                placeholder="e.g. project/snippets/foo.j2 (auto if blank)"
+                {...register('git_path')}
+              />
+              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>Defaults to <code>{'{project}/{name}.j2'}</code></p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-3.5 h-3.5 rounded accent-indigo-500"
+                {...register('is_hidden')}
+              />
+              <span className="text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>Hidden from catalog</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-3.5 h-3.5 rounded accent-indigo-500"
+                {...register('is_snippet')}
+              />
+              <span className="text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>Snippet (include-only)</span>
+            </label>
           </div>
 
           {createMut.isError && (
@@ -336,22 +399,22 @@ export default function AdminTemplates() {
       {showImport && (
         <div
           className="rounded-xl border p-5 mb-6 space-y-4"
-          style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="font-semibold text-slate-100 font-display">Import .j2 Template</h2>
-              <p className="text-xs mt-1" style={{ color: '#546485' }}>
-                Upload a Jinja2 template file. YAML frontmatter (<code style={{ color: '#8892b0' }}>parameters</code>,{' '}
-                <code style={{ color: '#8892b0' }}>display_name</code>) will be parsed and registered automatically.
+              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-3)' }}>
+                Upload a Jinja2 template file. YAML frontmatter (<code style={{ color: 'var(--c-muted-2)' }}>parameters</code>,{' '}
+                <code style={{ color: 'var(--c-muted-2)' }}>display_name</code>) will be parsed and registered automatically.
               </p>
             </div>
             <button
               type="button"
               className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors"
-              style={{ borderColor: '#2a3255', color: '#546485', backgroundColor: 'transparent' }}
+              style={{ borderColor: 'var(--c-border-bright)', color: 'var(--c-muted-3)', backgroundColor: 'transparent' }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.color = '#818cf8' }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2a3255'; e.currentTarget.style.color = '#546485' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--c-border-bright)'; e.currentTarget.style.color = 'var(--c-muted-3)' }}
               onClick={() => {
                 const example = [
                   '---',
@@ -411,7 +474,7 @@ export default function AdminTemplates() {
           <div
             className="rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition-colors"
             style={{
-              borderColor: isDragging ? '#6366f1' : importFile ? '#4ade80' : '#2a3255',
+              borderColor: isDragging ? '#6366f1' : importFile ? '#4ade80' : 'var(--c-border-bright)',
               backgroundColor: isDragging ? 'rgba(99,102,241,0.05)' : 'transparent',
             }}
             onClick={() => fileInputRef.current?.click()}
@@ -424,11 +487,11 @@ export default function AdminTemplates() {
                 <svg className="w-4 h-4 shrink-0" style={{ color: '#4ade80' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
                 </svg>
-                <span className="text-sm font-medium" style={{ color: '#e2e8f4' }}>{importFile.name}</span>
+                <span className="text-sm font-medium" style={{ color: 'var(--c-text)' }}>{importFile.name}</span>
                 <button
                   type="button"
                   className="ml-2 text-xs transition-colors"
-                  style={{ color: '#546485' }}
+                  style={{ color: 'var(--c-muted-3)' }}
                   onClick={(e) => { e.stopPropagation(); setImportFile(null); uploadMut.reset(); setUploadResult(null) }}
                 >
                   ✕
@@ -436,10 +499,10 @@ export default function AdminTemplates() {
               </div>
             ) : (
               <div>
-                <svg className="w-8 h-8 mx-auto mb-2" style={{ color: '#2a3255' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <svg className="w-8 h-8 mx-auto mb-2" style={{ color: 'var(--c-border-bright)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
-                <p className="text-sm" style={{ color: '#546485' }}>Drop a <span style={{ color: '#8892b0' }}>.j2</span> file here, or click to browse</p>
+                <p className="text-sm" style={{ color: 'var(--c-muted-3)' }}>Drop a <span style={{ color: 'var(--c-muted-2)' }}>.j2</span> file here, or click to browse</p>
               </div>
             )}
           </div>
@@ -453,18 +516,18 @@ export default function AdminTemplates() {
 
           {/* Project */}
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
               Project <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <select
               className={inputClass}
-              style={{ ...inputStyle, color: importProjectId === '' ? '#546485' : '#e2e8f4' }}
+              style={{ ...inputStyle, color: importProjectId === '' ? 'var(--c-muted-3)' : 'var(--c-text)' }}
               value={importProjectId}
               onChange={(e) => setImportProjectId(e.target.value === '' ? '' : Number(e.target.value))}
             >
-              <option value="" style={{ backgroundColor: '#141828' }}>— select project —</option>
+              <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
               {projects?.map((p) => (
-                <option key={p.id} value={p.id} style={{ backgroundColor: '#141828' }}>{p.display_name}</option>
+                <option key={p.id} value={p.id} style={{ backgroundColor: 'var(--c-card)' }}>{p.display_name}</option>
               ))}
             </select>
           </div>
@@ -482,7 +545,7 @@ export default function AdminTemplates() {
               <p className="text-sm font-medium" style={{ color: '#34d399' }}>
                 ✓ Imported: {uploadResult.template.display_name}
               </p>
-              <p className="text-xs" style={{ color: '#546485' }}>
+              <p className="text-xs" style={{ color: 'var(--c-muted-3)' }}>
                 {uploadResult.parameters_registered} parameter{uploadResult.parameters_registered !== 1 ? 's' : ''} registered from frontmatter
               </p>
               {uploadResult.suggested_parameters.length > 0 && (
@@ -521,7 +584,7 @@ export default function AdminTemplates() {
         <div className="relative flex-1 max-w-xs">
           <svg
             className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
-            style={{ color: '#3d4777' }}
+            style={{ color: 'var(--c-muted-4)' }}
             fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"
           >
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -532,7 +595,7 @@ export default function AdminTemplates() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search templates…"
             className="w-full rounded-lg pl-8 pr-3 py-1.5 text-sm border focus:outline-none"
-            style={{ backgroundColor: '#0d1021', borderColor: '#1e2440', color: '#e2e8f4' }}
+            style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)', color: 'var(--c-text)' }}
           />
         </div>
 
@@ -540,7 +603,7 @@ export default function AdminTemplates() {
           value={filterProjectId}
           onChange={(e) => setFilterProjectId(e.target.value === '' ? '' : Number(e.target.value))}
           className="rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
-          style={{ backgroundColor: '#0d1021', borderColor: '#1e2440', color: filterProjectId === '' ? '#546485' : '#e2e8f4' }}
+          style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)', color: filterProjectId === '' ? 'var(--c-muted-3)' : 'var(--c-text)' }}
         >
           <option value="">All projects</option>
           {projects?.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
@@ -550,18 +613,27 @@ export default function AdminTemplates() {
           <button
             onClick={() => { setSearch(''); setFilterProjectId('') }}
             className="text-xs transition-colors"
-            style={{ color: '#546485' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#8892b0')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#546485')}
+            style={{ color: 'var(--c-muted-3)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-3)')}
           >
             Clear
           </button>
         )}
 
-        <span className="text-xs ml-auto" style={{ color: '#3d4777' }}>
+        <span className="text-xs ml-auto" style={{ color: 'var(--c-muted-4)' }}>
           {templates?.length ?? 0} template{templates?.length !== 1 ? 's' : ''}
         </span>
       </div>
+
+      {/* Error from toggle/delete */}
+      {(deleteMut.isError || toggleFlagMut.isError) && (
+        <p className="text-xs mb-3 px-3 py-2 rounded-lg border" style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.2)', backgroundColor: 'rgba(239,68,68,0.05)' }}>
+          {(deleteMut.error as any)?.response?.data?.detail
+            ?? (toggleFlagMut.error as any)?.response?.data?.detail
+            ?? 'Operation failed'}
+        </p>
+      )}
 
       {/* Table area */}
       {isLoading ? (
@@ -570,17 +642,17 @@ export default function AdminTemplates() {
         </div>
       ) : isFiltering ? (
         /* ── Flat filtered list ─────────────────────────────────────────── */
-        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}>
+        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
           {!flatFiltered.length ? (
-            <p className="px-4 py-10 text-center text-sm" style={{ color: '#546485' }}>No templates match your search.</p>
+            <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No templates match your search.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead style={{ backgroundColor: '#0a0d1a', borderBottom: '1px solid #1e2440' }}>
+              <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Project</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Parent</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Project</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Parent</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Flags</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -588,24 +660,37 @@ export default function AdminTemplates() {
                 {flatFiltered.map((t, idx) => (
                   <tr
                     key={t.id}
-                    style={{ borderBottom: idx < flatFiltered.length - 1 ? '1px solid #1e2440' : 'none' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)')}
+                    style={{ borderBottom: idx < flatFiltered.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
                     <td className="px-4 py-3">
-                      <span className="font-medium" style={{ color: '#e2e8f4' }}>{t.display_name}</span>
-                      <span className="ml-2 font-mono text-xs" style={{ color: '#3d4777' }}>{t.name}</span>
+                      <span className="font-medium" style={{ color: 'var(--c-text)' }}>{t.display_name}</span>
+                      <span className="ml-2 font-mono text-xs" style={{ color: 'var(--c-muted-4)' }}>{t.name}</span>
+                      {t.git_path && (
+                        <p className="font-mono text-xs mt-0.5 truncate" style={{ color: 'var(--c-border-bright)' }}>{t.git_path}</p>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#546485' }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>
                       {projectMap.get(t.project_id)?.display_name ?? `#${t.project_id}`}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#3d4777' }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>
                       {t.parent_template_id
                         ? (templateMap.get(t.parent_template_id)?.display_name ?? '—')
-                        : <span style={{ color: '#2a3255' }}>—</span>}
+                        : <span style={{ color: 'var(--c-border-bright)' }}>—</span>}
                     </td>
-                    <td className="px-4 py-3"><StatusBadge active={t.is_active} /></td>
-                    <td className="px-4 py-3 text-right"><EditLink id={t.id} /></td>
+                    <td className="px-4 py-3">
+                      <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <RowActions
+                        id={t.id}
+                        confirmId={confirmDeleteId}
+                        onConfirmDelete={setConfirmDeleteId}
+                        onDelete={(id) => deleteMut.mutate(id)}
+                        isDeleting={deleteMut.isPending}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -616,19 +701,19 @@ export default function AdminTemplates() {
         /* ── Tree view grouped by project ────────────────────────────────── */
         <div className="space-y-4">
           {!templates?.length ? (
-            <div className="rounded-xl border" style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}>
-              <p className="px-4 py-10 text-center text-sm" style={{ color: '#546485' }}>No templates found.</p>
+            <div className="rounded-xl border" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
+              <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No templates found.</p>
             </div>
           ) : projectGroups.map(({ project, rows }) => (
             <div
               key={project?.id ?? 'unknown'}
               className="rounded-xl border overflow-hidden"
-              style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+              style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
             >
               {/* Project group header */}
               <div
                 className="flex items-center gap-2 px-4 py-2.5 border-b"
-                style={{ backgroundColor: '#0a0d1a', borderColor: '#1e2440' }}
+                style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
               >
                 <svg className="w-3.5 h-3.5 shrink-0" style={{ color: '#6366f1' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
@@ -636,7 +721,7 @@ export default function AdminTemplates() {
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6366f1' }}>
                   {project?.display_name ?? `Project #${project?.id}`}
                 </span>
-                <span className="text-xs" style={{ color: '#3d4777' }}>
+                <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>
                   ({rows.length} template{rows.length !== 1 ? 's' : ''})
                 </span>
               </div>
@@ -644,16 +729,16 @@ export default function AdminTemplates() {
               {/* Template rows */}
               <table className="w-full text-sm">
                 <colgroup>
-                  <col style={{ width: '40%' }} />
-                  <col style={{ width: '35%' }} />
-                  <col style={{ width: '12%' }} />
-                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '32%' }} />
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '16%' }} />
                 </colgroup>
-                <thead style={{ borderBottom: '1px solid #1e2440' }}>
+                <thead style={{ borderBottom: '1px solid var(--c-border)' }}>
                   <tr>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Internal name</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Display name</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Status</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Internal name</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Display name</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Flags</th>
                     <th className="px-4 py-2" />
                   </tr>
                 </thead>
@@ -661,31 +746,50 @@ export default function AdminTemplates() {
                   {rows.map(({ t, depth, isLast, continuations, hasChildren }, idx) => (
                     <tr
                       key={t.id}
-                      style={{ borderBottom: idx < rows.length - 1 ? '1px solid #0f1326' : 'none' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)')}
+                      style={{ borderBottom: idx < rows.length - 1 ? '1px solid var(--c-surface-alt)' : 'none' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
                       <td className="px-4 py-2.5">
                         <div className="flex items-center min-w-0">
                           <TreePrefix depth={depth} isLast={isLast} continuations={continuations} />
-                          <span className="font-mono text-xs" style={{ color: '#546485' }}>{t.name}</span>
-                          {hasChildren && (
-                            <span className="ml-1.5 shrink-0" title="Has child templates" style={{ color: '#2a3255' }}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
-                            </span>
-                          )}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="font-mono text-xs" style={{ color: 'var(--c-muted-3)' }}>{t.name}</span>
+                              {hasChildren && (
+                                <span className="shrink-0" title="Has child templates" style={{ color: 'var(--c-border-bright)' }}>
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <polyline points="6 9 12 15 18 9" />
+                                  </svg>
+                                </span>
+                              )}
+                            </div>
+                            {t.git_path && (
+                              <div className="font-mono text-xs truncate mt-0.5" style={{ color: 'var(--c-border-bright)' }} title={t.git_path}>
+                                {t.git_path}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className="font-medium text-sm" style={{ color: '#e2e8f4' }}>{t.display_name}</span>
+                        <span className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t.display_name}</span>
                         {t.description && (
-                          <p className="text-xs mt-0.5 truncate" style={{ color: '#3d4777' }}>{t.description}</p>
+                          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)' }}>{t.description}</p>
                         )}
                       </td>
-                      <td className="px-4 py-2.5"><StatusBadge active={t.is_active} /></td>
-                      <td className="px-4 py-2.5 text-right"><EditLink id={t.id} /></td>
+                      <td className="px-4 py-2.5">
+                        <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <RowActions
+                          id={t.id}
+                          confirmId={confirmDeleteId}
+                          onConfirmDelete={setConfirmDeleteId}
+                          onDelete={(id) => deleteMut.mutate(id)}
+                          isDeleting={deleteMut.isPending}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -700,31 +804,149 @@ export default function AdminTemplates() {
 
 // ── Small shared sub-components ───────────────────────────────────────────────
 
-function StatusBadge({ active }: { active: boolean }) {
+// Icon components for flag badges
+function IconCheck() {
   return (
-    <span
-      className="text-xs px-2 py-0.5 rounded-full border font-medium"
-      style={
-        active
-          ? { backgroundColor: 'rgba(52,211,153,0.1)', color: '#34d399', borderColor: 'rgba(52,211,153,0.2)' }
-          : { backgroundColor: 'rgba(148,163,184,0.08)', color: '#546485', borderColor: '#2a3255' }
-      }
-    >
-      {active ? 'active' : 'inactive'}
-    </span>
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+function IconX() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+function IconEye() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+  )
+}
+function IconEyeOff() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+    </svg>
+  )
+}
+function IconCode() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+    </svg>
   )
 }
 
-function EditLink({ id }: { id: number }) {
+function TemplateFlagBadges({
+  t,
+  onToggle,
+}: {
+  t: TemplateOut
+  onToggle: (id: number, data: TemplateUpdate) => void
+}) {
   return (
-    <Link
-      to={`/admin/templates/${id}/edit`}
-      className="text-xs font-medium transition-colors"
-      style={{ color: '#6366f1' }}
-      onMouseEnter={(e) => (e.currentTarget.style.color = '#818cf8')}
-      onMouseLeave={(e) => (e.currentTarget.style.color = '#6366f1')}
-    >
-      Edit
-    </Link>
+    <div className="flex items-center gap-1">
+      {/* Active toggle */}
+      <button
+        onClick={() => onToggle(t.id, { is_active: !t.is_active })}
+        title={t.is_active ? 'Active — click to deactivate' : 'Inactive — click to activate'}
+        className="p-1 rounded transition-colors"
+        style={{ color: t.is_active ? '#34d399' : 'var(--c-muted-3)', backgroundColor: t.is_active ? 'rgba(52,211,153,0.08)' : 'transparent' }}
+      >
+        {t.is_active ? <IconCheck /> : <IconX />}
+      </button>
+
+      {/* Hidden toggle */}
+      <button
+        onClick={() => onToggle(t.id, { is_hidden: !t.is_hidden })}
+        title={t.is_hidden ? 'Hidden from catalog — click to show' : 'Visible in catalog — click to hide'}
+        className="p-1 rounded transition-colors"
+        style={{ color: t.is_hidden ? '#fbbf24' : 'var(--c-muted-4)', backgroundColor: t.is_hidden ? 'rgba(251,191,36,0.08)' : 'transparent' }}
+      >
+        {t.is_hidden ? <IconEyeOff /> : <IconEye />}
+      </button>
+
+      {/* Snippet toggle */}
+      <button
+        onClick={() => onToggle(t.id, { is_snippet: !t.is_snippet })}
+        title={t.is_snippet ? 'Snippet (include-only) — click to make renderable' : 'Normal template — click to mark as snippet'}
+        className="p-1 rounded transition-colors"
+        style={{ color: t.is_snippet ? '#a78bfa' : 'var(--c-muted-4)', backgroundColor: t.is_snippet ? 'rgba(139,92,246,0.1)' : 'transparent' }}
+      >
+        <IconCode />
+      </button>
+    </div>
+  )
+}
+
+function RowActions({
+  id,
+  confirmId,
+  onConfirmDelete,
+  onDelete,
+  isDeleting,
+}: {
+  id: number
+  confirmId: number | null
+  onConfirmDelete: (id: number | null) => void
+  onDelete: (id: number) => void
+  isDeleting: boolean
+}) {
+  if (confirmId === id) {
+    return (
+      <div className="flex items-center gap-2 justify-end">
+        <span className="text-xs" style={{ color: '#ef4444' }}>Delete?</span>
+        <button
+          onClick={() => onDelete(id)}
+          disabled={isDeleting}
+          className="text-xs font-medium transition-colors disabled:opacity-50"
+          style={{ color: '#ef4444' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#fca5a5')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#ef4444')}
+        >
+          {isDeleting ? '…' : 'Yes'}
+        </button>
+        <button
+          onClick={() => onConfirmDelete(null)}
+          className="text-xs transition-colors"
+          style={{ color: 'var(--c-muted-3)' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-2)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-3)')}
+        >
+          No
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-3 justify-end">
+      <Link
+        to={`/admin/templates/${id}/edit`}
+        className="text-xs font-medium transition-colors"
+        style={{ color: '#6366f1' }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = '#818cf8')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = '#6366f1')}
+      >
+        Edit
+      </Link>
+      <button
+        onClick={() => onConfirmDelete(id)}
+        title="Delete template"
+        className="transition-colors"
+        style={{ color: 'var(--c-muted-4)' }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-4)')}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
+    </div>
   )
 }

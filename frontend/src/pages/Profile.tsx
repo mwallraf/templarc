@@ -5,8 +5,8 @@ import { getMe, updateMe } from '../api/auth'
 import type { MeUpdate } from '../api/types'
 
 const inputClass = 'w-full rounded-lg px-3 py-2 text-sm border transition-colors focus:outline-none'
-const inputStyle = { backgroundColor: '#141828', borderColor: '#2a3255', color: '#e2e8f4' }
-const readonlyStyle = { backgroundColor: '#0a0d1a', borderColor: '#1e2440', color: '#546485' }
+const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)', color: 'var(--c-text)' }
+const readonlyStyle = { backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)', color: 'var(--c-muted-3)' }
 
 function formatDate(iso?: string) {
   if (!iso) return '—'
@@ -57,7 +57,7 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm p-4" style={{ color: '#546485' }}>
+      <div className="flex items-center gap-2 text-sm p-4" style={{ color: 'var(--c-muted-3)' }}>
         <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -72,12 +72,12 @@ export default function Profile() {
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-bold text-white font-display mb-1">Profile</h1>
-      <p className="text-sm mb-6" style={{ color: '#546485' }}>Your account details and settings</p>
+      <p className="text-sm mb-6" style={{ color: 'var(--c-muted-3)' }}>Your account details and settings</p>
 
       {/* Avatar + identity card */}
       <div
         className="rounded-xl border p-5 mb-5 flex items-center gap-5"
-        style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+        style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
       >
         <div
           className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 text-xl font-bold text-white"
@@ -87,7 +87,7 @@ export default function Profile() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-lg font-semibold text-white font-display">{me?.username}</p>
-          <p className="text-sm" style={{ color: '#546485' }}>{me?.email ?? 'No email set'}</p>
+          <p className="text-sm" style={{ color: 'var(--c-muted-3)' }}>{me?.email ?? 'No email set'}</p>
           <div className="flex items-center gap-2 mt-2">
             {/* Account type badge */}
             <span
@@ -103,7 +103,7 @@ export default function Profile() {
               className="text-xs px-2 py-0.5 rounded-full border"
               style={me?.is_admin
                 ? { color: '#f59e0b', borderColor: '#78350f', backgroundColor: 'rgba(245,158,11,0.08)' }
-                : { color: '#546485', borderColor: '#1e2440', backgroundColor: 'transparent' }}
+                : { color: 'var(--c-muted-3)', borderColor: 'var(--c-border)', backgroundColor: 'transparent' }}
             >
               {me?.is_admin ? 'Admin' : 'User'}
             </span>
@@ -114,25 +114,25 @@ export default function Profile() {
       {/* Info grid */}
       <div
         className="rounded-xl border p-5 mb-5 space-y-4"
-        style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+        style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
       >
-        <h2 className="text-sm font-semibold" style={{ color: '#8892b0' }}>Account info</h2>
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--c-muted-2)' }}>Account info</h2>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#3d4777' }}>Username</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-4)' }}>Username</label>
             <input className={inputClass} style={readonlyStyle} value={me?.username ?? ''} readOnly />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#3d4777' }}>Organization ID</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-4)' }}>Organization ID</label>
             <input className={inputClass} style={readonlyStyle} value={me?.org_id ?? ''} readOnly />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#3d4777' }}>Last login</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-4)' }}>Last login</label>
             <input className={inputClass} style={readonlyStyle} value={formatDate(me?.last_login)} readOnly />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ color: '#3d4777' }}>Member since</label>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-4)' }}>Member since</label>
             <input className={inputClass} style={readonlyStyle} value={formatDate(me?.created_at)} readOnly />
           </div>
         </div>
@@ -141,9 +141,9 @@ export default function Profile() {
       {/* Email update */}
       <div
         className="rounded-xl border p-5 mb-5"
-        style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+        style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
       >
-        <h2 className="text-sm font-semibold mb-4" style={{ color: '#8892b0' }}>Email address</h2>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--c-muted-2)' }}>Email address</h2>
         <form
           onSubmit={emailForm.handleSubmit((d) => emailMut.mutate(d.email))}
           className="flex gap-3"
@@ -175,12 +175,12 @@ export default function Profile() {
       {/* Password change — local accounts only */}
       <div
         className="rounded-xl border p-5 mb-5"
-        style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+        style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold" style={{ color: '#8892b0' }}>Password</h2>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--c-muted-2)' }}>Password</h2>
           {me?.is_ldap ? (
-            <span className="text-xs" style={{ color: '#3d4777' }}>Managed by LDAP</span>
+            <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>Managed by LDAP</span>
           ) : (
             <button
               onClick={() => { setShowPasswordForm((v) => !v); pwForm.reset(); pwMut.reset() }}
@@ -197,7 +197,7 @@ export default function Profile() {
         {showPasswordForm && !me?.is_ldap && (
           <form onSubmit={pwForm.handleSubmit(handlePwSubmit)} className="mt-4 space-y-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Current password</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Current password</label>
               <input
                 type="password"
                 className={inputClass}
@@ -208,7 +208,7 @@ export default function Profile() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>New password</label>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>New password</label>
                 <input
                   type="password"
                   className={inputClass}
@@ -221,7 +221,7 @@ export default function Profile() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Confirm password</label>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Confirm password</label>
                 <input
                   type="password"
                   className={inputClass}

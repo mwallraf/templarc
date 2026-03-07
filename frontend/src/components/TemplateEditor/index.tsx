@@ -8,7 +8,8 @@ import type { editor as MonacoEditor, IPosition } from 'monaco-editor'
 import { getTemplateVariables, updateTemplate } from '../../api/templates'
 import { listParameters } from '../../api/parameters'
 import { listSecrets } from '../../api/auth'
-import type { ParameterOut, TemplateOut, VariableRefOut } from '../../api/types'
+import { listFilters } from '../../api/admin'
+import type { CustomFilterOut, ParameterOut, TemplateOut, VariableRefOut } from '../../api/types'
 import type { DataSourceDef } from './DataSourceForm'
 import { ParameterPanel } from './ParameterPanel'
 import { PreviewModal } from './PreviewModal'
@@ -86,74 +87,282 @@ function MonacoDropZone({ children, isOver }: { children: React.ReactNode; isOve
   )
 }
 
-// ── Validate panel ────────────────────────────────────────────────────────────
+// ── Validate modal ────────────────────────────────────────────────────────────
 
-function ValidationPanel({
+function ValidateModal({
   variables,
+  isLoading,
   onClose,
 }: {
-  variables: VariableRefOut[]
+  variables: VariableRefOut[] | undefined
+  isLoading: boolean
   onClose: () => void
 }) {
-  const registered = variables.filter((v) => v.is_registered)
-  const unregistered = variables.filter((v) => !v.is_registered)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const registered = variables?.filter((v) => v.is_registered) ?? []
+  const unregistered = variables?.filter((v) => !v.is_registered) ?? []
+  const total = variables?.length ?? 0
 
   return (
-    <div className="border-t border-gray-200 bg-gray-50">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200">
-        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-          Template variables (saved version)
-        </span>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">
-          ×
-        </button>
-      </div>
-      <div className="flex gap-6 p-3">
-        {unregistered.length > 0 && (
-          <div className="flex-1">
-            <p className="text-xs font-medium text-red-600 mb-1.5">
-              Unregistered ({unregistered.length})
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {unregistered.map((v) => (
-                <span
-                  key={v.full_path}
-                  className="font-mono text-xs bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded"
-                >
-                  {'{{ '}
-                  {v.full_path}
-                  {' }}'}
-                </span>
-              ))}
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-12"
+      style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="w-full max-w-2xl mx-4 rounded-2xl border overflow-hidden"
+        style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)', boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-3.5 border-b"
+          style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
+        >
+          <div className="flex items-center gap-3">
+            <svg className="w-4 h-4 shrink-0" style={{ color: '#6366f1' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>Template Variables</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--c-muted-4)' }}>Scanned from the saved Git version</p>
             </div>
           </div>
-        )}
-        {registered.length > 0 && (
-          <div className="flex-1">
-            <p className="text-xs font-medium text-green-600 mb-1.5">
-              Registered ({registered.length})
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {registered.map((v) => (
-                <span
-                  key={v.full_path}
-                  className="font-mono text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded"
-                >
-                  {'{{ '}
-                  {v.full_path}
-                  {' }}'}
-                </span>
-              ))}
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-lg leading-none"
+            style={{ color: 'var(--c-muted-3)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-3)')}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5">
+          {isLoading && (
+            <div className="flex items-center gap-2 justify-center py-10 text-sm" style={{ color: 'var(--c-muted-3)' }}>
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Scanning template variables…
             </div>
-          </div>
-        )}
-        {variables.length === 0 && (
-          <p className="text-xs text-gray-400 italic">No variables found in saved template.</p>
-        )}
+          )}
+
+          {!isLoading && variables !== undefined && (
+            <>
+              {/* Summary bar */}
+              <div
+                className="flex items-center gap-5 rounded-xl px-4 py-3 mb-5 border"
+                style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)' }}
+              >
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold font-display" style={{ color: 'var(--c-text)' }}>{total}</span>
+                  <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>total</span>
+                </div>
+                <div className="w-px h-8" style={{ backgroundColor: 'var(--c-border)' }} />
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold font-display" style={{ color: registered.length > 0 ? '#34d399' : 'var(--c-muted-4)' }}>{registered.length}</span>
+                  <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>registered</span>
+                </div>
+                <div className="w-px h-8" style={{ backgroundColor: 'var(--c-border)' }} />
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold font-display" style={{ color: unregistered.length > 0 ? '#f87171' : 'var(--c-muted-4)' }}>{unregistered.length}</span>
+                  <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>unregistered</span>
+                </div>
+                {unregistered.length === 0 && total > 0 && (
+                  <span className="ml-auto text-xs font-medium px-2.5 py-1 rounded-full border" style={{ backgroundColor: 'rgba(52,211,153,0.08)', borderColor: 'rgba(52,211,153,0.2)', color: '#34d399' }}>
+                    All registered ✓
+                  </span>
+                )}
+              </div>
+
+              {/* Unregistered */}
+              {unregistered.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: '#f87171' }}>
+                    Unregistered — need a parameter definition
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {unregistered.map((v) => (
+                      <span
+                        key={v.full_path}
+                        className="font-mono text-xs px-2.5 py-1 rounded-lg border"
+                        style={{ backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)', color: '#fca5a5' }}
+                      >
+                        {'{{'}
+                        <span className="mx-0.5 opacity-60"> </span>
+                        {v.full_path}
+                        <span className="mx-0.5 opacity-60"> </span>
+                        {'}}'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Registered */}
+              {registered.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: '#34d399' }}>
+                    Registered
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {registered.map((v) => (
+                      <span
+                        key={v.full_path}
+                        className="font-mono text-xs px-2.5 py-1 rounded-lg border"
+                        style={{ backgroundColor: 'rgba(52,211,153,0.06)', borderColor: 'rgba(52,211,153,0.18)', color: '#6ee7b7' }}
+                      >
+                        {'{{'}
+                        <span className="mx-0.5 opacity-60"> </span>
+                        {v.full_path}
+                        <span className="mx-0.5 opacity-60"> </span>
+                        {'}}'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {total === 0 && (
+                <p className="text-sm text-center py-6" style={{ color: 'var(--c-muted-4)' }}>
+                  No Jinja2 variables found in the saved template body.
+                </p>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
 }
+
+// ── Snippet toolbar ───────────────────────────────────────────────────────────
+
+const JINJA_SNIPPETS: { label: string; insert: string; title: string }[] = [
+  { label: '{{ }}',       insert: '{{ variable }}',                                    title: 'Variable expression' },
+  { label: '{% if %}',    insert: '{% if condition %}\n\n{% endif %}',                 title: 'If / endif block' },
+  { label: '{% elif %}',  insert: '{% elif condition %}',                              title: 'Elif branch' },
+  { label: '{% else %}',  insert: '{% else %}',                                        title: 'Else branch' },
+  { label: '{% for %}',   insert: '{% for item in items %}\n{{ item }}\n{% endfor %}', title: 'For loop' },
+  { label: '{% set %}',   insert: '{% set var = value %}',                             title: 'Set variable' },
+  { label: '{% include %}', insert: "{% include 'shared/file.j2' %}",                 title: 'Include fragment' },
+  { label: '| default',  insert: " | default('')",                                    title: 'Default filter' },
+  { label: '| join',     insert: " | join(', ')",                                     title: 'Join list' },
+  { label: '| upper',    insert: ' | upper',                                           title: 'Uppercase' },
+  { label: '| lower',    insert: ' | lower',                                           title: 'Lowercase' },
+  { label: '| replace',  insert: " | replace('old', 'new')",                          title: 'Replace string' },
+]
+
+function SnippetToolbar({ onInsert }: { onInsert: (text: string) => void }) {
+  const chipBase: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    padding: '1px 7px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    border: '1px solid',
+    transition: 'opacity 0.1s',
+    whiteSpace: 'nowrap',
+  }
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-1 gap-y-1 px-3 py-1.5 border-b shrink-0"
+      style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-surface-alt)' }}
+    >
+      {JINJA_SNIPPETS.map((s) => (
+        <button
+          key={s.label}
+          type="button"
+          title={s.title}
+          onClick={() => onInsert(s.insert)}
+          style={{
+            ...chipBase,
+            color: '#818cf8',
+            backgroundColor: 'rgba(99,102,241,0.08)',
+            borderColor: 'rgba(99,102,241,0.2)',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.75' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+        >
+          {s.label}
+        </button>
+      ))}
+      <span style={{ fontSize: '10px', color: 'var(--c-border-bright)', marginLeft: '4px', userSelect: 'none' }}>
+        type <span style={{ color: 'var(--c-muted-4)', fontFamily: 'monospace' }}>|</span> for filter autocomplete
+      </span>
+    </div>
+  )
+}
+
+// ── Jinja2 built-in filter completions ────────────────────────────────────────
+
+const JINJA2_BUILTIN_FILTERS: { name: string; doc: string; snippet?: string }[] = [
+  { name: 'abs',            doc: 'Return the absolute value of the argument.' },
+  { name: 'capitalize',     doc: 'Capitalize: first character uppercase, all others lowercase.' },
+  { name: 'center',         doc: 'Center the value in a field of given width.', snippet: 'center(${1:80})' },
+  { name: 'default',        doc: "Return a default value if the value is undefined or falsy.", snippet: "default('${1:}')" },
+  { name: 'd',              doc: "Alias for default.", snippet: "d('${1:}')" },
+  { name: 'dictsort',       doc: 'Sort a dict and yield (key, value) pairs.' },
+  { name: 'escape',         doc: 'Convert &, <, >, \', " to HTML-safe sequences.' },
+  { name: 'e',              doc: 'Alias for escape.' },
+  { name: 'filesizeformat', doc: 'Format the value as a human-readable file size (e.g. "1.2 MB").' },
+  { name: 'first',          doc: 'Return the first item of a sequence.' },
+  { name: 'float',          doc: 'Convert the value into a floating point number.' },
+  { name: 'forceescape',    doc: 'Enforce HTML escaping, even if auto-escaping is disabled.' },
+  { name: 'format',         doc: 'Apply printf-style formatting to the value.', snippet: 'format(${1:})' },
+  { name: 'groupby',        doc: 'Group a sequence of objects by an attribute.', snippet: "groupby('${1:attribute}')" },
+  { name: 'indent',         doc: 'Add spaces in front of each line (first line optional).', snippet: 'indent(${1:4})' },
+  { name: 'int',            doc: 'Convert the value into an integer.' },
+  { name: 'items',          doc: 'Return an iterator over the (key, value) pairs of a dict.' },
+  { name: 'join',           doc: "Concatenate items in a sequence with a separator.", snippet: "join('${1:, }')" },
+  { name: 'last',           doc: 'Return the last item of a sequence.' },
+  { name: 'length',         doc: 'Return the number of items of a sequence or mapping.' },
+  { name: 'count',          doc: 'Alias for length.' },
+  { name: 'list',           doc: 'Convert the value into a list.' },
+  { name: 'lower',          doc: 'Convert a value to lowercase.' },
+  { name: 'map',            doc: 'Apply a filter on a sequence of objects.', snippet: "map(attribute='${1:attr}')" },
+  { name: 'max',            doc: 'Return the largest item from the sequence.' },
+  { name: 'min',            doc: 'Return the smallest item from the sequence.' },
+  { name: 'pprint',         doc: 'Pretty print a variable (useful for debugging).' },
+  { name: 'random',         doc: 'Return a random item from the sequence.' },
+  { name: 'reject',         doc: 'Filter a sequence, removing items that pass the test.', snippet: "reject('${1:test}')" },
+  { name: 'rejectattr',     doc: 'Filter a sequence of objects, removing those where the attribute passes the test.', snippet: "rejectattr('${1:attr}')" },
+  { name: 'replace',        doc: 'Replace occurrences of a substring.', snippet: "replace('${1:old}', '${2:new}')" },
+  { name: 'reverse',        doc: 'Reverse the object or return a reversed iterator.' },
+  { name: 'round',          doc: 'Round the number to a given precision.', snippet: 'round(${1:0})' },
+  { name: 'safe',           doc: 'Mark the value as safe — it will not be HTML-escaped.' },
+  { name: 'select',         doc: 'Filter a sequence, keeping items that pass the test.', snippet: "select('${1:test}')" },
+  { name: 'selectattr',     doc: 'Filter a sequence of objects, keeping those where the attribute passes the test.', snippet: "selectattr('${1:attr}')" },
+  { name: 'slice',          doc: 'Slice an iterator and return a list of lists.', snippet: 'slice(${1:3})' },
+  { name: 'sort',           doc: 'Sort an iterable.', snippet: "sort(attribute='${1:attr}')" },
+  { name: 'string',         doc: 'Convert the object to a string.' },
+  { name: 'striptags',      doc: 'Strip SGML/XML tags and replace adjacent whitespace.' },
+  { name: 'sum',            doc: 'Return the sum of a sequence of numbers.', snippet: "sum(attribute='${1:attr}')" },
+  { name: 'title',          doc: 'Return a titlecased version of the value.' },
+  { name: 'tojson',         doc: 'Serialize an object to a JSON string.', snippet: 'tojson(indent=${1:2})' },
+  { name: 'trim',           doc: 'Strip leading and trailing whitespace.' },
+  { name: 'truncate',       doc: 'Return a truncated copy of the string.', snippet: 'truncate(${1:255})' },
+  { name: 'unique',         doc: 'Return a list of unique items from the iterable.' },
+  { name: 'upper',          doc: 'Convert a value to uppercase.' },
+  { name: 'urlencode',      doc: 'Percent-encode a string for use in a URL.' },
+  { name: 'urlize',         doc: 'Convert URLs in plain text into clickable HTML links.' },
+  { name: 'wordcount',      doc: 'Count the words in the string.' },
+  { name: 'wordwrap',       doc: "Wrap the string's words at the given width.", snippet: 'wordwrap(${1:79})' },
+  { name: 'xmlattr',        doc: 'Build an HTML/XML attribute string from a dict.' },
+]
 
 // ── Main TemplateEditor ───────────────────────────────────────────────────────
 
@@ -204,6 +413,21 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
     queryKey: ['secrets'],
     queryFn: listSecrets,
   })
+
+  // Custom filters — for Monaco IntelliSense completion
+  const { data: customFilters = [] } = useQuery({
+    queryKey: ['filters', template.project_id],
+    queryFn: () => listFilters({ project_id: template.project_id }),
+    select: (data) => data.filter((f) => f.is_active),
+  })
+
+  // Keep a ref so the completion provider always reads fresh data without re-registering
+  const customFiltersRef = useRef<CustomFilterOut[]>(customFilters)
+  useEffect(() => { customFiltersRef.current = customFilters }, [customFilters])
+
+  // Disposable for the Monaco completion provider — cleaned up on unmount
+  const completionDisposableRef = useRef<{ dispose(): void } | null>(null)
+  useEffect(() => () => { completionDisposableRef.current?.dispose() }, [])
 
   // Variables for validation panel (reads from saved Git version)
   const validateQuery = useQuery({
@@ -331,14 +555,14 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
         {/* ── Toolbar ──────────────────────────────────────────────────── */}
         <div
           className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0"
-          style={{ backgroundColor: '#0a0d1a', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
         >
           <Link
             to="/admin/templates"
             className="flex items-center gap-1 text-xs font-medium transition-colors mr-1"
-            style={{ color: '#546485' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#8892b0')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#546485')}
+            style={{ color: 'var(--c-muted-3)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-3)')}
           >
             <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -346,17 +570,17 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
             Templates
           </Link>
 
-          <span style={{ color: '#2a3255' }}>|</span>
+          <span style={{ color: 'var(--c-border-bright)' }}>|</span>
 
-          <h2 className="font-semibold text-sm mr-1" style={{ color: '#e2e8f4' }}>{metaDisplayName || template.display_name}</h2>
+          <h2 className="font-semibold text-sm mr-1" style={{ color: 'var(--c-text)' }}>{metaDisplayName || template.display_name}</h2>
 
-          <span style={{ color: '#2a3255' }}>|</span>
+          <span style={{ color: 'var(--c-border-bright)' }}>|</span>
 
           <button
             onClick={handleValidate}
             disabled={validateQuery.isFetching}
             className="px-3 py-1.5 text-xs rounded-md transition-colors disabled:opacity-50"
-            style={{ border: '1px solid #2a3255', color: '#8892b0', backgroundColor: 'transparent' }}
+            style={{ border: '1px solid var(--c-border-bright)', color: 'var(--c-muted-2)', backgroundColor: 'transparent' }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
@@ -366,7 +590,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
           <button
             onClick={() => setShowPreview(true)}
             className="px-3 py-1.5 text-xs rounded-md transition-colors"
-            style={{ border: '1px solid #2a3255', color: '#8892b0', backgroundColor: 'transparent' }}
+            style={{ border: '1px solid var(--c-border-bright)', color: 'var(--c-muted-2)', backgroundColor: 'transparent' }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
@@ -383,9 +607,9 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
             placeholder="Commit message (optional)"
             className="w-56 rounded-md px-2.5 py-1.5 text-xs focus:outline-none"
             style={{
-              backgroundColor: '#141828',
-              border: '1px solid #2a3255',
-              color: '#e2e8f4',
+              backgroundColor: 'var(--c-card)',
+              border: '1px solid var(--c-border-bright)',
+              color: 'var(--c-text)',
             }}
           />
 
@@ -406,6 +630,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
         <div className="flex flex-1 min-h-0">
           {/* Left: Monaco editor — 60% */}
           <div className="w-[60%] flex flex-col min-h-0">
+            <SnippetToolbar onInsert={insertAtCursor} />
             <MonacoDropZone isOver={isDragOver}>
               <Editor
                 height="100%"
@@ -413,10 +638,54 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
                 theme="vs-dark"
                 value={editorContent}
                 onChange={(val) => setEditorContent(val ?? '')}
-                onMount={(editor) => {
+                onMount={(editor, monaco) => {
                   editorRef.current = editor
                   editor.onDidChangeCursorPosition((e) => {
                     lastCursorRef.current = e.position
+                  })
+
+                  // Register Jinja2 filter completion provider (triggers on |)
+                  completionDisposableRef.current = monaco.languages.registerCompletionItemProvider('python', {
+                    triggerCharacters: ['|'],
+                    provideCompletionItems: (model, position) => {
+                      // Only activate when the text before the cursor ends with | (optionally with spaces)
+                      const textBefore = model.getLineContent(position.lineNumber).substring(0, position.column - 1)
+                      if (!/\|\s*\w*$/.test(textBefore)) return { suggestions: [] }
+
+                      const word = model.getWordUntilPosition(position)
+                      const range = {
+                        startLineNumber: position.lineNumber,
+                        endLineNumber: position.lineNumber,
+                        startColumn: word.startColumn,
+                        endColumn: word.endColumn,
+                      }
+
+                      const customSuggestions = customFiltersRef.current.map((f) => ({
+                        label: f.name,
+                        kind: monaco.languages.CompletionItemKind.Function,
+                        detail: '⚙ custom filter',
+                        documentation: { value: f.description ?? `Custom Jinja2 filter: \`${f.name}\`` },
+                        insertText: f.name,
+                        insertTextRules: monaco.languages.CompletionItemInsertTextRule.None,
+                        range,
+                        sortText: '0' + f.name, // custom filters sort first
+                      }))
+
+                      const builtinSuggestions = JINJA2_BUILTIN_FILTERS.map((f) => ({
+                        label: f.name,
+                        kind: monaco.languages.CompletionItemKind.Function,
+                        detail: 'Jinja2',
+                        documentation: { value: f.doc },
+                        insertText: f.snippet ?? f.name,
+                        insertTextRules: f.snippet
+                          ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+                          : monaco.languages.CompletionItemInsertTextRule.None,
+                        range,
+                        sortText: '1' + f.name,
+                      }))
+
+                      return { suggestions: [...customSuggestions, ...builtinSuggestions] }
+                    },
                   })
                 }}
                 options={{
@@ -432,13 +701,6 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
               />
             </MonacoDropZone>
 
-            {/* Validation panel */}
-            {showValidate && validateQuery.data && (
-              <ValidationPanel
-                variables={validateQuery.data}
-                onClose={() => setShowValidate(false)}
-              />
-            )}
           </div>
 
           {/* Right: Parameter panel — 40% */}
@@ -481,6 +743,15 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
       {/* Preview modal */}
       {showPreview && (
         <PreviewModal templateId={template.id} onClose={() => setShowPreview(false)} />
+      )}
+
+      {/* Validate modal */}
+      {showValidate && (
+        <ValidateModal
+          variables={validateQuery.data}
+          isLoading={validateQuery.isFetching}
+          onClose={() => setShowValidate(false)}
+        />
       )}
 
       {/* Toast */}

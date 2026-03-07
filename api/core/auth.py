@@ -32,22 +32,54 @@ Usage in a router:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import bcrypt as _bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings
+from api.database import get_db
 
 logger = logging.getLogger(__name__)
 
-_bearer = HTTPBearer(auto_error=True)
+# Bearer is optional so we can fall through to X-API-Key when no Authorization header
+_bearer = HTTPBearer(auto_error=False)
+
+
+# ---------------------------------------------------------------------------
+# API key helpers (used by both auth core and auth router)
+# ---------------------------------------------------------------------------
+
+_KEY_PREFIX = "tmpl_"
+_KEY_BYTES = 32  # 64 hex chars after the prefix
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """
+    Generate a new API key.
+
+    Returns (raw_key, key_prefix, key_hash):
+      - raw_key    — the full key shown to the user once, e.g. "tmpl_<64 hex>"
+      - key_prefix — first 12 chars stored in DB for display, e.g. "tmpl_a1b2c3"
+      - key_hash   — SHA-256 hex digest stored for lookup
+    """
+    raw = _KEY_PREFIX + secrets.token_hex(_KEY_BYTES)
+    prefix = raw[:12]
+    digest = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, prefix, digest
+
+
+def hash_api_key(raw_key: str) -> str:
+    """Return the SHA-256 hex digest of a raw API key string."""
+    return hashlib.sha256(raw_key.encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -76,9 +108,30 @@ class UserInfo:
 # ---------------------------------------------------------------------------
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    db: AsyncSession = Depends(get_db),
 ) -> TokenData:
-    """Decode a Bearer JWT and return structured token claims."""
+    """
+    Resolve caller identity from either a Bearer JWT or an X-API-Key header.
+
+    Priority: X-API-Key → Bearer JWT → 401.
+    """
+    if x_api_key:
+        return await _resolve_api_key(x_api_key, db)
+
+    if credentials:
+        return _decode_jwt(credentials.credentials)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required — provide a Bearer token or X-API-Key header",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _decode_jwt(token: str) -> TokenData:
+    """Decode and validate a JWT, returning structured claims."""
     settings = get_settings()
     exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,11 +139,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
-            credentials.credentials,
-            settings.SECRET_KEY,
-            algorithms=["HS256"],
-        )
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         sub: str | None = payload.get("sub")
         org_id: int | None = payload.get("org_id")
         if sub is None or org_id is None:
@@ -99,6 +148,48 @@ async def get_current_user(
         return TokenData(sub=sub, org_id=org_id, is_admin=is_admin)
     except JWTError:
         raise exc
+
+
+async def _resolve_api_key(raw_key: str, db: AsyncSession) -> TokenData:
+    """Look up an API key by its hash and return TokenData. Updates last_used_at."""
+    from api.models.api_key import ApiKey  # local import to avoid circular deps
+
+    key_hash = hash_api_key(raw_key)
+    result = await db.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))
+    api_key: ApiKey | None = result.scalar_one_or_none()
+
+    if api_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    now = datetime.now(timezone.utc)
+
+    # Check expiry
+    if api_key.expires_at is not None and api_key.expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key has expired",
+        )
+
+    # Update last_used_at (best-effort — don't let a write failure break the request)
+    try:
+        await db.execute(
+            update(ApiKey)
+            .where(ApiKey.id == api_key.id)
+            .values(last_used_at=now)
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    return TokenData(
+        sub=f"apikey:{api_key.name}",
+        org_id=api_key.organization_id,
+        is_admin=api_key.is_admin,
+    )
 
 
 async def require_admin(

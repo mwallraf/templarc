@@ -48,7 +48,10 @@ export interface TemplateTreeNode {
   id: number
   name: string
   display_name: string
+  git_path?: string
   is_active: boolean
+  is_snippet: boolean
+  is_hidden: boolean
   sort_order: number
   children: TemplateTreeNode[]
 }
@@ -91,6 +94,8 @@ export interface TemplateOut {
   git_path?: string
   parent_template_id?: number
   is_active: boolean
+  is_snippet: boolean
+  is_hidden: boolean
   sort_order: number
   created_at: string
   updated_at: string
@@ -101,8 +106,11 @@ export interface TemplateCreate {
   name: string
   display_name: string
   description?: string
+  git_path?: string
   parent_template_id?: number
   sort_order?: number
+  is_snippet?: boolean
+  is_hidden?: boolean
   content?: string
   author?: string
 }
@@ -115,6 +123,9 @@ export interface TemplateUpdate {
   content?: string
   commit_message?: string
   author?: string
+  is_active?: boolean
+  is_snippet?: boolean
+  is_hidden?: boolean
 }
 
 export interface VariableRefOut {
@@ -227,6 +238,12 @@ export interface PaginatedResponse<T> {
 
 // ── Render ─────────────────────────────────────────────────────────────────
 
+export interface VisibleWhenCondition {
+  param: string
+  op: 'eq' | 'ne' | 'in' | 'not_in'
+  value: string | string[]
+}
+
 export interface EnrichedParameterOut {
   name: string
   scope: string
@@ -239,10 +256,28 @@ export interface EnrichedParameterOut {
   sort_order: number
   is_derived: boolean
   validation_regex?: string
+  section?: string
+  visible_when?: VisibleWhenCondition
   prefill?: unknown
   options?: { value: string; label: string; condition_param?: string; condition_value?: string }[]
   readonly?: boolean
   source_id?: string
+}
+
+export interface RenderPresetOut {
+  id: number
+  template_id: number
+  name: string
+  description?: string
+  params: Record<string, unknown>
+  created_by?: number
+  created_at: string
+}
+
+export interface RenderPresetCreate {
+  name: string
+  description?: string
+  params: Record<string, unknown>
 }
 
 export interface FormDefinitionOut {
@@ -352,6 +387,29 @@ export interface SecretOut {
   created_at: string
 }
 
+// ── Auth / API Keys ────────────────────────────────────────────────────────
+
+export interface ApiKeyCreate {
+  name: string
+  is_admin: boolean
+  expires_at?: string | null
+}
+
+export interface ApiKeyOut {
+  id: number
+  name: string
+  key_prefix: string
+  is_admin: boolean
+  created_by: number | null
+  last_used_at: string | null
+  expires_at: string | null
+  created_at: string
+}
+
+export interface ApiKeyCreatedOut extends ApiKeyOut {
+  raw_key: string
+}
+
 export interface LoginRequest {
   username: string
   password: string
@@ -401,6 +459,7 @@ export interface CustomObjectCreate {
   name: string
   code: string
   description?: string
+  scope: FilterScope
   project_id?: number
 }
 
@@ -409,6 +468,27 @@ export interface CustomObjectOut {
   name: string
   code: string
   description?: string
+  scope: FilterScope
+  project_id?: number
+  is_active: boolean
+  created_at: string
+  created_by?: string
+}
+
+export interface CustomMacroCreate {
+  name: string
+  body: string
+  description?: string
+  scope: FilterScope
+  project_id?: number
+}
+
+export interface CustomMacroOut {
+  id: number
+  name: string
+  body: string
+  description?: string
+  scope: FilterScope
   project_id?: number
   is_active: boolean
   created_at: string
@@ -428,18 +508,33 @@ export interface SyncImportedTemplate {
   git_path: string
 }
 
+export interface SyncDeletedTemplate {
+  id: number
+  name: string
+  git_path: string
+}
+
+export interface GitSyncRequest {
+  import_paths?: string[] | null
+  delete_paths?: string[] | null
+}
+
 export interface SyncReport {
   scanned: number
   imported: number
   already_registered: number
   skipped_fragments: number
+  deleted: number
   errors: SyncErrorItem[]
   imported_templates: SyncImportedTemplate[]
+  deleted_templates: SyncDeletedTemplate[]
 }
 
 export interface SyncStatusItem {
   git_path: string
   status: 'in_sync' | 'in_db_only' | 'in_git_only' | 'fragment'
+  template_name?: string
+  template_id?: number
 }
 
 export interface SyncStatusReport {
@@ -448,4 +543,100 @@ export interface SyncStatusReport {
   in_git_only: number
   skipped_fragments: number
   items: SyncStatusItem[]
+}
+
+// ── Duplicate parameter detection ───────────────────────────────────────────
+
+export interface DuplicateTemplateRef {
+  param_id: number
+  template_id: number
+  template_name: string
+  template_display_name: string
+  widget_type: string
+  label?: string
+  required: boolean
+}
+
+export interface DuplicateParameterGroup {
+  name: string
+  project_id: number
+  project_display_name: string
+  count: number
+  has_conflicts: boolean
+  templates: DuplicateTemplateRef[]
+}
+
+export interface DuplicatesReport {
+  groups: DuplicateParameterGroup[]
+  total_duplicate_names: number
+  total_redundant_params: number
+}
+
+export interface PromoteRequest {
+  from_name: string
+  to_name: string
+  project_id: number
+}
+
+export interface PromoteTemplateRewrite {
+  template_id: number
+  template_name: string
+  git_path?: string
+  rewritten: boolean
+  replacements: number
+  error?: string
+}
+
+export interface PromoteReport {
+  created_param_id: number
+  deleted_param_ids: number[]
+  templates_updated: number
+  git_files_rewritten: number
+  template_rewrites: PromoteTemplateRewrite[]
+}
+
+// ── Quickpads ───────────────────────────────────────────────────────────────
+
+export interface QuickpadOut {
+  id: string
+  name: string
+  description?: string
+  body: string
+  is_public: boolean
+  owner_username?: string
+  organization_id: number
+  created_at: string
+  updated_at: string
+}
+
+export interface QuickpadListOut {
+  items: QuickpadOut[]
+  total: number
+}
+
+export interface QuickpadCreate {
+  name: string
+  description?: string
+  body?: string
+  is_public?: boolean
+}
+
+export interface QuickpadUpdate {
+  name?: string
+  description?: string
+  body?: string
+  is_public?: boolean
+}
+
+export interface QuickpadVariablesOut {
+  variables: string[]
+}
+
+export interface QuickpadRenderRequest {
+  params: Record<string, string>
+}
+
+export interface QuickpadRenderOut {
+  output: string
+  variables_used: string[]
 }

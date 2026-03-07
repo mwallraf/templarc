@@ -152,15 +152,16 @@ export function ParameterPanel({
   onUpdateDataSource,
 }: ParameterPanelProps) {
   const [search, setSearch] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
   const [showDsForm, setShowDsForm] = useState(false)
   const [editingDs, setEditingDs] = useState<DataSourceDef | null>(null)
   const [activeSection, setActiveSection] = useState<'params' | 'datasources' | 'parent' | 'metadata'>('params')
 
-  // Search all parameters in the registry
+  // Search all parameters in the registry — always enabled so results appear on focus
   const { data: searchResults } = useQuery({
     queryKey: ['parameters', 'search', search],
-    queryFn: () => listParameters({ search: search || undefined, page_size: 20 }),
-    enabled: search.length >= 1,
+    queryFn: () => listParameters({ search: search || undefined, page_size: 50 }),
+    enabled: true,
   })
 
   // All templates in this project (for parent selector)
@@ -172,6 +173,7 @@ export function ParameterPanel({
 
   const assignedIds = new Set(assignedParams.map((p) => p.id))
   const filteredResults = (searchResults?.items ?? []).filter((p) => !assignedIds.has(p.id))
+  const showResults = searchFocused || search.length > 0
 
   function handleAddDs(ds: DataSourceDef) {
     if (editingDs) {
@@ -184,7 +186,7 @@ export function ParameterPanel({
   }
 
   const siblingsAndAncestors: TemplateOut[] = (projectTemplates ?? []).filter(
-    (t) => t.id !== templateId,
+    (t) => t.id !== templateId && !t.is_snippet && t.is_active,
   )
 
   return (
@@ -254,14 +256,16 @@ export function ParameterPanel({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                 placeholder="Search parameters…"
                 className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
               />
-              {search && (
+              {showResults && (
                 <div className="space-y-1.5">
                   {filteredResults.length === 0 ? (
                     <p className="text-xs text-gray-400 italic text-center py-2">
-                      No parameters found
+                      {search ? 'No parameters found' : 'No more parameters to add'}
                     </p>
                   ) : (
                     filteredResults.map((p) => (
@@ -283,9 +287,9 @@ export function ParameterPanel({
                 </div>
               )}
 
-              {!search && (
+              {!showResults && (
                 <p className="text-xs text-gray-400 italic text-center py-4">
-                  Type to search parameters. Drag into editor to insert{' '}
+                  Click to browse or search. Drag into editor to insert{' '}
                   <code className="bg-gray-100 px-1 rounded">{'{{ name }}'}</code>
                 </p>
               )}

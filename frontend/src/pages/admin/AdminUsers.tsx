@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import type { UserCreate } from '../../api/types'
 
 const inputClass = 'w-full rounded-lg px-3 py-2 text-sm text-slate-100 border transition-colors focus:outline-none'
-const inputStyle = { backgroundColor: '#141828', borderColor: '#2a3255' }
+const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }
 
 function formatDate(iso?: string) {
   if (!iso) return '—'
@@ -62,7 +62,7 @@ export default function AdminUsers() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white font-display">Users</h1>
-          <p className="text-sm mt-1" style={{ color: '#546485' }}>Manage local and LDAP accounts</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--c-muted-3)' }}>Manage local and LDAP accounts</p>
         </div>
         <button
           onClick={() => { setShowForm((v) => !v); if (showForm) reset() }}
@@ -70,8 +70,8 @@ export default function AdminUsers() {
           style={{
             background: showForm ? 'transparent' : 'linear-gradient(135deg, #6366f1, #818cf8)',
             boxShadow: showForm ? 'none' : '0 4px 14px rgba(99,102,241,0.3)',
-            border: showForm ? '1px solid #2a3255' : 'none',
-            color: showForm ? '#8892b0' : 'white',
+            border: showForm ? '1px solid var(--c-border-bright)' : 'none',
+            color: showForm ? 'var(--c-muted-2)' : 'white',
           }}
         >
           {showForm ? 'Cancel' : 'New User'}
@@ -82,13 +82,13 @@ export default function AdminUsers() {
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
           className="rounded-xl border p-5 mb-6 space-y-4"
-          style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+          style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
           <h2 className="font-semibold text-slate-100 font-display">New Local User</h2>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Username</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Username</label>
               <input
                 className={inputClass}
                 style={inputStyle}
@@ -98,7 +98,7 @@ export default function AdminUsers() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Email</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Email</label>
               <input
                 type="email"
                 className={inputClass}
@@ -111,7 +111,7 @@ export default function AdminUsers() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ color: '#8892b0' }}>Password</label>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Password</label>
               <input
                 type="password"
                 className={inputClass}
@@ -127,7 +127,7 @@ export default function AdminUsers() {
                   className="rounded"
                   {...register('is_admin')}
                 />
-                <span className="text-sm" style={{ color: '#8892b0' }}>Administrator</span>
+                <span className="text-sm" style={{ color: 'var(--c-muted-2)' }}>Administrator</span>
               </label>
             </div>
           </div>
@@ -157,18 +157,18 @@ export default function AdminUsers() {
           {[1, 2, 3].map((i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
         </div>
       ) : (
-        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}>
+        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
           {!users?.length ? (
-            <p className="px-4 py-10 text-center text-sm" style={{ color: '#546485' }}>No users found.</p>
+            <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No users found.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead style={{ backgroundColor: '#0a0d1a', borderBottom: '1px solid #1e2440' }}>
+              <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Username</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Type</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3d4777' }}>Last Login</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Username</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Email</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Type</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Role</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Last Login</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -179,13 +179,13 @@ export default function AdminUsers() {
                     <tr
                       key={u.id}
                       style={{
-                        borderBottom: idx < users.length - 1 ? '1px solid #1e2440' : 'none',
+                        borderBottom: idx < users.length - 1 ? '1px solid var(--c-border)' : 'none',
                         borderLeft: isSelf ? '3px solid #6366f1' : '3px solid transparent',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: '#8892b0' }}>
+                      <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>
                         {u.username}
                         {isSelf && (
                           <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full border font-sans" style={{ color: '#6366f1', borderColor: '#312e81', backgroundColor: 'rgba(99,102,241,0.1)' }}>
@@ -193,7 +193,7 @@ export default function AdminUsers() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#546485' }}>{u.email || '—'}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{u.email || '—'}</td>
                       <td className="px-4 py-3">
                         <span
                           className="text-xs px-2 py-0.5 rounded-full border"
@@ -210,13 +210,13 @@ export default function AdminUsers() {
                           className="text-xs px-2 py-0.5 rounded-full border"
                           style={u.is_admin
                             ? { color: '#f59e0b', borderColor: '#78350f', backgroundColor: 'rgba(245,158,11,0.08)' }
-                            : { color: '#546485', borderColor: '#1e2440', backgroundColor: 'transparent' }
+                            : { color: 'var(--c-muted-3)', borderColor: 'var(--c-border)', backgroundColor: 'transparent' }
                           }
                         >
                           {u.is_admin ? 'Admin' : 'User'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#3d4777' }}>{formatDate(u.last_login)}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{formatDate(u.last_login)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-3">
                           {/* Toggle admin — not for self */}
@@ -234,7 +234,7 @@ export default function AdminUsers() {
                           <button
                             onClick={() => handleDuplicate(u.email, u.is_admin)}
                             className="text-xs font-medium transition-colors"
-                            style={{ color: '#8892b0' }}
+                            style={{ color: 'var(--c-muted-2)' }}
                           >
                             Duplicate
                           </button>

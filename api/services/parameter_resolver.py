@@ -422,6 +422,9 @@ class ResolvedParameter:
     options: list                 # list[ParameterOption] — for select/multiselect widgets
     prefill: str | None           # computed value for derived params; None for regular (filled later by datasource resolver)
     is_derived: bool
+    validation_regex: str | None = None
+    section: str | None = None
+    visible_when: dict | None = None
 
 
 @dataclass
@@ -541,6 +544,9 @@ def build_resolution_result(
             options=list(param.options),
             prefill=prefill,
             is_derived=param.is_derived,
+            validation_regex=param.validation_regex,
+            section=param.section,
+            visible_when=param.visible_when,
         )
 
     resolved_glob = [
@@ -657,6 +663,45 @@ async def _load_glob_params(
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
+async def re_evaluate_derived_params(
+    db: AsyncSession,
+    template_id: int,
+    current_context: dict,
+) -> dict[str, str]:
+    """
+    Re-evaluate all derived parameters for a template against a given context.
+
+    Used by the on_change handler so that derived readonly fields (e.g. ``vendor``
+    derived from ``hardware``) are updated in the UI whenever a dependency changes.
+
+    Parameters
+    ----------
+    current_context:
+        The current form values (name → value), typically from the on_change
+        request body. Derived params are re-computed against this context.
+
+    Returns
+    -------
+    A dict mapping each derived parameter name to its newly computed value.
+    """
+    chain = await _load_inheritance_chain(db, template_id)
+    if not chain:
+        return {}
+
+    # Collect all derived params from the inheritance chain
+    all_derived: list = []
+    for template in chain:
+        for param in template.parameters:
+            if param.is_active and param.is_derived:
+                all_derived.append(param)
+
+    if not all_derived:
+        return {}
+
+    resolved = resolve_derived_params(all_derived, current_context)
+    return {p.name: str(resolved[p.name]) for p in all_derived if p.name in resolved}
+
 
 async def resolve_template_parameters(
     db: AsyncSession,

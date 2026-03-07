@@ -9,6 +9,9 @@ Mounted at /templates in main.py. Routes:
   DELETE /templates/{id}                    — soft delete (is_active=False)
   GET    /templates/{id}/variables          — parsed variable refs with registry status
   GET    /templates/{id}/inheritance-chain  — full parent chain, root first
+  GET    /templates/{id}/presets            — list render presets for a template
+  POST   /templates/{id}/presets            — create a named render preset (admin)
+  DELETE /templates/{id}/presets/{pid}      — delete a render preset (admin)
 
 Auth:
   - GET endpoints: any authenticated user
@@ -24,6 +27,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +35,7 @@ from api.core.auth import TokenData, get_current_user, require_admin
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.parameter import Parameter, ParameterScope
+from api.models.render_preset import RenderPreset
 from api.schemas.catalog import (
     InheritanceChainItem,
     TemplateCreate,
@@ -40,6 +45,7 @@ from api.schemas.catalog import (
     TemplateUploadOut,
     VariableRefOut,
 )
+from api.schemas.render_preset import RenderPresetCreate, RenderPresetOut
 from api.services import catalog_service
 from api.services.audit_log_service import log_write
 from api.services.git_service import GitService
@@ -371,3 +377,88 @@ async def get_inheritance_chain(
     _token: TokenData = Depends(get_current_user),
 ) -> list[InheritanceChainItem]:
     return await catalog_service.get_inheritance_chain(db, template_id)
+
+
+# ---------------------------------------------------------------------------
+# Render presets
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{template_id}/presets",
+    response_model=list[RenderPresetOut],
+    summary="List render presets",
+    description="Return all named parameter presets saved for a template.",
+)
+async def list_presets(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    _token: TokenData = Depends(get_current_user),
+) -> list[RenderPresetOut]:
+    # Verify template exists
+    await catalog_service.get_template(db, template_id)
+    result = await db.execute(
+        select(RenderPreset)
+        .where(RenderPreset.template_id == template_id)
+        .order_by(RenderPreset.created_at)
+    )
+    presets = result.scalars().all()
+    return [RenderPresetOut.model_validate(p) for p in presets]
+
+
+@router.post(
+    "/{template_id}/presets",
+    response_model=RenderPresetOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create render preset",
+    description=(
+        "Save a named parameter preset for a template. "
+        "The `params` dict is stored as-is and can be used to pre-fill the render form."
+    ),
+)
+async def create_preset(
+    template_id: int,
+    data: RenderPresetCreate,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> RenderPresetOut:
+    await catalog_service.get_template(db, template_id)
+    preset = RenderPreset(
+        template_id=template_id,
+        name=data.name,
+        description=data.description,
+        params=data.params,
+        created_by=None,  # created_by user lookup would require a DB query; omit for now
+    )
+    db.add(preset)
+    await db.flush()
+    await db.refresh(preset)
+    await log_write(db, token.sub, "create", "render_preset", preset.id, {"name": data.name})
+    await db.commit()
+    return RenderPresetOut.model_validate(preset)
+
+
+@router.delete(
+    "/{template_id}/presets/{preset_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Delete render preset",
+    description="Permanently delete a named render preset.",
+)
+async def delete_preset(
+    template_id: int,
+    preset_id: int,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> None:
+    result = await db.execute(
+        select(RenderPreset).where(
+            RenderPreset.id == preset_id,
+            RenderPreset.template_id == template_id,
+        )
+    )
+    preset = result.scalar_one_or_none()
+    if preset is None:
+        raise HTTPException(status_code=404, detail="Preset not found.")
+    await db.delete(preset)
+    await log_write(db, token.sub, "delete", "render_preset", preset_id)
+    await db.commit()

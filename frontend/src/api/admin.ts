@@ -1,11 +1,30 @@
 import { apiClient } from './client'
 import type {
+  ApiKeyCreate,
+  ApiKeyCreatedOut,
+  ApiKeyOut,
   CustomFilterCreate,
   CustomFilterOut,
   FilterTestResult,
   CustomObjectCreate,
   CustomObjectOut,
+  CustomMacroCreate,
+  CustomMacroOut,
+  DuplicatesReport,
+  PromoteRequest,
+  PromoteReport,
 } from './types'
+
+// ── API Keys ────────────────────────────────────────────────────────────────
+
+export const listApiKeys = () =>
+  apiClient.get<ApiKeyOut[]>('/auth/api-keys').then((r) => r.data)
+
+export const createApiKey = (data: ApiKeyCreate) =>
+  apiClient.post<ApiKeyCreatedOut>('/auth/api-keys', data).then((r) => r.data)
+
+export const deleteApiKey = (id: number) =>
+  apiClient.delete(`/auth/api-keys/${id}`)
 
 export const listFilters = (params?: { scope?: string; project_id?: number }) =>
   apiClient.get<CustomFilterOut[]>('/admin/filters', { params }).then((r) => r.data)
@@ -31,3 +50,20 @@ export const createObject = (data: CustomObjectCreate) =>
 
 export const deleteObject = (id: number) =>
   apiClient.delete<{ id: number }>(`/admin/objects/${id}`).then((r) => r.data)
+
+export const listMacros = (params?: { scope?: string; project_id?: number }) =>
+  apiClient.get<CustomMacroOut[]>('/admin/macros', { params }).then((r) => r.data)
+
+export const createMacro = (data: CustomMacroCreate) =>
+  apiClient.post<CustomMacroOut>('/admin/macros', data).then((r) => r.data)
+
+export const deleteMacro = (id: number) =>
+  apiClient.delete<{ id: number }>(`/admin/macros/${id}`).then((r) => r.data)
+
+export const findDuplicateParameters = (project_id?: number) =>
+  apiClient
+    .get<DuplicatesReport>('/admin/parameters/duplicates', { params: project_id ? { project_id } : undefined })
+    .then((r) => r.data)
+
+export const promoteParameter = (data: PromoteRequest) =>
+  apiClient.post<PromoteReport>('/admin/parameters/promote', data).then((r) => r.data)

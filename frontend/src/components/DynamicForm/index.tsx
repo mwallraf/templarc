@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation } from '@tanstack/react-query'
-import type { EnrichedParameterOut, FormDefinitionOut, RenderOut } from '../../api/types'
+import type { EnrichedParameterOut, FormDefinitionOut, RenderOut, VisibleWhenCondition } from '../../api/types'
 import { onChangeParam, renderTemplate } from '../../api/render'
 import { ParameterField } from './ParameterField'
 
@@ -39,17 +39,77 @@ function buildDefaultValues(
   return defaults
 }
 
-function groupByScope(params: EnrichedParameterOut[]) {
-  const global: EnrichedParameterOut[] = []
-  const project: EnrichedParameterOut[] = []
-  const template: EnrichedParameterOut[] = []
-  for (const p of params) {
-    if (p.scope === 'global') global.push(p)
-    else if (p.scope === 'project') project.push(p)
-    else template.push(p)
+/** Evaluate a single visible_when condition against current form values. */
+function isVisible(
+  param: EnrichedParameterOut,
+  currentValues: Record<string, unknown>,
+): boolean {
+  if (!param.visible_when) return true
+  const cond = param.visible_when as VisibleWhenCondition
+  const current = String(currentValues[cond.param] ?? '')
+  switch (cond.op) {
+    case 'eq': return current === String(cond.value)
+    case 'ne': return current !== String(cond.value)
+    case 'in': return (cond.value as string[]).includes(current)
+    case 'not_in': return !(cond.value as string[]).includes(current)
+    default: return true
   }
+}
+
+const SECTION_ACCENTS = [
+  '#6366f1', // indigo
+  '#22d3ee', // cyan
+  '#f59e0b', // amber
+  '#10b981', // emerald
+  '#f472b6', // pink
+  '#a78bfa', // violet
+  '#fb923c', // orange
+]
+
+interface SectionGroup {
+  title: string
+  params: EnrichedParameterOut[]
+  accent: string
+  initialOpen: boolean
+}
+
+/**
+ * Group params by their `section` field if any param has one.
+ * Falls back to scope-based grouping (Global / Project / Template) otherwise.
+ */
+function groupParams(params: EnrichedParameterOut[]): SectionGroup[] {
   const sort = (a: EnrichedParameterOut, b: EnrichedParameterOut) => a.sort_order - b.sort_order
-  return { global: global.sort(sort), project: project.sort(sort), template: template.sort(sort) }
+  const hasAnySections = params.some((p) => p.section)
+
+  if (!hasAnySections) {
+    const global = params.filter((p) => p.scope === 'global').sort(sort)
+    const project = params.filter((p) => p.scope === 'project').sort(sort)
+    const template = params.filter((p) => p.scope === 'template').sort(sort)
+    const groups: SectionGroup[] = []
+    if (global.length) groups.push({ title: 'Global Parameters', params: global, accent: '#fbbf24', initialOpen: false })
+    if (project.length) groups.push({ title: 'Project Parameters', params: project, accent: '#60a5fa', initialOpen: false })
+    if (template.length) groups.push({ title: 'Template Parameters', params: template, accent: '#6366f1', initialOpen: true })
+    return groups
+  }
+
+  // Section-based: preserve insertion order, "General" bucket for params without a section
+  const order: string[] = []
+  const map = new Map<string, EnrichedParameterOut[]>()
+  for (const p of params) {
+    const key = p.section ?? 'General'
+    if (!map.has(key)) {
+      map.set(key, [])
+      order.push(key)
+    }
+    map.get(key)!.push(p)
+  }
+
+  return order.map((title, i) => ({
+    title,
+    params: map.get(title)!.sort(sort),
+    accent: SECTION_ACCENTS[i % SECTION_ACCENTS.length],
+    initialOpen: true,
+  }))
 }
 
 // ── Section component ─────────────────────────────────────────────────────────
@@ -58,59 +118,92 @@ interface SectionProps {
   title: string
   accent: string
   params: EnrichedParameterOut[]
+  visibleCount: number
+  initialOpen: boolean
   register: ReturnType<typeof useForm<Record<string, unknown>>>['register']
   control: ReturnType<typeof useForm<Record<string, unknown>>>['control']
   errors: ReturnType<typeof useForm<Record<string, unknown>>>['formState']['errors']
   currentValues: Record<string, unknown>
   loadingFields: Set<string>
+  paramVisibility: Record<string, boolean>
 }
 
 function ParameterSection({
   title,
   accent,
   params,
+  visibleCount,
+  initialOpen,
   register,
   control,
   errors,
   currentValues,
   loadingFields,
+  paramVisibility,
 }: SectionProps) {
+  const [open, setOpen] = useState(initialOpen)
   if (params.length === 0) return null
+
   return (
     <div
       className="rounded-xl border overflow-hidden"
-      style={{ backgroundColor: '#0d1021', borderColor: '#1e2440' }}
+      style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
     >
-      {/* Section header */}
-      <div
-        className="flex items-center gap-2 px-4 py-3 border-b"
-        style={{ borderColor: '#1e2440', backgroundColor: '#0a0d1a' }}
+      {/* Section header — clickable to collapse */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 border-b text-left transition-colors"
+        style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface-alt)' }}
       >
         <span
-          className="w-2 h-2 rounded-full"
+          className="w-2 h-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: accent }}
         />
-        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#546485' }}>
+        <h3 className="text-xs font-semibold uppercase tracking-widest flex-1" style={{ color: 'var(--c-muted-3)' }}>
           {title}
         </h3>
-        <span className="ml-auto text-xs" style={{ color: '#2d3665' }}>
-          {params.length} param{params.length !== 1 ? 's' : ''}
+        <span
+          className="text-xs px-2 py-0.5 rounded-full border font-mono"
+          style={{
+            color: visibleCount < params.length ? '#fbbf24' : accent,
+            borderColor: visibleCount < params.length ? 'rgba(251,191,36,0.2)' : `${accent}33`,
+            backgroundColor: visibleCount < params.length ? 'rgba(251,191,36,0.07)' : `${accent}11`,
+          }}
+        >
+          {visibleCount < params.length ? `${visibleCount}/${params.length}` : params.length}
         </span>
-      </div>
+        <span
+          className="text-xs ml-1"
+          style={{
+            color: 'var(--c-dim)',
+            display: 'inline-block',
+            transition: 'transform 200ms',
+            transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          }}
+        >
+          ▾
+        </span>
+      </button>
+
       {/* Fields */}
-      <div className="p-4 space-y-5">
-        {params.map((p) => (
-          <ParameterField
-            key={p.name}
-            param={p}
-            register={register}
-            control={control}
-            errors={errors}
-            currentValues={currentValues}
-            isLoading={loadingFields.has(p.name)}
-          />
-        ))}
-      </div>
+      {open && (
+        <div className="p-4 space-y-5">
+          {params.map((p) =>
+            paramVisibility[p.name] === false ? null : (
+              <ParameterField
+                key={p.name}
+                param={p}
+                register={register}
+                control={control}
+                errors={errors}
+                currentValues={currentValues}
+                isLoading={loadingFields.has(p.name)}
+              />
+            ),
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -121,12 +214,12 @@ function InheritanceChain({ chain }: { chain: string[] }) {
   const [open, setOpen] = useState(false)
   if (chain.length === 0) return null
   return (
-    <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#1e2440', backgroundColor: '#0d1021' }}>
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface)' }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-4 py-3 text-sm transition-colors"
-        style={{ color: '#546485' }}
+        style={{ color: 'var(--c-muted-3)' }}
       >
         <span className="flex items-center gap-2 font-medium">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4">
@@ -134,20 +227,20 @@ function InheritanceChain({ chain }: { chain: string[] }) {
           </svg>
           Inheritance chain
         </span>
-        <span className="text-xs" style={{ color: '#2d3665' }}>{open ? '▲ hide' : '▼ show'}</span>
+        <span className="text-xs" style={{ color: 'var(--c-dim)' }}>{open ? '▲ hide' : '▼ show'}</span>
       </button>
       {open && (
-        <div className="border-t px-4 py-3" style={{ borderColor: '#1e2440', backgroundColor: '#0a0d1a' }}>
+        <div className="border-t px-4 py-3" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface-alt)' }}>
           <ol className="flex items-center gap-1.5 flex-wrap text-xs">
             {chain.map((name, i) => (
               <li key={name} className="flex items-center gap-1.5">
-                {i > 0 && <span style={{ color: '#2d3665' }}>›</span>}
+                {i > 0 && <span style={{ color: 'var(--c-dim)' }}>›</span>}
                 <span
                   className="px-2 py-0.5 rounded-full border font-medium"
                   style={
                     i === chain.length - 1
                       ? { backgroundColor: 'rgba(99,102,241,0.12)', color: '#818cf8', borderColor: 'rgba(99,102,241,0.25)' }
-                      : { backgroundColor: '#141828', color: '#546485', borderColor: '#2a3255' }
+                      : { backgroundColor: 'var(--c-card)', color: 'var(--c-muted-3)', borderColor: 'var(--c-border-bright)' }
                   }
                 >
                   {name}
@@ -197,7 +290,7 @@ function RenderOutput({ result }: { result: RenderOut }) {
             {result.git_sha.slice(0, 8)}
           </span>
           {result.render_id && (
-            <span className="text-xs" style={{ color: '#546485' }}>
+            <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>
               #{result.render_id}
             </span>
           )}
@@ -213,7 +306,7 @@ function RenderOutput({ result }: { result: RenderOut }) {
       </div>
       <pre
         className="p-4 text-xs code-block overflow-x-auto whitespace-pre leading-relaxed max-h-[600px] overflow-y-auto"
-        style={{ backgroundColor: '#060810', color: '#a5f3c8' }}
+        style={{ backgroundColor: 'var(--c-base)', color: '#a5f3c8' }}
       >
         {result.output}
       </pre>
@@ -240,7 +333,7 @@ export default function DynamicForm({
     ...enrichmentOverrides[p.name],
   }))
 
-  const { global, project, template } = groupByScope(effectiveParams)
+  const sections = groupParams(effectiveParams)
 
   const {
     register,
@@ -252,6 +345,7 @@ export default function DynamicForm({
     formState: { errors },
   } = useForm<Record<string, unknown>>({
     defaultValues: buildDefaultValues(definition.parameters, prefillValues),
+    mode: 'onBlur',
   })
 
   useEffect(() => {
@@ -321,48 +415,49 @@ export default function DynamicForm({
   })
 
   function onSubmit(values: Record<string, unknown>) {
-    renderMut.mutate(values)
+    // Filter out params hidden by visible_when conditions
+    const filteredValues: Record<string, unknown> = {}
+    for (const [name, value] of Object.entries(values)) {
+      const param = effectiveParams.find((p) => p.name === name)
+      if (!param || isVisible(param, values)) {
+        filteredValues[name] = value
+      }
+    }
+    renderMut.mutate(filteredValues)
   }
 
   const currentValues = watch() as Record<string, unknown>
+
+  // Pre-compute visibility for all params
+  const paramVisibility: Record<string, boolean> = {}
+  for (const p of effectiveParams) {
+    paramVisibility[p.name] = isVisible(p, currentValues)
+  }
 
   return (
     <div className="space-y-5">
       <InheritanceChain chain={definition.inheritance_chain} />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <ParameterSection
-          title="Global Parameters"
-          accent="#fbbf24"
-          params={global}
-          register={register}
-          control={control}
-          errors={errors}
-          currentValues={currentValues}
-          loadingFields={loadingFields}
-        />
-
-        <ParameterSection
-          title="Project Parameters"
-          accent="#60a5fa"
-          params={project}
-          register={register}
-          control={control}
-          errors={errors}
-          currentValues={currentValues}
-          loadingFields={loadingFields}
-        />
-
-        <ParameterSection
-          title="Template Parameters"
-          accent="#6366f1"
-          params={template}
-          register={register}
-          control={control}
-          errors={errors}
-          currentValues={currentValues}
-          loadingFields={loadingFields}
-        />
+        {sections.map((section) => {
+          const visibleCount = section.params.filter((p) => paramVisibility[p.name] !== false).length
+          return (
+            <ParameterSection
+              key={section.title}
+              title={section.title}
+              accent={section.accent}
+              params={section.params}
+              visibleCount={visibleCount}
+              initialOpen={section.initialOpen}
+              register={register}
+              control={control}
+              errors={errors}
+              currentValues={currentValues}
+              loadingFields={loadingFields}
+              paramVisibility={paramVisibility}
+            />
+          )
+        })}
 
         {renderMut.error && (
           <div
@@ -398,7 +493,7 @@ export default function DynamicForm({
           </button>
 
           {renderResult && (
-            <span className="text-xs" style={{ color: '#3d4777' }}>
+            <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>
               Last render: {new Date().toLocaleTimeString()}
             </span>
           )}
