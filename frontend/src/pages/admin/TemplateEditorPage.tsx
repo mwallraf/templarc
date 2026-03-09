@@ -46,7 +46,7 @@ export default function TemplateEditorPage() {
 
   return (
     // Full-height layout: subtract the Layout's own padding/header
-    <div className="-mx-6 -my-6 h-[calc(100vh-4rem)] flex flex-col">
+    <div className="-mx-6 -mb-6 h-[calc(100vh-8rem)] flex flex-col">
       <TemplateEditor template={template} initialContent={content ?? ''} />
     </div>
   )

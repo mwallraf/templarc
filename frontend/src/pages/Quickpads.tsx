@@ -682,7 +682,7 @@ export default function QuickpadsPage() {
   const items = data?.items ?? []
 
   return (
-    <div className="-mx-6 -my-6 flex" style={{ height: 'calc(100vh - 4rem)' }}>
+    <div className="-mx-6 -mb-6 flex" style={{ height: 'calc(100vh - 8rem)' }}>
       {/* Left: list */}
       <div className="w-64 shrink-0 flex flex-col" style={{ backgroundColor: 'var(--c-surface-alt)' }}>
         {isLoading ? (

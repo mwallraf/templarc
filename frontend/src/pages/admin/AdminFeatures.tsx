@@ -571,7 +571,7 @@ export default function AdminFeatures() {
   }
 
   return (
-    <div className="-mx-6 -my-6 flex" style={{ height: 'calc(100vh - 4rem)' }}>
+    <div className="-mx-6 -mb-6 flex" style={{ height: 'calc(100vh - 8rem)' }}>
 
       {/* Left: project selector + feature list */}
       <div className="w-64 shrink-0 flex flex-col border-r" style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}>

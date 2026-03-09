@@ -29,7 +29,7 @@ interface TreeRow {
 }
 
 function buildProjectTree(templates: TemplateOut[], projectId: number): TreeRow[] {
-  const projectTemplates = templates.filter((t) => t.project_id === projectId)
+  const projectTemplates = templates.filter((t) => t.project_id === projectId && !t.is_snippet)
   const byParent = new Map<number | null, TemplateOut[]>()
   const childCount = new Map<number, number>()
 
@@ -94,6 +94,7 @@ export default function AdminTemplates() {
   const [search, setSearch] = useState('')
   const [filterProjectId, setFilterProjectId] = useState<number | ''>('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const [expandedSnippetProjects, setExpandedSnippetProjects] = useState<Set<number>>(new Set())
 
   // Import state
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -143,7 +144,9 @@ export default function AdminTemplates() {
     },
   })
 
-  const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<TemplateCreate>()
+  const { register, handleSubmit, reset, watch, formState: { errors: formErrors } } = useForm<TemplateCreate>()
+  const watchIsSnippet = watch('is_snippet', false)
+  const watchName = watch('name', '')
 
   function handleCancel() {
     setShowForm(false)
@@ -224,6 +227,9 @@ export default function AdminTemplates() {
     return projectIds.map((pid) => ({
       project: projectMap.get(pid),
       rows: buildProjectTree(templates, pid),
+      snippets: templates
+        .filter((t) => t.project_id === pid && t.is_snippet)
+        .sort((a, b) => a.sort_order - b.sort_order || a.display_name.localeCompare(b.display_name)),
     }))
   }, [templates, projectMap])
 
@@ -269,7 +275,12 @@ export default function AdminTemplates() {
       {/* Create form */}
       {showForm && (
         <form
-          onSubmit={handleSubmit((data) => createMut.mutate(data))}
+          onSubmit={handleSubmit((data) => {
+          if (data.is_snippet && !data.git_path && data.name) {
+            data.git_path = `snippets/${data.name}.j2`
+          }
+          createMut.mutate(data)
+        })}
           className="rounded-xl border p-5 mb-6 space-y-4"
           style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
@@ -338,7 +349,7 @@ export default function AdminTemplates() {
                 {...register('parent_template_id', { setValueAs: (v) => v === '' ? undefined : Number(v) })}
               >
                 <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— none (root template) —</option>
-                {templates?.map((t) => (
+                {templates?.filter((t) => !t.is_snippet).map((t) => (
                   <option key={t.id} value={t.id} style={{ backgroundColor: 'var(--c-card)' }}>{t.display_name}</option>
                 ))}
               </select>
@@ -362,10 +373,16 @@ export default function AdminTemplates() {
               <input
                 className={inputClass}
                 style={inputStyle}
-                placeholder="e.g. project/snippets/foo.j2 (auto if blank)"
+                placeholder={watchIsSnippet
+                  ? `snippets/${watchName || 'name'}.j2 (auto if blank)`
+                  : 'e.g. project/subfolder/foo.j2 (auto if blank)'}
                 {...register('git_path')}
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>Defaults to <code>{'{project}/{name}.j2'}</code></p>
+              <p className="text-xs mt-1" style={{ color: watchIsSnippet ? '#818cf8' : 'var(--c-muted-4)' }}>
+                {watchIsSnippet
+                  ? <>Snippets auto-routed to <code>snippets/{'{name}'}.j2</code></>
+                  : <>Defaults to <code>{'{project}/{name}.j2'}</code></>}
+              </p>
             </div>
           </div>
 
@@ -641,7 +658,12 @@ export default function AdminTemplates() {
         )}
 
         <span className="text-xs ml-auto" style={{ color: 'var(--c-muted-4)' }}>
-          {templates?.length ?? 0} template{templates?.length !== 1 ? 's' : ''}
+          {(templates ?? []).filter(t => !t.is_snippet).length} template{(templates ?? []).filter(t => !t.is_snippet).length !== 1 ? 's' : ''}
+          {(templates ?? []).some(t => t.is_snippet) && (
+            <span className="ml-1.5" style={{ color: 'var(--c-border-bright)' }}>
+              · {(templates ?? []).filter(t => t.is_snippet).length} snippet{(templates ?? []).filter(t => t.is_snippet).length !== 1 ? 's' : ''}
+            </span>
+          )}
         </span>
       </div>
 
@@ -723,9 +745,19 @@ export default function AdminTemplates() {
             <div className="rounded-xl border" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
               <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No templates found.</p>
             </div>
-          ) : projectGroups.map(({ project, rows }) => (
+          ) : projectGroups.map(({ project, rows, snippets }) => {
+            const pid = project?.id ?? 0
+            const snippetsExpanded = expandedSnippetProjects.has(pid)
+            function toggleSnippets() {
+              setExpandedSnippetProjects((prev) => {
+                const next = new Set(prev)
+                next.has(pid) ? next.delete(pid) : next.add(pid)
+                return next
+              })
+            }
+            return (
             <div
-              key={project?.id ?? 'unknown'}
+              key={pid}
               className="rounded-xl border overflow-hidden"
               style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
             >
@@ -738,7 +770,7 @@ export default function AdminTemplates() {
                   <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
                 </svg>
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6366f1' }}>
-                  {project?.display_name ?? `Project #${project?.id}`}
+                  {project?.display_name ?? `Project #${pid}`}
                 </span>
                 <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>
                   ({rows.length} template{rows.length !== 1 ? 's' : ''})
@@ -746,75 +778,157 @@ export default function AdminTemplates() {
               </div>
 
               {/* Template rows */}
-              <table className="w-full text-sm">
-                <colgroup>
-                  <col style={{ width: '32%' }} />
-                  <col style={{ width: '28%' }} />
-                  <col style={{ width: '24%' }} />
-                  <col style={{ width: '16%' }} />
-                </colgroup>
-                <thead style={{ borderBottom: '1px solid var(--c-border)' }}>
-                  <tr>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Internal name</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Display name</th>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Flags</th>
-                    <th className="px-4 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ t, depth, isLast, continuations, hasChildren }, idx) => (
-                    <tr
-                      key={t.id}
-                      style={{ borderBottom: idx < rows.length - 1 ? '1px solid var(--c-surface-alt)' : 'none' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center min-w-0">
-                          <TreePrefix depth={depth} isLast={isLast} continuations={continuations} />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1">
-                              <span className="font-mono text-xs" style={{ color: 'var(--c-muted-3)' }}>{t.name}</span>
-                              {hasChildren && (
-                                <span className="shrink-0" title="Has child templates" style={{ color: 'var(--c-border-bright)' }}>
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <polyline points="6 9 12 15 18 9" />
-                                  </svg>
-                                </span>
+              {rows.length > 0 && (
+                <table className="w-full text-sm">
+                  <colgroup>
+                    <col style={{ width: '32%' }} />
+                    <col style={{ width: '28%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '16%' }} />
+                  </colgroup>
+                  <thead style={{ borderBottom: '1px solid var(--c-border)' }}>
+                    <tr>
+                      <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Internal name</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Display name</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Flags</th>
+                      <th className="px-4 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ t, depth, isLast, continuations, hasChildren }, idx) => (
+                      <tr
+                        key={t.id}
+                        style={{ borderBottom: idx < rows.length - 1 ? '1px solid var(--c-surface-alt)' : 'none' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center min-w-0">
+                            <TreePrefix depth={depth} isLast={isLast} continuations={continuations} />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-xs" style={{ color: 'var(--c-muted-3)' }}>{t.name}</span>
+                                {hasChildren && (
+                                  <span className="shrink-0" title="Has child templates" style={{ color: 'var(--c-border-bright)' }}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <polyline points="6 9 12 15 18 9" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </div>
+                              {t.git_path && (
+                                <div className="font-mono text-xs truncate mt-0.5" style={{ color: 'var(--c-border-bright)' }} title={t.git_path}>
+                                  {t.git_path}
+                                </div>
                               )}
                             </div>
-                            {t.git_path && (
-                              <div className="font-mono text-xs truncate mt-0.5" style={{ color: 'var(--c-border-bright)' }} title={t.git_path}>
-                                {t.git_path}
-                              </div>
-                            )}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t.display_name}</span>
-                        {t.description && (
-                          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)' }}>{t.description}</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <RowActions
-                          id={t.id}
-                          confirmId={confirmDeleteId}
-                          onConfirmDelete={setConfirmDeleteId}
-                          onDelete={(id) => deleteMut.mutate(id)}
-                          isDeleting={deleteMut.isPending}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="font-medium text-sm" style={{ color: 'var(--c-text)' }}>{t.display_name}</span>
+                          {t.description && (
+                            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)' }}>{t.description}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <RowActions
+                            id={t.id}
+                            confirmId={confirmDeleteId}
+                            onConfirmDelete={setConfirmDeleteId}
+                            onDelete={(id) => deleteMut.mutate(id)}
+                            isDeleting={deleteMut.isPending}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {/* Snippets sub-section (collapsible) */}
+              {snippets.length > 0 && (
+                <div style={{ borderTop: rows.length > 0 ? '1px solid var(--c-border)' : 'none' }}>
+                  {/* Toggle header */}
+                  <button
+                    onClick={toggleSnippets}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-left transition-colors"
+                    style={{ backgroundColor: snippetsExpanded ? 'var(--c-surface-alt)' : 'transparent' }}
+                    onMouseEnter={(e) => { if (!snippetsExpanded) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--c-row-hover)' }}
+                    onMouseLeave={(e) => { if (!snippetsExpanded) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                      className="w-3 h-3 shrink-0 transition-transform"
+                      style={{ color: 'var(--c-muted-4)', transform: snippetsExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                    <svg className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--c-muted-4)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span className="text-xs font-medium" style={{ color: 'var(--c-muted-3)' }}>
+                      Snippets
+                    </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'var(--c-card)', color: 'var(--c-muted-4)', border: '1px solid var(--c-border-bright)' }}>
+                      {snippets.length}
+                    </span>
+                  </button>
+
+                  {/* Snippet rows */}
+                  {snippetsExpanded && (
+                    <table className="w-full text-sm" style={{ borderTop: '1px solid var(--c-border)' }}>
+                      <tbody>
+                        {snippets.map((t, idx) => (
+                          <tr
+                            key={t.id}
+                            style={{ borderBottom: idx < snippets.length - 1 ? '1px solid var(--c-surface-alt)' : 'none' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            <td className="px-4 py-2.5" style={{ width: '32%' }}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-xs opacity-30 select-none">└─</span>
+                                <div className="min-w-0">
+                                  <span className="font-mono text-xs" style={{ color: 'var(--c-muted-3)' }}>{t.name}</span>
+                                  {t.git_path && (
+                                    <div className="font-mono text-xs truncate mt-0.5" style={{ color: 'var(--c-border-bright)' }} title={t.git_path}>
+                                      {t.git_path}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5" style={{ width: '28%' }}>
+                              <span className="text-sm" style={{ color: 'var(--c-muted-2)' }}>{t.display_name}</span>
+                              {t.description && (
+                                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)' }}>{t.description}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5" style={{ width: '24%' }}>
+                              <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
+                            </td>
+                            <td className="px-4 py-2.5 text-right" style={{ width: '16%' }}>
+                              <RowActions
+                                id={t.id}
+                                confirmId={confirmDeleteId}
+                                onConfirmDelete={setConfirmDeleteId}
+                                onDelete={(id) => deleteMut.mutate(id)}
+                                isDeleting={deleteMut.isPending}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

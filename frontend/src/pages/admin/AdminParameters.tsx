@@ -9,7 +9,8 @@ import {
 } from '../../api/parameters'
 import { findDuplicateParameters, promoteParameter } from '../../api/admin'
 import { listProjects } from '../../api/catalog'
-import type { DuplicateParameterGroup, ParameterOut, ParameterScope, PromoteReport } from '../../api/types'
+import { listTemplates } from '../../api/templates'
+import type { DuplicateParameterGroup, ParameterOut, ParameterScope, ProjectOut, PromoteReport, TemplateOut } from '../../api/types'
 import { ParameterModal } from './ParameterModal'
 import {
   DndContext,
@@ -217,19 +218,15 @@ function SortableParamRow({
   )
 }
 
-// ── Scope section ─────────────────────────────────────────────────────────────
+// ── Param sub-section (sortable table, used inside ScopeSection) ──────────────
 
-function ScopeSection({
-  title,
-  accent,
+function ParamSubSection({
   params,
   onEdit,
   onDelete,
   onReorder,
   isFiltered,
 }: {
-  title: string
-  accent: string
   params: ParameterOut[]
   onEdit: (p: ParameterOut) => void
   onDelete: (p: ParameterOut) => void
@@ -237,11 +234,7 @@ function ScopeSection({
   isFiltered: boolean
 }) {
   const [sorted, setSorted] = useState<ParameterOut[]>(params)
-
-  useEffect(() => {
-    setSorted(params)
-  }, [params])
-
+  useEffect(() => { setSorted(params) }, [params])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   function handleDragEnd(event: DragEndEvent) {
@@ -254,58 +247,152 @@ function ScopeSection({
     onReorder(reordered)
   }
 
-  if (sorted.length === 0) return null
+  return (
+    <table className="w-full text-sm">
+      <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
+        <tr>
+          <th className="px-2 py-2.5 w-8" />
+          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
+          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
+          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Widget</th>
+          <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Req.</th>
+          <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Info</th>
+          <th className="px-4 py-2.5" />
+        </tr>
+      </thead>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={sorted.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+          <tbody>
+            {sorted.map((p, idx) => (
+              <SortableParamRow
+                key={p.id}
+                param={p}
+                idx={idx}
+                total={sorted.length}
+                onEdit={() => onEdit(p)}
+                onDelete={() => onDelete(p)}
+                disabled={isFiltered}
+              />
+            ))}
+          </tbody>
+        </SortableContext>
+      </DndContext>
+    </table>
+  )
+}
+
+// ── Group definition + Scope section ─────────────────────────────────────────
+
+interface GroupDef {
+  key: string
+  label: string
+  sublabel?: string
+  params: ParameterOut[]
+}
+
+function ScopeSection({
+  title,
+  accent,
+  params,
+  groups,
+  defaultCollapsed,
+  onEdit,
+  onDelete,
+  onReorder,
+  isFiltered,
+}: {
+  title: string
+  accent: string
+  params?: ParameterOut[]
+  groups?: GroupDef[]
+  defaultCollapsed?: boolean
+  onEdit: (p: ParameterOut) => void
+  onDelete: (p: ParameterOut) => void
+  onReorder: (reordered: ParameterOut[]) => void
+  isFiltered: boolean
+}) {
+  const flatParams = params ?? []
+  const totalCount = groups ? groups.reduce((n, g) => n + g.params.length, 0) : flatParams.length
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    if (defaultCollapsed && groups) groups.forEach((g) => s.add(g.key))
+    return s
+  })
+
+  if (totalCount === 0) return null
+
+  function toggleGroup(key: string) {
+    setCollapsed((s) => {
+      const next = new Set(s)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
 
   return (
     <div className="mb-6">
+      {/* Section header */}
       <div className="flex items-center gap-2 mb-2 px-1">
         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: accent }} />
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--c-muted-3)' }}>{title}</h2>
-        <span
-          className="text-xs px-2 py-0.5 rounded-full ml-1"
-          style={{ backgroundColor: 'var(--c-card)', color: 'var(--c-muted-4)', border: '1px solid var(--c-border-bright)' }}
-        >
-          {sorted.length}
+        <span className="text-xs px-2 py-0.5 rounded-full ml-1" style={{ backgroundColor: 'var(--c-card)', color: 'var(--c-muted-4)', border: '1px solid var(--c-border-bright)' }}>
+          {totalCount}
         </span>
         {isFiltered && (
-          <span className="text-xs ml-2" style={{ color: 'var(--c-muted-4)' }}>
-            (clear search to reorder)
-          </span>
+          <span className="text-xs ml-2" style={{ color: 'var(--c-muted-4)' }}>(clear search to reorder)</span>
         )}
       </div>
-      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
-        <table className="w-full text-sm">
-          <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
-            <tr>
-              <th className="px-2 py-2.5 w-8" />
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Widget</th>
-              <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Req.</th>
-              <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Info</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={sorted.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-              <tbody>
-                {sorted.map((p, idx) => (
-                  <SortableParamRow
-                    key={p.id}
-                    param={p}
-                    idx={idx}
-                    total={sorted.length}
-                    onEdit={() => onEdit(p)}
-                    onDelete={() => onDelete(p)}
-                    disabled={isFiltered}
-                  />
-                ))}
-              </tbody>
-            </SortableContext>
-          </DndContext>
-        </table>
-      </div>
+
+      {/* Flat rendering (global scope) */}
+      {!groups && (
+        <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
+          <ParamSubSection params={flatParams} onEdit={onEdit} onDelete={onDelete} onReorder={onReorder} isFiltered={isFiltered} />
+        </div>
+      )}
+
+      {/* Grouped rendering (project / template scope) */}
+      {groups && groups.map((g) => {
+        const isOpen = !collapsed.has(g.key)
+        return (
+          <div key={g.key} className="mb-3 rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
+            {/* Sub-group header */}
+            <button
+              onClick={() => toggleGroup(g.key)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-left transition-colors"
+              style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: isOpen ? '1px solid var(--c-border)' : 'none' }}
+            >
+              <svg
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                className="w-3 h-3 shrink-0 transition-transform"
+                style={{ color: 'var(--c-muted-3)', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              <div className="flex items-center gap-2 min-w-0">
+                {g.sublabel && (
+                  <span className="text-xs shrink-0" style={{ color: 'var(--c-muted-4)' }}>{g.sublabel} ›</span>
+                )}
+                <span className="text-xs font-medium truncate" style={{ color: 'var(--c-muted-2)' }}>{g.label}</span>
+              </div>
+              <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--c-card)', color: 'var(--c-muted-4)', border: '1px solid var(--c-border-bright)' }}>
+                {g.params.length}
+              </span>
+            </button>
+            {/* Sub-group table */}
+            {isOpen && (
+              <ParamSubSection
+                params={g.params}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onReorder={onReorder}
+                isFiltered={isFiltered}
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -780,6 +867,8 @@ export default function AdminParameters() {
 
   const [search, setSearch] = useState('')
   const [scopeFilter, setScopeFilter] = useState<ParameterScope | ''>('')
+  const [projectFilter, setProjectFilter] = useState<number | ''>('')
+  const [templateFilter, setTemplateFilter] = useState<number | ''>('')
   const [showModal, setShowModal] = useState(false)
   const [editingParam, setEditingParam] = useState<ParameterOut | undefined>()
   const [deletingParam, setDeletingParam] = useState<ParameterOut | undefined>()
@@ -791,15 +880,21 @@ export default function AdminParameters() {
   const { data: projects } = useQuery({
     queryKey: ['projects'],
     queryFn: () => listProjects(),
-    enabled: showDuplicates,
+  })
+
+  const { data: templates } = useQuery({
+    queryKey: ['templates', { project_id: projectFilter || undefined }],
+    queryFn: () => listTemplates({ project_id: projectFilter ? Number(projectFilter) : undefined, active_only: false }),
   })
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['parameters', { search, scopeFilter }],
+    queryKey: ['parameters', { search, scopeFilter, projectFilter, templateFilter }],
     queryFn: () =>
       listParameters({
         search: search || undefined,
         scope: scopeFilter || undefined,
+        project_id: projectFilter ? Number(projectFilter) : undefined,
+        template_id: templateFilter ? Number(templateFilter) : undefined,
         page_size: 200,
         include_inactive: false,
       }),
@@ -815,10 +910,53 @@ export default function AdminParameters() {
 
   const params = data?.items ?? []
   const globalParams = params.filter((p) => p.scope === 'global').sort((a, b) => a.sort_order - b.sort_order)
-  const projectParams = params.filter((p) => p.scope === 'project').sort((a, b) => a.sort_order - b.sort_order)
-  const templateParams = params.filter((p) => p.scope === 'template').sort((a, b) => a.sort_order - b.sort_order)
+  const projectParams = params.filter((p) => p.scope === 'project')
+  const templateParams = params.filter((p) => p.scope === 'template')
 
-  const isFiltered = Boolean(search || scopeFilter)
+  const isFiltered = Boolean(search || scopeFilter || projectFilter || templateFilter)
+
+  // Build name lookup maps
+  const projectMap = new Map<number, string>(
+    (projects ?? []).map((p: ProjectOut) => [p.id, p.display_name])
+  )
+  const templateMap = new Map<number, { name: string; projectName: string }>(
+    (templates ?? []).map((t: TemplateOut) => [t.id, { name: t.display_name, projectName: projectMap.get(t.project_id ?? 0) ?? '' }])
+  )
+
+  // Build groups for project scope
+  const projectGroupMap = new Map<number, ParameterOut[]>()
+  for (const p of projectParams) {
+    const pid = p.project_id ?? 0
+    if (!projectGroupMap.has(pid)) projectGroupMap.set(pid, [])
+    projectGroupMap.get(pid)!.push(p)
+  }
+  const projectGroups: GroupDef[] = Array.from(projectGroupMap.entries()).map(([pid, ps]) => ({
+    key: String(pid),
+    label: projectMap.get(pid) ?? `Project #${pid}`,
+    params: ps.sort((a, b) => a.sort_order - b.sort_order),
+  }))
+
+  // Build groups for template scope
+  const templateGroupMap = new Map<number, ParameterOut[]>()
+  for (const p of templateParams) {
+    const tid = p.template_id ?? 0
+    if (!templateGroupMap.has(tid)) templateGroupMap.set(tid, [])
+    templateGroupMap.get(tid)!.push(p)
+  }
+  const templateGroups: GroupDef[] = Array.from(templateGroupMap.entries()).map(([tid, ps]) => {
+    const info = templateMap.get(tid)
+    return {
+      key: String(tid),
+      label: info?.name ?? `Template #${tid}`,
+      sublabel: info?.projectName || undefined,
+      params: ps.sort((a, b) => a.sort_order - b.sort_order),
+    }
+  })
+
+  // Templates available in dropdown (filtered by project if set)
+  const filteredTemplatesForDropdown = projectFilter
+    ? (templates ?? []).filter((t: TemplateOut) => t.project_id === Number(projectFilter))
+    : (templates ?? [])
 
   function handleReorder(reordered: ParameterOut[]) {
     reordered.forEach((p, i) => {
@@ -981,18 +1119,18 @@ export default function AdminParameters() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-3 mb-6 flex-wrap">
         <input
           type="text"
           placeholder="Search by name or label…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className={`flex-1 ${inputClass}`}
+          className={`flex-1 min-w-48 ${inputClass}`}
           style={inputStyle}
         />
         <select
           value={scopeFilter}
-          onChange={(e) => setScopeFilter(e.target.value as ParameterScope | '')}
+          onChange={(e) => { setScopeFilter(e.target.value as ParameterScope | ''); setProjectFilter(''); setTemplateFilter('') }}
           className={inputClass}
           style={inputStyle}
         >
@@ -1001,6 +1139,32 @@ export default function AdminParameters() {
           <option value="project" style={{ backgroundColor: 'var(--c-card)' }}>Project</option>
           <option value="template" style={{ backgroundColor: 'var(--c-card)' }}>Template</option>
         </select>
+        <select
+          value={projectFilter}
+          onChange={(e) => { setProjectFilter(e.target.value === '' ? '' : Number(e.target.value)); setTemplateFilter('') }}
+          className={inputClass}
+          style={inputStyle}
+          disabled={scopeFilter === 'global'}
+        >
+          <option value="" style={{ backgroundColor: 'var(--c-card)' }}>All projects</option>
+          {(projects ?? []).map((p: ProjectOut) => (
+            <option key={p.id} value={p.id} style={{ backgroundColor: 'var(--c-card)' }}>{p.display_name}</option>
+          ))}
+        </select>
+        {projectFilter !== '' && (
+          <select
+            value={templateFilter}
+            onChange={(e) => setTemplateFilter(e.target.value === '' ? '' : Number(e.target.value))}
+            className={inputClass}
+            style={inputStyle}
+            disabled={scopeFilter === 'global' || scopeFilter === 'project'}
+          >
+            <option value="" style={{ backgroundColor: 'var(--c-card)' }}>All templates</option>
+            {filteredTemplatesForDropdown.map((t: TemplateOut) => (
+              <option key={t.id} value={t.id} style={{ backgroundColor: 'var(--c-card)' }}>{t.display_name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {isLoading && (
@@ -1025,10 +1189,34 @@ export default function AdminParameters() {
 
       {!isLoading && params.length > 0 && (
         <>
-          <ScopeSection title="Global Parameters" accent="#fbbf24" params={globalParams} onEdit={openEdit} onDelete={setDeletingParam} onReorder={handleReorder} isFiltered={isFiltered} />
-          <ScopeSection title="Project Parameters" accent="#60a5fa" params={projectParams} onEdit={openEdit} onDelete={setDeletingParam} onReorder={handleReorder} isFiltered={isFiltered} />
-          <ScopeSection title="Template Parameters" accent="#6366f1" params={templateParams} onEdit={openEdit} onDelete={setDeletingParam} onReorder={handleReorder} isFiltered={isFiltered} />
-
+          <ScopeSection
+            title="Global Parameters"
+            accent="#fbbf24"
+            params={globalParams}
+            onEdit={openEdit}
+            onDelete={setDeletingParam}
+            onReorder={handleReorder}
+            isFiltered={isFiltered}
+          />
+          <ScopeSection
+            title="Project Parameters"
+            accent="#60a5fa"
+            groups={projectGroups}
+            onEdit={openEdit}
+            onDelete={setDeletingParam}
+            onReorder={handleReorder}
+            isFiltered={isFiltered}
+          />
+          <ScopeSection
+            title="Template Parameters"
+            accent="#6366f1"
+            groups={templateGroups}
+            defaultCollapsed
+            onEdit={openEdit}
+            onDelete={setDeletingParam}
+            onReorder={handleReorder}
+            isFiltered={isFiltered}
+          />
           <div className="text-xs text-right mt-2" style={{ color: 'var(--c-dim)' }}>
             {data?.total} parameter{data?.total !== 1 ? 's' : ''} total
           </div>
