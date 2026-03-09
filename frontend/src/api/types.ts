@@ -603,6 +603,15 @@ export interface CustomMacroOut {
   created_by?: string
 }
 
+// ── AI Settings ────────────────────────────────────────────────────────────
+
+export interface AISettingsOut {
+  provider: string  // "anthropic" | "openai" | "" (empty = disabled)
+  model: string
+  has_api_key: boolean
+  api_key_source: string  // "db" | "env" | ""
+}
+
 // ── Admin ──────────────────────────────────────────────────────────────────
 
 export interface SyncErrorItem {

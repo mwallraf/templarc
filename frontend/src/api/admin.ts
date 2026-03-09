@@ -13,6 +13,7 @@ import type {
   DuplicatesReport,
   PromoteRequest,
   PromoteReport,
+  AISettingsOut,
 } from './types'
 
 // ── API Keys ────────────────────────────────────────────────────────────────
@@ -59,6 +60,11 @@ export const createMacro = (data: CustomMacroCreate) =>
 
 export const deleteMacro = (id: number) =>
   apiClient.delete<{ id: number }>(`/admin/macros/${id}`).then((r) => r.data)
+
+// ── AI Settings ─────────────────────────────────────────────────────────────
+
+export const getAISettings = () =>
+  apiClient.get<AISettingsOut>('/settings/ai').then((r) => r.data)
 
 export const findDuplicateParameters = (project_id?: number) =>
   apiClient

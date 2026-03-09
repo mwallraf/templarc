@@ -5,11 +5,11 @@ import { DndContext, type DragEndEvent, type DragOverEvent, DragOverlay } from '
 import { useDroppable } from '@dnd-kit/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { editor as MonacoEditor, IPosition } from 'monaco-editor'
-import { getTemplateVariables, updateTemplate } from '../../api/templates'
+import { getTemplateVariables, listTemplates, updateTemplate } from '../../api/templates'
 import { listParameters } from '../../api/parameters'
 import { listSecrets } from '../../api/auth'
-import { listFilters } from '../../api/admin'
-import type { CustomFilterOut, ParameterOut, TemplateOut, VariableRefOut } from '../../api/types'
+import { getAISettings, listFilters, listMacros } from '../../api/admin'
+import type { CustomFilterOut, CustomMacroOut, ParameterOut, TemplateOut, VariableRefOut } from '../../api/types'
 import type { DataSourceDef } from './DataSourceForm'
 import { ParameterPanel } from './ParameterPanel'
 import { PreviewModal } from './PreviewModal'
@@ -308,6 +308,301 @@ function SnippetToolbar({ onInsert }: { onInsert: (text: string) => void }) {
   )
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a DB git_path (which includes the project directory prefix, e.g.
+ * "router_provisioning/snippets/banner.j2") to a path relative to the
+ * project root as used in {% include %} directives (e.g. "snippets/banner.j2").
+ * The project prefix is derived from the owning template's git_path.
+ */
+function toIncludePath(snippetGitPath: string, templateGitPath: string | undefined): string {
+  if (!templateGitPath) return snippetGitPath
+  const slashIdx = templateGitPath.indexOf('/')
+  if (slashIdx === -1) return snippetGitPath
+  const projectDir = templateGitPath.substring(0, slashIdx + 1) // e.g. "router_provisioning/"
+  return snippetGitPath.startsWith(projectDir)
+    ? snippetGitPath.slice(projectDir.length)
+    : snippetGitPath
+}
+
+// ── Snippet include picker panel ──────────────────────────────────────────────
+
+function SnippetPickerPanel({
+  snippets,
+  onInsert,
+  onClose,
+  anchorEl,
+  pathTransform = (p) => p,
+}: {
+  snippets: TemplateOut[]
+  onInsert: (gitPath: string) => void
+  onClose: () => void
+  anchorEl: HTMLButtonElement | null
+  pathTransform?: (rawGitPath: string) => string
+}) {
+  const [search, setSearch] = useState('')
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useEffect(() => {
+    if (!anchorEl) return
+    const rect = anchorEl.getBoundingClientRect()
+    setPos({ top: rect.bottom + 6, left: rect.left })
+  }, [anchorEl])
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        anchorEl && !anchorEl.contains(e.target as Node)
+      ) {
+        onClose()
+      }
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [onClose, anchorEl])
+
+  useEffect(() => {
+    function handler(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const filtered = snippets.filter((s) =>
+    !search ||
+    s.display_name.toLowerCase().includes(search.toLowerCase()) ||
+    (s.git_path ?? '').toLowerCase().includes(search.toLowerCase()),
+  )
+
+  return (
+    <div
+      ref={panelRef}
+      style={{
+        position: 'fixed',
+        top: pos.top,
+        left: pos.left,
+        zIndex: 1000,
+        width: '288px',
+        backgroundColor: 'var(--c-surface)',
+        border: '1px solid var(--c-border)',
+        borderRadius: '10px',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header */}
+      <div className="px-3 pt-2.5 pb-2 border-b" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface-alt)' }}>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--c-muted-3)' }}>
+          Insert snippet include
+        </p>
+        <input
+          autoFocus
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search snippets…"
+          className="w-full rounded-md px-2.5 py-1.5 text-xs focus:outline-none"
+          style={{
+            backgroundColor: 'var(--c-base)',
+            border: '1px solid var(--c-border-bright)',
+            color: 'var(--c-text)',
+          }}
+        />
+      </div>
+
+      {/* List */}
+      <div style={{ maxHeight: '252px', overflowY: 'auto' }}>
+        {filtered.length === 0 && (
+          <p className="text-xs text-center py-5" style={{ color: 'var(--c-muted-4)' }}>
+            {snippets.length === 0 ? 'No snippets in this project' : 'No matches'}
+          </p>
+        )}
+        {filtered.map((s) => {
+          const rawPath = s.git_path ?? `snippets/${s.name}.j2`
+          const path = pathTransform(rawPath)
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onInsert(path)}
+              className="w-full text-left px-3 py-2.5 transition-colors border-b"
+              style={{ borderColor: 'var(--c-border)', backgroundColor: 'transparent' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-surface-alt)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <p className="text-xs font-medium truncate" style={{ color: 'var(--c-text)' }}>
+                {s.display_name}
+              </p>
+              <p className="text-xs font-mono mt-0.5 truncate" style={{ color: 'var(--c-muted-4)' }}>
+                {path}
+              </p>
+              {s.description && (
+                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)', fontSize: '10px' }}>
+                  {s.description}
+                </p>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Footer hint */}
+      <div className="px-3 py-1.5 border-t" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-base)' }}>
+        <p className="text-xs" style={{ color: 'var(--c-muted-4)' }}>
+          Click to insert{' '}
+          <span className="font-mono" style={{ color: 'var(--c-muted-3)' }}>
+            {'{% include "…" %}'}
+          </span>{' '}
+          at cursor
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ── Macro call picker panel ───────────────────────────────────────────────────
+
+function MacroPickerPanel({
+  macros,
+  onInsert,
+  onClose,
+  anchorEl,
+}: {
+  macros: CustomMacroOut[]
+  onInsert: (text: string) => void
+  onClose: () => void
+  anchorEl: HTMLButtonElement | null
+}) {
+  const [search, setSearch] = useState('')
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  useEffect(() => {
+    if (!anchorEl) return
+    const rect = anchorEl.getBoundingClientRect()
+    setPos({ top: rect.bottom + 6, left: rect.left })
+  }, [anchorEl])
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        anchorEl && !anchorEl.contains(e.target as Node)
+      ) {
+        onClose()
+      }
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [onClose, anchorEl])
+
+  useEffect(() => {
+    function handler(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const filtered = macros.filter((m) =>
+    !search ||
+    m.name.toLowerCase().includes(search.toLowerCase()) ||
+    (m.description ?? '').toLowerCase().includes(search.toLowerCase()),
+  )
+
+  // Extract parameter names from macro body signature: {% macro name(p1, p2) %}
+  function getMacroSignature(macro: CustomMacroOut): string {
+    const match = macro.body.match(/\{%-?\s*macro\s+\w+\s*\(([^)]*)\)/)
+    const args = match?.[1]?.trim() ?? ''
+    return `{{ ${macro.name}(${args}) }}`
+  }
+
+  return (
+    <div
+      ref={panelRef}
+      style={{
+        position: 'fixed',
+        top: pos.top,
+        left: pos.left,
+        zIndex: 1000,
+        width: '300px',
+        backgroundColor: 'var(--c-surface)',
+        border: '1px solid var(--c-border)',
+        borderRadius: '10px',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header */}
+      <div className="px-3 pt-2.5 pb-2 border-b" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-surface-alt)' }}>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'var(--c-muted-3)' }}>
+          Insert macro call
+        </p>
+        <input
+          autoFocus
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search macros…"
+          className="w-full rounded-md px-2.5 py-1.5 text-xs focus:outline-none"
+          style={{
+            backgroundColor: 'var(--c-base)',
+            border: '1px solid var(--c-border-bright)',
+            color: 'var(--c-text)',
+          }}
+        />
+      </div>
+
+      {/* List */}
+      <div style={{ maxHeight: '252px', overflowY: 'auto' }}>
+        {filtered.length === 0 && (
+          <p className="text-xs text-center py-5" style={{ color: 'var(--c-muted-4)' }}>
+            {macros.length === 0 ? 'No macros for this project' : 'No matches'}
+          </p>
+        )}
+        {filtered.map((m) => {
+          const call = getMacroSignature(m)
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onInsert(call)}
+              className="w-full text-left px-3 py-2.5 transition-colors border-b"
+              style={{ borderColor: 'var(--c-border)', backgroundColor: 'transparent' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-surface-alt)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="text-xs font-mono font-medium truncate" style={{ color: '#818cf8' }}>
+                  {m.name}
+                </p>
+                <span className="text-xs px-1 py-0 rounded" style={{ backgroundColor: 'rgba(99,102,241,0.1)', color: 'var(--c-muted-4)', fontSize: '9px' }}>
+                  {m.scope}
+                </span>
+              </div>
+              <p className="text-xs font-mono truncate" style={{ color: 'var(--c-muted-4)' }}>
+                {call}
+              </p>
+              {m.description && (
+                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--c-muted-4)', fontSize: '10px' }}>
+                  {m.description}
+                </p>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="px-3 py-1.5 border-t" style={{ borderColor: 'var(--c-border)', backgroundColor: 'var(--c-base)' }}>
+        <p className="text-xs" style={{ color: 'var(--c-muted-4)' }}>
+          Click to insert macro call at cursor
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Jinja2 built-in filter completions ────────────────────────────────────────
 
 const JINJA2_BUILTIN_FILTERS: { name: string; doc: string; snippet?: string }[] = [
@@ -393,10 +688,14 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   const [showPreview, setShowPreview] = useState(false)
   const [showValidate, setShowValidate] = useState(false)
   const [showAI, setShowAI] = useState(false)
+  const [showSnippetPanel, setShowSnippetPanel] = useState(false)
+  const [showMacroPanel, setShowMacroPanel] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [activeDragParam, setActiveDragParam] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
+  const snippetBtnRef = useRef<HTMLButtonElement>(null)
+  const macroBtnRef = useRef<HTMLButtonElement>(null)
 
   // Fetch initial template parameters from API
   const { data: templateParamsData } = useQuery({
@@ -426,6 +725,41 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   // Keep a ref so the completion provider always reads fresh data without re-registering
   const customFiltersRef = useRef<CustomFilterOut[]>(customFilters)
   useEffect(() => { customFiltersRef.current = customFilters }, [customFilters])
+
+  // Project snippets — for the snippet picker panel and Monaco include completions
+  const { data: projectTemplatesData } = useQuery({
+    queryKey: ['templates', template.project_id],
+    queryFn: () => listTemplates({ project_id: template.project_id }),
+  })
+  const projectSnippets = (projectTemplatesData ?? []).filter((t) => t.is_snippet && t.is_active)
+  const projectSnippetsRef = useRef<TemplateOut[]>([])
+  useEffect(() => { projectSnippetsRef.current = projectSnippets }, [projectSnippets])
+
+  // Path transform — strips the project directory prefix for {% include %} paths
+  const snippetPathTransform = useCallback(
+    (rawPath: string) => toIncludePath(rawPath, template.git_path),
+    [template.git_path],
+  )
+
+  // Project macros (project-scoped + global)
+  const { data: projectMacros = [] } = useQuery({
+    queryKey: ['macros', template.project_id],
+    queryFn: async () => {
+      const [proj, global] = await Promise.all([
+        listMacros({ project_id: template.project_id }),
+        listMacros({ scope: 'global' }),
+      ])
+      return [...proj, ...global].filter((m) => m.is_active)
+    },
+  })
+
+  // AI settings — to know whether to enable the AI button
+  const { data: aiSettings } = useQuery({
+    queryKey: ['settings', 'ai'],
+    queryFn: getAISettings,
+    staleTime: 5 * 60 * 1000,
+  })
+  const aiEnabled = Boolean(aiSettings?.provider && aiSettings.provider !== '')
 
   // Disposable for the Monaco completion provider — cleaned up on unmount
   const completionDisposableRef = useRef<{ dispose(): void } | null>(null)
@@ -492,6 +826,16 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
     ])
     editor.focus()
   }, [])
+
+  const insertSnippetInclude = useCallback((gitPath: string) => {
+    insertAtCursor(`{% include "${gitPath}" %}`)
+    setShowSnippetPanel(false)
+  }, [insertAtCursor])
+
+  const insertMacroCall = useCallback((text: string) => {
+    insertAtCursor(text)
+    setShowMacroPanel(false)
+  }, [insertAtCursor])
 
   // ── dnd-kit handlers ──────────────────────────────────────────────────────
 
@@ -611,20 +955,57 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
           </button>
 
           <button
-            onClick={() => setShowAI(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all"
+            onClick={() => aiEnabled && setShowAI(true)}
+            disabled={!aiEnabled}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
               background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.15))',
               border: '1px solid rgba(99,102,241,0.35)',
               color: '#a5b4fc',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.6)' }}
+            title={aiEnabled ? 'AI assist' : 'AI is disabled — configure a provider in Settings'}
+            onMouseEnter={(e) => { if (aiEnabled) (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.6)' }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.35)' }}
           >
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
             AI
+          </button>
+
+          <button
+            ref={snippetBtnRef}
+            onClick={() => { setShowMacroPanel(false); setShowSnippetPanel((v) => !v) }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors"
+            style={{
+              border: '1px solid var(--c-border-bright)',
+              color: showSnippetPanel ? '#818cf8' : 'var(--c-muted-2)',
+              backgroundColor: showSnippetPanel ? 'rgba(99,102,241,0.1)' : 'transparent',
+            }}
+            title="Insert snippet include (project snippets)"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+              <path strokeLinecap="round" d="M2 4h4M2 8h8M2 12h5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 9l2 2-2 2M14 9l-2 2 2 2" />
+            </svg>
+            Snippets
+          </button>
+
+          <button
+            ref={macroBtnRef}
+            onClick={() => { setShowSnippetPanel(false); setShowMacroPanel((v) => !v) }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors"
+            style={{
+              border: '1px solid var(--c-border-bright)',
+              color: showMacroPanel ? '#818cf8' : 'var(--c-muted-2)',
+              backgroundColor: showMacroPanel ? 'rgba(99,102,241,0.1)' : 'transparent',
+            }}
+            title="Insert macro call (project & global macros)"
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4l3 4-3 4M8 12h5" />
+            </svg>
+            Macros
           </button>
 
           <div className="flex-1" />
@@ -658,8 +1039,8 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
 
         {/* ── Split view ────────────────────────────────────────────────── */}
         <div className="flex flex-1 min-h-0">
-          {/* Left: Monaco editor — 60% */}
-          <div className="w-[60%] flex flex-col min-h-0">
+          {/* Left: Monaco editor — grows to fill remaining space */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
             <SnippetToolbar onInsert={insertAtCursor} />
             <MonacoDropZone isOver={isDragOver}>
               <Editor
@@ -675,7 +1056,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
                   })
 
                   // Register Jinja2 filter completion provider (triggers on |)
-                  completionDisposableRef.current = monaco.languages.registerCompletionItemProvider('python', {
+                  const filterCompletion = monaco.languages.registerCompletionItemProvider('python', {
                     triggerCharacters: ['|'],
                     provideCompletionItems: (model, position) => {
                       // Only activate when the text before the cursor ends with | (optionally with spaces)
@@ -717,6 +1098,51 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
                       return { suggestions: [...customSuggestions, ...builtinSuggestions] }
                     },
                   })
+
+                  // Register {% include "..." %} snippet path completion (triggers on ")
+                  const includeCompletion = monaco.languages.registerCompletionItemProvider('python', {
+                    triggerCharacters: ['"'],
+                    provideCompletionItems: (model, position) => {
+                      const lineContent = model.getLineContent(position.lineNumber)
+                      const textBefore = lineContent.substring(0, position.column - 1)
+                      // Only activate inside {% include "... pattern
+                      const match = textBefore.match(/\{%-?\s*include\s+"([^"]*)$/)
+                      if (!match) return { suggestions: [] }
+
+                      // Range covers only the text already typed after the opening quote
+                      const typed = match[1]
+                      const startCol = position.column - typed.length
+                      const range = {
+                        startLineNumber: position.lineNumber,
+                        endLineNumber: position.lineNumber,
+                        startColumn: startCol,
+                        endColumn: position.column,
+                      }
+
+                      return {
+                        suggestions: projectSnippetsRef.current.map((s) => {
+                          const path = toIncludePath(
+                            s.git_path ?? `snippets/${s.name}.j2`,
+                            template.git_path,
+                          )
+                          return {
+                            label: path,
+                            kind: monaco.languages.CompletionItemKind.File,
+                            detail: s.display_name,
+                            documentation: { value: s.description ?? `Include snippet: **${s.display_name}**` },
+                            insertText: path,
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.None,
+                            range,
+                            sortText: '0' + path,
+                          }
+                        }),
+                      }
+                    },
+                  })
+
+                  completionDisposableRef.current = {
+                    dispose: () => { filterCompletion.dispose(); includeCompletion.dispose() },
+                  }
                 }}
                 options={{
                   minimap: { enabled: false },
@@ -733,8 +1159,8 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
 
           </div>
 
-          {/* Right: Parameter panel — 40% */}
-          <div className="w-[40%] flex flex-col min-h-0 overflow-hidden">
+          {/* Right: Parameter panel — responsive fixed width */}
+          <div className="w-80 lg:w-96 xl:w-[440px] 2xl:w-[520px] shrink-0 flex flex-col min-h-0 overflow-hidden">
             <ParameterPanel
               templateId={template.id}
               projectId={template.project_id}
@@ -769,6 +1195,27 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
           </div>
         )}
       </DragOverlay>
+
+      {/* Snippet picker panel */}
+      {showSnippetPanel && (
+        <SnippetPickerPanel
+          snippets={projectSnippets}
+          onInsert={insertSnippetInclude}
+          onClose={() => setShowSnippetPanel(false)}
+          anchorEl={snippetBtnRef.current}
+          pathTransform={snippetPathTransform}
+        />
+      )}
+
+      {/* Macro picker panel */}
+      {showMacroPanel && (
+        <MacroPickerPanel
+          macros={projectMacros}
+          onInsert={insertMacroCall}
+          onClose={() => setShowMacroPanel(false)}
+          anchorEl={macroBtnRef.current}
+        />
+      )}
 
       {/* Preview modal */}
       {showPreview && (
