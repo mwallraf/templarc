@@ -143,7 +143,7 @@ export default function AdminTemplates() {
     },
   })
 
-  const { register, handleSubmit, reset } = useForm<TemplateCreate>()
+  const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<TemplateCreate>()
 
   function handleCancel() {
     setShowForm(false)
@@ -285,11 +285,15 @@ export default function AdminTemplates() {
                 style={inputStyle}
                 placeholder="e.g. cisco_891_base"
                 {...register('name', {
-                  required: true,
-                  pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Only letters, digits, underscores' },
+                  required: 'Name is required',
+                  pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Only letters, digits, underscores — no spaces or special characters' },
                 })}
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>Letters, digits, underscores only</p>
+              {formErrors.name ? (
+                <p className="text-xs mt-1 font-medium" style={{ color: '#f87171' }}>{formErrors.name.message}</p>
+              ) : (
+                <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>Letters, digits, underscores only</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
@@ -299,8 +303,11 @@ export default function AdminTemplates() {
                 className={inputClass}
                 style={inputStyle}
                 placeholder="e.g. Cisco 891 Base Config"
-                {...register('display_name', { required: true })}
+                {...register('display_name', { required: 'Display name is required' })}
               />
+              {formErrors.display_name && (
+                <p className="text-xs mt-1 font-medium" style={{ color: '#f87171' }}>{formErrors.display_name.message}</p>
+              )}
             </div>
           </div>
 
@@ -312,13 +319,16 @@ export default function AdminTemplates() {
               <select
                 className={inputClass}
                 style={{ ...inputStyle, color: 'var(--c-text)' }}
-                {...register('project_id', { required: true, setValueAs: (v) => v === '' ? undefined : Number(v) })}
+                {...register('project_id', { required: 'Project is required', setValueAs: (v) => v === '' ? undefined : Number(v) })}
               >
                 <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
                 {projects?.map((p) => (
                   <option key={p.id} value={p.id} style={{ backgroundColor: 'var(--c-card)' }}>{p.display_name}</option>
                 ))}
               </select>
+              {formErrors.project_id && (
+                <p className="text-xs mt-1 font-medium" style={{ color: '#f87171' }}>{formErrors.project_id.message}</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Parent Template</label>
@@ -379,9 +389,18 @@ export default function AdminTemplates() {
           </div>
 
           {createMut.isError && (
-            <p className="text-xs" style={{ color: '#ef4444' }}>
-              {(createMut.error as any)?.response?.data?.detail ?? 'Failed to create template'}
-            </p>
+            <div
+              className="rounded-lg px-3 py-2.5 text-xs"
+              style={{ backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}
+            >
+              {(() => {
+                const detail = (createMut.error as any)?.response?.data?.detail
+                if (!detail) return 'Failed to create template'
+                if (typeof detail === 'string') return detail
+                if (Array.isArray(detail)) return detail.map((d: any) => d.msg ?? JSON.stringify(d)).join('; ')
+                return JSON.stringify(detail)
+              })()}
+            </div>
           )}
 
           <button

@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     # Idempotent — skipped silently if the seed organisation already exists.
     SEED_ON_STARTUP: bool = False
 
+    # --- AI assistant -------------------------------------------------------
+    # Provider: "anthropic" | "openai" | "" (empty = disabled)
+    AI_PROVIDER: str = ""
+    # API key for the selected provider.
+    AI_API_KEY: str = ""
+    # Model name (e.g. "claude-sonnet-4-6", "gpt-4o", "llama3").
+    AI_MODEL: str = "claude-sonnet-4-6"
+    # Base URL — used only for openai-compatible providers.
+    # Default points to OpenAI; override for Azure, local Ollama, etc.
+    AI_BASE_URL: str = "https://api.openai.com/v1"
+
     # -------------------------------------------------------------------------
     # Computed URL properties
     # -------------------------------------------------------------------------

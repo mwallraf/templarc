@@ -50,6 +50,9 @@ from api.models.api_key import ApiKey  # noqa: F401
 # Tier 10: FK → Project (features) + FK → Template + Feature (template_features)
 from api.models.feature import Feature, TemplateFeature  # noqa: F401
 
+# Tier 11: FK → Organization (one row per org)
+from api.models.system_settings import SystemSettings  # noqa: F401
+
 __all__ = [
     "Base",
     "Organization",
@@ -71,4 +74,5 @@ __all__ = [
     "ApiKey",
     "Feature",
     "TemplateFeature",
+    "SystemSettings",
 ]

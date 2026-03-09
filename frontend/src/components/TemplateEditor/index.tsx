@@ -14,6 +14,7 @@ import type { DataSourceDef } from './DataSourceForm'
 import { ParameterPanel } from './ParameterPanel'
 import { PreviewModal } from './PreviewModal'
 import { Toast, type ToastState } from './Toast'
+import AiAssistModal, { type InsertMode } from '../AiAssistModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -391,6 +392,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   // UI state
   const [showPreview, setShowPreview] = useState(false)
   const [showValidate, setShowValidate] = useState(false)
+  const [showAI, setShowAI] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [activeDragParam, setActiveDragParam] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
@@ -543,6 +545,17 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
     await validateQuery.refetch()
   }
 
+  function handleAIAccept(text: string, mode: InsertMode) {
+    if (mode === 'replace') {
+      setEditorContent(text)
+    } else if (mode === 'append') {
+      setEditorContent((prev) => (prev ? prev + '\n' + text : text))
+    } else {
+      insertAtCursor(text)
+    }
+    setShowAI(false)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -595,6 +608,23 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             Preview Form
+          </button>
+
+          <button
+            onClick={() => setShowAI(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all"
+            style={{
+              background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.15))',
+              border: '1px solid rgba(99,102,241,0.35)',
+              color: '#a5b4fc',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.6)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.35)' }}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            AI
           </button>
 
           <div className="flex-1" />
@@ -756,6 +786,17 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
 
       {/* Toast */}
       {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
+
+      {/* AI assistant modal */}
+      {showAI && (
+        <AiAssistModal
+          registeredParams={assignedParams.map((p) => p.name)}
+          customFilters={customFilters.map((f) => f.name)}
+          existingBody={editorContent}
+          onAccept={handleAIAccept}
+          onClose={() => setShowAI(false)}
+        />
+      )}
     </DndContext>
   )
 }

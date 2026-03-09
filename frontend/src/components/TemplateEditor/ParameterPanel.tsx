@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { useDraggable } from '@dnd-kit/core'
-import { listParameters } from '../../api/parameters'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { listParameters, updateParameter } from '../../api/parameters'
 import { listTemplates } from '../../api/templates'
 import { getInheritanceChain } from '../../api/templates'
 import { attachFeature, detachFeature, listFeatures, listTemplateFeatures, updateTemplateFeature } from '../../api/features'
@@ -38,40 +41,56 @@ function DraggableParam({ param }: { param: ParameterOut }) {
   )
 }
 
-// ── Template parameters list (currently assigned) ─────────────────────────
+// ── Sortable assigned parameter row ───────────────────────────────────────
 
-interface AssignedParamProps {
+interface SortableParamProps {
   param: ParameterOut
   onRemove: () => void
 }
 
-function AssignedParam({ param, onRemove }: AssignedParamProps) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `assigned-${param.id}`,
-    data: { paramName: param.name, paramId: param.id },
+function SortableParam({ param, onRemove }: SortableParamProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: param.id,
   })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
 
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border text-xs cursor-grab select-none ${
-        isDragging ? 'opacity-40' : 'border-indigo-100 bg-indigo-50'
-      }`}
+      style={style}
+      className={`flex items-center gap-1.5 ${isDragging ? 'opacity-50' : ''}`}
     >
-      <div className="min-w-0">
-        <span className="font-mono text-indigo-700 font-medium">{param.name}</span>
-        <span className="ml-1.5 text-xs text-gray-400">{param.widget_type}</span>
-      </div>
+      {/* Drag handle */}
       <button
         type="button"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={onRemove}
-        className="shrink-0 text-gray-400 hover:text-red-500 leading-none text-base"
+        {...listeners}
+        {...attributes}
+        className="shrink-0 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 px-0.5 py-1.5 rounded touch-none"
+        title="Drag to reorder"
+        tabIndex={-1}
       >
-        ×
+        <svg viewBox="0 0 10 16" className="w-2.5 h-3.5 fill-current">
+          <circle cx="2" cy="2" r="1.5" /><circle cx="8" cy="2" r="1.5" />
+          <circle cx="2" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" />
+          <circle cx="2" cy="14" r="1.5" /><circle cx="8" cy="14" r="1.5" />
+        </svg>
       </button>
+      <div className="flex-1 flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border text-xs border-indigo-100 bg-indigo-50 min-w-0">
+        <div className="min-w-0">
+          <span className="font-mono text-indigo-700 font-medium">{param.name}</span>
+          <span className="ml-1.5 text-xs text-gray-400">{param.widget_type}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 text-gray-400 hover:text-red-500 leading-none text-base"
+        >
+          ×
+        </button>
+      </div>
     </div>
   )
 }
@@ -155,6 +174,36 @@ export function ParameterPanel({
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
+
+  // Local sorted copy — optimistically updated on drag, synced when assignedParams changes
+  const [sortedParams, setSortedParams] = useState<ParameterOut[]>(() =>
+    [...assignedParams].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+  )
+  useEffect(() => {
+    setSortedParams([...assignedParams].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)))
+  }, [assignedParams])
+
+  const reorderMut = useMutation({
+    mutationFn: (params: ParameterOut[]) =>
+      Promise.all(
+        params.map((p, i) =>
+          p.sort_order !== i ? updateParameter(p.id, { sort_order: i }) : Promise.resolve(p),
+        ),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['parameters'] }),
+  })
+
+  function handleSortEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setSortedParams((items) => {
+      const oldIndex = items.findIndex((p) => p.id === active.id)
+      const newIndex = items.findIndex((p) => p.id === over.id)
+      const reordered = arrayMove(items, oldIndex, newIndex)
+      reorderMut.mutate(reordered)
+      return reordered
+    })
+  }
   const [showDsForm, setShowDsForm] = useState(false)
   const [editingDs, setEditingDs] = useState<DataSourceDef | null>(null)
   const [activeSection, setActiveSection] = useState<'params' | 'datasources' | 'features' | 'parent' | 'metadata'>('params')
@@ -268,21 +317,31 @@ export function ParameterPanel({
         {/* ── Parameters section ────────────────────────────────────────── */}
         {activeSection === 'params' && (
           <>
-            {/* Assigned */}
-            {assignedParams.length > 0 && (
+            {/* Assigned — sortable list */}
+            {sortedParams.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
                   In this template
+                  {reorderMut.isPending && (
+                    <span className="ml-2 font-normal normal-case text-gray-300">saving…</span>
+                  )}
                 </p>
-                <div className="space-y-1.5">
-                  {assignedParams.map((p) => (
-                    <AssignedParam
-                      key={p.id}
-                      param={p}
-                      onRemove={() => onUnassignParam(p.id)}
-                    />
-                  ))}
-                </div>
+                <DndContext collisionDetection={closestCenter} onDragEnd={handleSortEnd}>
+                  <SortableContext
+                    items={sortedParams.map((p) => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1.5">
+                      {sortedParams.map((p) => (
+                        <SortableParam
+                          key={p.id}
+                          param={p}
+                          onRemove={() => onUnassignParam(p.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </div>
             )}
 

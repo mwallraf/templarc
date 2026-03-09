@@ -1,15 +1,31 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   listParameters,
   deleteParameter,
   createParameter,
   createParameterOption,
+  updateParameter,
 } from '../../api/parameters'
 import { findDuplicateParameters, promoteParameter } from '../../api/admin'
 import { listProjects } from '../../api/catalog'
 import type { DuplicateParameterGroup, ParameterOut, ParameterScope, PromoteReport } from '../../api/types'
 import { ParameterModal } from './ParameterModal'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -120,15 +136,58 @@ function DeleteConfirm({ param, onConfirm, onCancel, isPending }: DeleteConfirmP
   )
 }
 
-// ── Parameter table row ───────────────────────────────────────────────────────
+// ── Sortable parameter table row ──────────────────────────────────────────────
 
-function ParamRow({ param, onEdit, onDelete }: { param: ParameterOut; onEdit: () => void; onDelete: () => void }) {
-  const s = SCOPE_STYLE[param.scope]
+function SortableParamRow({
+  param,
+  idx,
+  total,
+  onEdit,
+  onDelete,
+  disabled,
+}: {
+  param: ParameterOut
+  idx: number
+  total: number
+  onEdit: () => void
+  onDelete: () => void
+  disabled: boolean
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: param.id,
+    disabled,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    backgroundColor: isDragging ? 'var(--c-surface-alt)' : 'transparent',
+    borderBottom: idx < total - 1 ? '1px solid var(--c-border)' : 'none',
+    position: 'relative' as const,
+    zIndex: isDragging ? 1 : 'auto',
+  }
+
   return (
-    <tr
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-    >
+    <tr ref={setNodeRef} style={style}>
+      <td className="px-2 py-3 w-8">
+        <div
+          {...attributes}
+          {...listeners}
+          title={disabled ? 'Clear search to reorder' : 'Drag to reorder'}
+          className="flex items-center justify-center w-6 h-6 rounded cursor-grab active:cursor-grabbing transition-colors"
+          style={{
+            color: disabled ? 'var(--c-border-bright)' : 'var(--c-muted-4)',
+            cursor: disabled ? 'not-allowed' : undefined,
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+            <circle cx="5" cy="4" r="1.2" /><circle cx="11" cy="4" r="1.2" />
+            <circle cx="5" cy="8" r="1.2" /><circle cx="11" cy="8" r="1.2" />
+            <circle cx="5" cy="12" r="1.2" /><circle cx="11" cy="12" r="1.2" />
+          </svg>
+        </div>
+      </td>
       <td className="px-4 py-3 font-mono text-xs max-w-xs" style={{ color: 'var(--c-muted-2)' }}>
         <span className="truncate block">{param.name}</span>
       </td>
@@ -136,36 +195,22 @@ function ParamRow({ param, onEdit, onDelete }: { param: ParameterOut; onEdit: ()
         {param.label ?? <span className="italic" style={{ color: 'var(--c-muted-4)' }}>—</span>}
       </td>
       <td className="px-4 py-3">
-        <span className="text-xs px-2 py-0.5 rounded-full border font-medium" style={{ backgroundColor: s.bg, color: s.text, borderColor: s.border }}>
+        <span className="text-xs px-2 py-0.5 rounded-full border font-medium" style={{ backgroundColor: SCOPE_STYLE[param.scope].bg, color: SCOPE_STYLE[param.scope].text, borderColor: SCOPE_STYLE[param.scope].border }}>
           {SCOPE_LABEL[param.scope]}
         </span>
       </td>
       <td className="px-4 py-3 text-xs font-mono" style={{ color: 'var(--c-muted-3)' }}>{param.widget_type}</td>
       <td className="px-4 py-3 text-xs text-center">
-        {param.required ? (
-          <span className="text-red-400 font-semibold">Yes</span>
-        ) : (
-          <span style={{ color: 'var(--c-border-bright)' }}>No</span>
-        )}
+        {param.required ? <span className="text-red-400 font-semibold">Yes</span> : <span style={{ color: 'var(--c-border-bright)' }}>No</span>}
       </td>
       <td className="px-4 py-3 text-xs text-center">
-        {param.is_derived && (
-          <span className="px-1.5 py-0.5 rounded-full text-xs border" style={{ backgroundColor: 'rgba(167,139,250,0.1)', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.2)' }}>
-            derived
-          </span>
-        )}
-        {param.options.length > 0 && (
-          <span style={{ color: 'var(--c-muted-4)' }}>{param.options.length} opts</span>
-        )}
+        {param.is_derived && <span className="px-1.5 py-0.5 rounded-full text-xs border" style={{ backgroundColor: 'rgba(167,139,250,0.1)', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.2)' }}>derived</span>}
+        {param.options.length > 0 && <span style={{ color: 'var(--c-muted-4)' }}>{param.options.length} opts</span>}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-3">
-          <button onClick={onEdit} className="text-xs font-medium transition-colors" style={{ color: '#6366f1' }}>
-            Edit
-          </button>
-          <button onClick={onDelete} className="text-xs font-medium transition-colors" style={{ color: '#ef4444' }}>
-            Delete
-          </button>
+          <button onClick={onEdit} className="text-xs font-medium" style={{ color: '#6366f1' }}>Edit</button>
+          <button onClick={onDelete} className="text-xs font-medium" style={{ color: '#ef4444' }}>Delete</button>
         </div>
       </td>
     </tr>
@@ -180,14 +225,36 @@ function ScopeSection({
   params,
   onEdit,
   onDelete,
+  onReorder,
+  isFiltered,
 }: {
   title: string
   accent: string
   params: ParameterOut[]
   onEdit: (p: ParameterOut) => void
   onDelete: (p: ParameterOut) => void
+  onReorder: (reordered: ParameterOut[]) => void
+  isFiltered: boolean
 }) {
-  if (params.length === 0) return null
+  const [sorted, setSorted] = useState<ParameterOut[]>(params)
+
+  useEffect(() => {
+    setSorted(params)
+  }, [params])
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = sorted.findIndex((p) => p.id === active.id)
+    const newIdx = sorted.findIndex((p) => p.id === over.id)
+    const reordered = arrayMove(sorted, oldIdx, newIdx)
+    setSorted(reordered)
+    onReorder(reordered)
+  }
+
+  if (sorted.length === 0) return null
 
   return (
     <div className="mb-6">
@@ -198,13 +265,19 @@ function ScopeSection({
           className="text-xs px-2 py-0.5 rounded-full ml-1"
           style={{ backgroundColor: 'var(--c-card)', color: 'var(--c-muted-4)', border: '1px solid var(--c-border-bright)' }}
         >
-          {params.length}
+          {sorted.length}
         </span>
+        {isFiltered && (
+          <span className="text-xs ml-2" style={{ color: 'var(--c-muted-4)' }}>
+            (clear search to reorder)
+          </span>
+        )}
       </div>
       <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
         <table className="w-full text-sm">
           <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
             <tr>
+              <th className="px-2 py-2.5 w-8" />
               <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
               <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
@@ -214,37 +287,23 @@ function ScopeSection({
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
-          <tbody>
-            {params.map((p, idx) => (
-              <tr key={p.id} style={{ borderBottom: idx < params.length - 1 ? '1px solid var(--c-border)' : 'none' }}>
-                <td className="px-4 py-3 font-mono text-xs max-w-xs" style={{ color: 'var(--c-muted-2)' }}>
-                  <span className="truncate block">{p.name}</span>
-                </td>
-                <td className="px-4 py-3 text-sm" style={{ color: 'var(--c-text)' }}>
-                  {p.label ?? <span className="italic" style={{ color: 'var(--c-muted-4)' }}>—</span>}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-xs px-2 py-0.5 rounded-full border font-medium" style={{ backgroundColor: SCOPE_STYLE[p.scope].bg, color: SCOPE_STYLE[p.scope].text, borderColor: SCOPE_STYLE[p.scope].border }}>
-                    {SCOPE_LABEL[p.scope]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs font-mono" style={{ color: 'var(--c-muted-3)' }}>{p.widget_type}</td>
-                <td className="px-4 py-3 text-xs text-center">
-                  {p.required ? <span className="text-red-400 font-semibold">Yes</span> : <span style={{ color: 'var(--c-border-bright)' }}>No</span>}
-                </td>
-                <td className="px-4 py-3 text-xs text-center">
-                  {p.is_derived && <span className="px-1.5 py-0.5 rounded-full text-xs border" style={{ backgroundColor: 'rgba(167,139,250,0.1)', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.2)' }}>derived</span>}
-                  {p.options.length > 0 && <span style={{ color: 'var(--c-muted-4)' }}>{p.options.length} opts</span>}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    <button onClick={() => onEdit(p)} className="text-xs font-medium" style={{ color: '#6366f1' }}>Edit</button>
-                    <button onClick={() => onDelete(p)} className="text-xs font-medium" style={{ color: '#ef4444' }}>Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={sorted.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              <tbody>
+                {sorted.map((p, idx) => (
+                  <SortableParamRow
+                    key={p.id}
+                    param={p}
+                    idx={idx}
+                    total={sorted.length}
+                    onEdit={() => onEdit(p)}
+                    onDelete={() => onDelete(p)}
+                    disabled={isFiltered}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </DndContext>
         </table>
       </div>
     </div>
@@ -755,9 +814,19 @@ export default function AdminParameters() {
   })
 
   const params = data?.items ?? []
-  const globalParams = params.filter((p) => p.scope === 'global')
-  const projectParams = params.filter((p) => p.scope === 'project')
-  const templateParams = params.filter((p) => p.scope === 'template')
+  const globalParams = params.filter((p) => p.scope === 'global').sort((a, b) => a.sort_order - b.sort_order)
+  const projectParams = params.filter((p) => p.scope === 'project').sort((a, b) => a.sort_order - b.sort_order)
+  const templateParams = params.filter((p) => p.scope === 'template').sort((a, b) => a.sort_order - b.sort_order)
+
+  const isFiltered = Boolean(search || scopeFilter)
+
+  function handleReorder(reordered: ParameterOut[]) {
+    reordered.forEach((p, i) => {
+      if (p.sort_order !== i) {
+        updateParameter(p.id, { sort_order: i }).catch(() => {/* best-effort */})
+      }
+    })
+  }
 
   function openCreate() { setEditingParam(undefined); setShowModal(true) }
   function openEdit(p: ParameterOut) { setEditingParam(p); setShowModal(true) }
@@ -956,9 +1025,9 @@ export default function AdminParameters() {
 
       {!isLoading && params.length > 0 && (
         <>
-          <ScopeSection title="Global Parameters" accent="#fbbf24" params={globalParams} onEdit={openEdit} onDelete={setDeletingParam} />
-          <ScopeSection title="Project Parameters" accent="#60a5fa" params={projectParams} onEdit={openEdit} onDelete={setDeletingParam} />
-          <ScopeSection title="Template Parameters" accent="#6366f1" params={templateParams} onEdit={openEdit} onDelete={setDeletingParam} />
+          <ScopeSection title="Global Parameters" accent="#fbbf24" params={globalParams} onEdit={openEdit} onDelete={setDeletingParam} onReorder={handleReorder} isFiltered={isFiltered} />
+          <ScopeSection title="Project Parameters" accent="#60a5fa" params={projectParams} onEdit={openEdit} onDelete={setDeletingParam} onReorder={handleReorder} isFiltered={isFiltered} />
+          <ScopeSection title="Template Parameters" accent="#6366f1" params={templateParams} onEdit={openEdit} onDelete={setDeletingParam} onReorder={handleReorder} isFiltered={isFiltered} />
 
           <div className="text-xs text-right mt-2" style={{ color: 'var(--c-dim)' }}>
             {data?.total} parameter{data?.total !== 1 ? 's' : ''} total

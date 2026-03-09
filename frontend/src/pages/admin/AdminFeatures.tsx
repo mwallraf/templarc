@@ -29,6 +29,7 @@ import {
   deleteFeatureParameter,
 } from '../../api/features'
 import type { FeatureOut, FeatureParameterOut, ProjectOut } from '../../api/types'
+import AiAssistModal, { type InsertMode } from '../../components/AiAssistModal'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -233,6 +234,7 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
   const [saved, setSaved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [label, setLabel] = useState(feature.label)
+  const [showAI, setShowAI] = useState(false)
 
   // Load body lazily when switching to snippet tab
   const { isFetching: bodyFetching } = useQuery({
@@ -271,6 +273,17 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
     { label: '{% if %}', insert: '{% if condition %}\n\n{% endif %}' },
     { label: '{% for %}', insert: '{% for item in items %}\n{{ item }}\n{% endfor %}' },
   ]
+
+  function handleAIAccept(text: string, mode: InsertMode) {
+    if (mode === 'replace') {
+      setBody(text)
+    } else if (mode === 'append') {
+      setBody((prev) => (prev ? prev + '\n' + text : text))
+    } else {
+      setBody((prev) => prev + text)
+    }
+    setShowAI(false)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -360,6 +373,22 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
                   {s.label}
                 </button>
               ))}
+              <button
+                onClick={() => setShowAI(true)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-all"
+                style={{
+                  background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.15))',
+                  border: '1px solid rgba(99,102,241,0.35)',
+                  color: '#a5b4fc',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.6)' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.35)' }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                AI
+              </button>
             </div>
             {bodyFetching && !bodyLoaded ? (
               <p className="text-xs italic" style={{ color: 'var(--c-muted-4)' }}>Loading from Git…</p>
@@ -378,6 +407,16 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
 
         {activeTab === 'parameters' && <ParamsPanel featureId={feature.id} />}
       </div>
+
+      {/* AI assistant modal */}
+      {showAI && (
+        <AiAssistModal
+          registeredParams={feature.parameters.map((p) => p.name)}
+          existingBody={body || undefined}
+          onAccept={handleAIAccept}
+          onClose={() => setShowAI(false)}
+        />
+      )}
 
       {/* Footer */}
       <div

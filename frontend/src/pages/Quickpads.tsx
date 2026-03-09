@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import type { QuickpadOut, QuickpadRenderOut } from '../api/types'
 import ApiCodePanel, { getApiBase } from '../components/ApiCodePanel'
+import AiAssistModal, { type InsertMode } from '../components/AiAssistModal'
 
 // ── Jinja2 pattern helpers ─────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ function EditorPanel({ pad, currentUsername, onSaved, onCreated, onDeleted }: Ed
   const [activeTab, setActiveTab] = useState<'edit' | 'render'>(pad ? 'render' : 'edit')
   const [copied, setCopied] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showAI, setShowAI] = useState(false)
 
   const isOwner = !pad || pad.owner_username === currentUsername
   const isNew = !pad
@@ -141,6 +143,18 @@ function EditorPanel({ pad, currentUsername, onSaved, onCreated, onDeleted }: Ed
       el.focus()
       el.setSelectionRange(start + text.length, start + text.length)
     })
+  }
+
+  function handleAIAccept(text: string, mode: InsertMode) {
+    const current = watch('body') ?? ''
+    if (mode === 'replace') {
+      setValue('body', text, { shouldDirty: true })
+    } else if (mode === 'append') {
+      setValue('body', current ? current + '\n' + text : text, { shouldDirty: true })
+    } else {
+      insertSnippet(text)
+    }
+    setShowAI(false)
   }
 
   function copyOutput() {
@@ -254,6 +268,23 @@ function EditorPanel({ pad, currentUsername, onSaved, onCreated, onDeleted }: Ed
                     {s.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setShowAI(true)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-all"
+                  style={{
+                    background: 'linear-gradient(135deg,rgba(99,102,241,0.15),rgba(168,85,247,0.15))',
+                    border: '1px solid rgba(99,102,241,0.35)',
+                    color: '#a5b4fc',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.6)' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.35)' }}
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  AI
+                </button>
               </div>
               <textarea
                 {...register('body')}
@@ -470,6 +501,15 @@ function EditorPanel({ pad, currentUsername, onSaved, onCreated, onDeleted }: Ed
             </button>
           </div>
         </div>
+      )}
+
+      {/* AI assistant modal */}
+      {showAI && (
+        <AiAssistModal
+          existingBody={watch('body') || undefined}
+          onAccept={handleAIAccept}
+          onClose={() => setShowAI(false)}
+        />
       )}
     </div>
   )
