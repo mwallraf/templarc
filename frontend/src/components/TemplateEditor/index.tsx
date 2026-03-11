@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import { DndContext, type DragEndEvent, type DragOverEvent, DragOverlay } from '@dnd-kit/core'
 import { useDroppable } from '@dnd-kit/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { editor as MonacoEditor, IPosition } from 'monaco-editor'
-import { getTemplateVariables, listTemplates, updateTemplate } from '../../api/templates'
-import { listParameters } from '../../api/parameters'
+import { getTemplateDatasources, getTemplateVariables, listTemplates, updateTemplate } from '../../api/templates'
+import { createParameter, listParameters } from '../../api/parameters'
 import { listSecrets } from '../../api/auth'
 import { getAISettings, listFilters, listMacros } from '../../api/admin'
 import type { CustomFilterOut, CustomMacroOut, ParameterOut, TemplateOut, VariableRefOut } from '../../api/types'
@@ -93,12 +93,20 @@ function MonacoDropZone({ children, isOver }: { children: React.ReactNode; isOve
 function ValidateModal({
   variables,
   isLoading,
+  template,
   onClose,
+  onCreated,
 }: {
   variables: VariableRefOut[] | undefined
   isLoading: boolean
+  template: TemplateOut
   onClose: () => void
+  onCreated: () => void
 }) {
+  const [justRegistered, setJustRegistered] = useState<Set<string>>(new Set())
+  const [registering, setRegistering] = useState<Set<string>>(new Set())
+  const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({})
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -107,8 +115,42 @@ function ValidateModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const registered = variables?.filter((v) => v.is_registered) ?? []
-  const unregistered = variables?.filter((v) => !v.is_registered) ?? []
+  // Derive scope from variable name prefix
+  function scopeForVar(fullPath: string): { scope: 'template' | 'project' | 'global'; label: string } {
+    if (fullPath.startsWith('glob.')) return { scope: 'global', label: 'global' }
+    if (fullPath.startsWith('proj.')) return { scope: 'project', label: 'project' }
+    return { scope: 'template', label: 'template' }
+  }
+
+  async function handleRegister(v: VariableRefOut) {
+    const { scope } = scopeForVar(v.full_path)
+    setRegistering((prev) => new Set(prev).add(v.full_path))
+    setRegisterErrors((prev) => { const n = { ...prev }; delete n[v.full_path]; return n })
+    try {
+      await createParameter({
+        name: v.full_path,
+        scope,
+        project_id: scope !== 'template' ? template.project_id : undefined,
+        template_id: scope === 'template' ? template.id : undefined,
+        widget_type: 'text',
+        required: false,
+      })
+      setJustRegistered((prev) => new Set(prev).add(v.full_path))
+      onCreated()
+    } catch (err) {
+      setRegisterErrors((prev) => ({
+        ...prev,
+        [v.full_path]: err instanceof Error ? err.message : 'Failed',
+      }))
+    } finally {
+      setRegistering((prev) => {
+        const n = new Set(prev); n.delete(v.full_path); return n
+      })
+    }
+  }
+
+  const registered = variables?.filter((v) => v.is_registered || justRegistered.has(v.full_path)) ?? []
+  const unregistered = variables?.filter((v) => !v.is_registered && !justRegistered.has(v.full_path)) ?? []
   const total = variables?.length ?? 0
 
   return (
@@ -132,7 +174,7 @@ function ValidateModal({
             </svg>
             <div>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>Template Variables</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--c-muted-4)' }}>Scanned from the saved Git version</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--c-muted-4)' }}>Scanned from the saved Git version · full inheritance chain</p>
             </div>
           </div>
           <button
@@ -186,26 +228,51 @@ function ValidateModal({
                 )}
               </div>
 
-              {/* Unregistered */}
+              {/* Unregistered — with Register buttons */}
               {unregistered.length > 0 && (
-                <div className="mb-4">
+                <div className="mb-5">
                   <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: '#f87171' }}>
-                    Unregistered — need a parameter definition
+                    Unregistered — click Register to create a parameter definition
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {unregistered.map((v) => (
-                      <span
-                        key={v.full_path}
-                        className="font-mono text-xs px-2.5 py-1 rounded-lg border"
-                        style={{ backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)', color: '#fca5a5' }}
-                      >
-                        {'{{'}
-                        <span className="mx-0.5 opacity-60"> </span>
-                        {v.full_path}
-                        <span className="mx-0.5 opacity-60"> </span>
-                        {'}}'}
-                      </span>
-                    ))}
+                  <div className="space-y-1.5">
+                    {unregistered.map((v) => {
+                      const { label: scopeLabel } = scopeForVar(v.full_path)
+                      const busy = registering.has(v.full_path)
+                      const errMsg = registerErrors[v.full_path]
+                      return (
+                        <div
+                          key={v.full_path}
+                          className="flex items-center gap-2 rounded-lg px-3 py-2 border"
+                          style={{ backgroundColor: 'rgba(239,68,68,0.05)', borderColor: 'rgba(239,68,68,0.18)' }}
+                        >
+                          <span className="font-mono text-xs flex-1 min-w-0 truncate" style={{ color: '#fca5a5' }}>
+                            {'{{ '}{v.full_path}{' }}'}
+                          </span>
+                          <span
+                            className="text-xs px-1.5 py-0.5 rounded border shrink-0"
+                            style={{ color: 'var(--c-muted-4)', borderColor: 'var(--c-border)', backgroundColor: 'var(--c-base)', fontSize: '10px' }}
+                          >
+                            {scopeLabel}
+                          </span>
+                          {errMsg && (
+                            <span className="text-xs text-red-400 shrink-0" title={errMsg}>⚠</span>
+                          )}
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleRegister(v)}
+                            className="shrink-0 text-xs px-2.5 py-1 rounded-md border font-medium transition-all disabled:opacity-50"
+                            style={{
+                              color: '#818cf8',
+                              borderColor: 'rgba(99,102,241,0.35)',
+                              backgroundColor: 'rgba(99,102,241,0.08)',
+                            }}
+                          >
+                            {busy ? '…' : 'Register'}
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -228,6 +295,9 @@ function ValidateModal({
                         {v.full_path}
                         <span className="mx-0.5 opacity-60"> </span>
                         {'}}'}
+                        {justRegistered.has(v.full_path) && (
+                          <span className="ml-1.5 opacity-70">✓ new</span>
+                        )}
                       </span>
                     ))}
                   </div>
@@ -664,6 +734,7 @@ const JINJA2_BUILTIN_FILTERS: { name: string; doc: string; snippet?: string }[] 
 
 export default function TemplateEditor({ template, initialContent = '' }: TemplateEditorProps) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
 
   // Monaco editor instance ref
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
@@ -697,6 +768,25 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   const snippetBtnRef = useRef<HTMLButtonElement>(null)
   const macroBtnRef = useRef<HTMLButtonElement>(null)
 
+  // Unsaved changes tracking
+  const [isDirty, setIsDirty] = useState(false)
+  const markDirty = useCallback(() => setIsDirty(true), [])
+
+  // Confirm navigation away when dirty
+  const confirmNavAway = useCallback((to: string) => {
+    if (!isDirty || window.confirm('You have unsaved changes. Leave without saving?')) {
+      navigate(to)
+    }
+  }, [isDirty, navigate])
+
+  // Warn on browser tab close / page reload
+  useEffect(() => {
+    if (!isDirty) return
+    function handler(e: BeforeUnloadEvent) { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
   // Fetch initial template parameters from API
   const { data: templateParamsData } = useQuery({
     queryKey: ['parameters', 'template', template.id],
@@ -708,6 +798,35 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
       setAssignedParams(templateParamsData.items)
     }
   }, [templateParamsData]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch existing data sources from template frontmatter
+  const { data: existingDatasources } = useQuery({
+    queryKey: ['template-datasources', template.id],
+    queryFn: () => getTemplateDatasources(template.id),
+  })
+
+  useEffect(() => {
+    if (existingDatasources && existingDatasources.length > 0 && dataSources.length === 0) {
+      const parsed = existingDatasources.map((raw) => ({
+        id: String(raw.id ?? ''),
+        url: String(raw.url ?? ''),
+        auth: raw.auth ? String(raw.auth) : undefined,
+        trigger: raw.trigger
+          ? String(raw.trigger).replace(/\{\{\s*([\w.]+)\s*\}\}/g, '$1')
+          : undefined,
+        on_error: (raw.on_error as DataSourceDef['on_error']) ?? undefined,
+        cache_ttl: raw.cache_ttl != null ? Number(raw.cache_ttl) : undefined,
+        mapping: Array.isArray(raw.mapping)
+          ? (raw.mapping as Record<string, unknown>[]).map((m) => ({
+              remote_field: String(m.remote_field ?? ''),
+              to_parameter: String(m.to_parameter ?? ''),
+              auto_fill: Boolean(m.auto_fill ?? false),
+            }))
+          : [],
+      }))
+      setDataSources(parsed)
+    }
+  }, [existingDatasources]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Secrets for data source auth picker
   const { data: secretsData } = useQuery({
@@ -794,8 +913,10 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
         detail: `git ${result.template.updated_at}`,
       })
       setCommitMessage('')
+      setIsDirty(false)
       qc.invalidateQueries({ queryKey: ['templates'] })
       qc.invalidateQueries({ queryKey: ['template', template.id] })
+      qc.invalidateQueries({ queryKey: ['template-datasources', template.id] })
     },
     onError: (err) => {
       setToast({
@@ -865,23 +986,28 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
     if (!assignedParams.find((p) => p.id === param.id)) {
       setAssignedParams((prev) => [...prev, param])
     }
+    markDirty()
     insertAtCursor(`{{ ${param.name} }}`)
   }
 
   function handleUnassignParam(paramId: number) {
     setAssignedParams((prev) => prev.filter((p) => p.id !== paramId))
+    markDirty()
   }
 
   function handleAddDs(ds: DataSourceDef) {
     setDataSources((prev) => [...prev.filter((d) => d.id !== ds.id), ds])
+    markDirty()
   }
 
   function handleRemoveDs(id: string) {
     setDataSources((prev) => prev.filter((d) => d.id !== id))
+    markDirty()
   }
 
   function handleUpdateDs(id: string, ds: DataSourceDef) {
     setDataSources((prev) => prev.map((d) => (d.id === id ? ds : d)))
+    markDirty()
   }
 
   async function handleValidate() {
@@ -914,10 +1040,11 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
           className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0"
           style={{ backgroundColor: 'var(--c-surface-alt)', borderColor: 'var(--c-border)' }}
         >
-          <Link
-            to="/admin/templates"
+          <button
+            type="button"
+            onClick={() => confirmNavAway('/admin/templates')}
             className="flex items-center gap-1 text-xs font-medium transition-colors mr-1"
-            style={{ color: 'var(--c-muted-3)' }}
+            style={{ color: 'var(--c-muted-3)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
             onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-2)')}
             onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-3)')}
           >
@@ -925,7 +1052,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
               <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
             Templates
-          </Link>
+          </button>
 
           <span style={{ color: 'var(--c-border-bright)' }}>|</span>
 
@@ -1024,17 +1151,26 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
             }}
           />
 
-          <button
-            onClick={() => saveMut.mutate()}
-            disabled={saveMut.isPending}
-            className="px-4 py-1.5 text-white text-xs font-semibold rounded-md disabled:opacity-50 transition-all"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
-            }}
-          >
-            {saveMut.isPending ? 'Saving…' : 'Save'}
-          </button>
+          <div className="relative">
+            {isDirty && (
+              <span
+                className="absolute -top-1 -right-1 w-2 h-2 rounded-full z-10"
+                style={{ backgroundColor: '#f59e0b', boxShadow: '0 0 6px rgba(245,158,11,0.7)' }}
+                title="Unsaved changes"
+              />
+            )}
+            <button
+              onClick={() => saveMut.mutate()}
+              disabled={saveMut.isPending}
+              className="px-4 py-1.5 text-white text-xs font-semibold rounded-md disabled:opacity-50 transition-all"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                boxShadow: isDirty ? '0 4px 14px rgba(99,102,241,0.5)' : '0 4px 14px rgba(99,102,241,0.3)',
+              }}
+            >
+              {saveMut.isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
         </div>
 
         {/* ── Split view ────────────────────────────────────────────────── */}
@@ -1048,7 +1184,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
                 language="python"
                 theme="vs-dark"
                 value={editorContent}
-                onChange={(val) => setEditorContent(val ?? '')}
+                onChange={(val) => { setEditorContent(val ?? ''); markDirty() }}
                 onMount={(editor, monaco) => {
                   editorRef.current = editor
                   editor.onDidChangeCursorPosition((e) => {
@@ -1171,12 +1307,12 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
               metaDisplayName={metaDisplayName}
               metaDescription={metaDescription}
               metaSortOrder={metaSortOrder}
-              onChangeDisplayName={setMetaDisplayName}
-              onChangeDescription={setMetaDescription}
-              onChangeSortOrder={setMetaSortOrder}
+              onChangeDisplayName={(v) => { setMetaDisplayName(v); markDirty() }}
+              onChangeDescription={(v) => { setMetaDescription(v); markDirty() }}
+              onChangeSortOrder={(v) => { setMetaSortOrder(v); markDirty() }}
               onAssignParam={handleAssignParam}
               onUnassignParam={handleUnassignParam}
-              onSetParent={setParentTemplateId}
+              onSetParent={(v) => { setParentTemplateId(v); markDirty() }}
               onAddDataSource={handleAddDs}
               onRemoveDataSource={handleRemoveDs}
               onUpdateDataSource={handleUpdateDs}
@@ -1227,7 +1363,12 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
         <ValidateModal
           variables={validateQuery.data}
           isLoading={validateQuery.isFetching}
+          template={template}
           onClose={() => setShowValidate(false)}
+          onCreated={() => {
+            qc.invalidateQueries({ queryKey: ['parameters', 'template', template.id] })
+            validateQuery.refetch()
+          }}
         />
       )}
 
@@ -1244,6 +1385,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
           onClose={() => setShowAI(false)}
         />
       )}
+
     </DndContext>
   )
 }

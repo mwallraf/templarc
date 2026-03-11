@@ -59,7 +59,7 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
             ID <span className="text-red-500">*</span>
           </label>
           <input
-            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="e.g. netbox"
             {...register('id', { required: 'Required' })}
           />
@@ -67,10 +67,13 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Trigger</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Trigger
+            <span className="ml-1 font-normal text-gray-400 text-xs">— plain param name, no {'{{ }}'}</span>
+          </label>
           <input
-            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="on_change:router.hostname"
+            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="on_change:proj.service_id  or  on_load"
             {...register('trigger')}
           />
         </div>
@@ -81,7 +84,7 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
           URL <span className="text-red-500">*</span>
         </label>
         <input
-          className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           placeholder="https://api.example.com/endpoint?name={{ param_name }}"
           {...register('url', { required: 'Required' })}
         />
@@ -92,7 +95,7 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
         <div className="col-span-2">
           <label className="block text-xs font-medium text-gray-600 mb-1">Auth secret</label>
           <select
-            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             {...register('auth')}
           >
             <option value="">None</option>
@@ -107,7 +110,7 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">On error</label>
           <select
-            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             {...register('on_error')}
           >
             <option value="warn">warn</option>
@@ -123,7 +126,7 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
         </label>
         <input
           type="number"
-          className="w-32 border border-gray-300 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-32 border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           {...register('cache_ttl', { valueAsNumber: true })}
         />
       </div>
@@ -134,7 +137,7 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
           <label className="text-xs font-medium text-gray-600">Field mappings</label>
           <button
             type="button"
-            onClick={() => append({ remote_field: '', to_parameter: '', auto_fill: false })}
+            onClick={() => append({ remote_field: '', to_parameter: '', auto_fill: true })}
             className="text-xs text-indigo-600 hover:underline"
           >
             + Add mapping
@@ -144,19 +147,22 @@ export function DataSourceForm({ secrets, onAdd, onCancel, initial }: DataSource
         {fields.map((field, idx) => (
           <div key={field.id} className="flex items-center gap-2 mb-2">
             <input
-              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="results[0].site.id"
               {...register(`mapping.${idx}.remote_field`)}
             />
             <span className="text-gray-400 text-xs shrink-0">→</span>
             <input
-              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="router.site_id"
               {...register(`mapping.${idx}.to_parameter`)}
             />
-            <label className="flex items-center gap-1 text-xs text-gray-600 shrink-0">
+            <label
+              className="flex items-center gap-1 text-xs text-gray-600 shrink-0 cursor-pointer"
+              title="Auto-fill: pre-populate this parameter's form field with the extracted value. Without this, the value is only available as select options."
+            >
               <input type="checkbox" {...register(`mapping.${idx}.auto_fill`)} />
-              auto
+              auto-fill
             </label>
             <button
               type="button"

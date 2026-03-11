@@ -258,6 +258,11 @@ class DataSourceResolver:
 
         trigger_key = f"on_change:{changed_param}"
         triggered = [s for s in data_sources if s.trigger == trigger_key]
+        logger.info(
+            "[datasource] on_change for %r — %d source(s) matched (available triggers: %s)",
+            changed_param, len(triggered),
+            [s.trigger for s in data_sources],
+        )
         if not triggered:
             return {}
 
@@ -317,10 +322,16 @@ class DataSourceResolver:
 
         cached = _cache_get(cache_key)
         if cached is not None:
-            logger.debug("Cache hit for data source %r (key=%r)", source.id, cache_key)
+            logger.info("[datasource] Cache hit for %r → %s", source.id, url)
             return cached
 
-        _check_ssrf(url)
+        logger.info("[datasource] Fetching %r → %s", source.id, url)
+
+        try:
+            _check_ssrf(url)
+        except DataSourceError as exc:
+            logger.warning("[datasource] SSRF block for %r → %s: %s", source.id, url, exc)
+            return self._handle_error(source, str(exc))
 
         headers: dict[str, str] = {}
         if source.auth:
@@ -330,14 +341,18 @@ class DataSourceResolver:
                 token = await self._secrets.resolve(source.auth)
                 headers["Authorization"] = f"Bearer {token}"
             except SecretNotFoundError as exc:
+                logger.warning("[datasource] Auth failed for %r: %s", source.id, exc)
                 return self._handle_error(source, f"auth resolution failed: {exc}")
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url, headers=headers)
+                logger.info("[datasource] %r response: HTTP %s", source.id, response.status_code)
                 response.raise_for_status()
                 data = response.json()
+                logger.info("[datasource] %r data: %s", source.id, str(data)[:200])
         except Exception as exc:
+            logger.warning("[datasource] Request failed for %r → %s: %s", source.id, url, exc)
             return self._handle_error(source, str(exc))
 
         _cache_set(cache_key, data, source.cache_ttl)

@@ -39,12 +39,17 @@ interface TextWidgetProps {
 }
 
 export function TextWidget({ param, register }: TextWidgetProps) {
+  // key forces a remount when prefill changes (e.g. after a datasource auto-fill),
+  // so the uncontrolled input picks up the new defaultValue immediately.
+  const prefillKey = param.prefill != null ? String(param.prefill) : ''
   return (
     <input
+      key={prefillKey}
       type="text"
       className={inputClass}
       style={inputStyle}
       placeholder={param.default_value ?? ''}
+      defaultValue={prefillKey || (param.default_value ?? '')}
       onFocus={applyFocus}
       onBlur={removeFocus}
       {...register(param.name, {

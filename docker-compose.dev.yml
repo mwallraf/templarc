@@ -136,5 +136,24 @@ services:
     networks:
       - backend
 
+  # ── Mock Router Inventory API ─────────────────────────────────────────────
+  # Lightweight fake device inventory for testing Templarc datasource features.
+  # Endpoints (from within Docker network):  http://mock-api:8080/devices/{SERVICEID}
+  # Endpoints (from host):                   http://localhost:8088/devices/{SERVICEID}
+  #
+  # Pre-loaded service IDs: VT00000 – VT00009
+  # Fields returned: hostname, management_ip, loopback_ip, snmp_community_ro/rw,
+  #                  location, site_code, country, vendor, model, os, os_version,
+  #                  role, bgp_asn, ntp_server, dns_server_primary/secondary, interfaces[]
+  mock-api:
+    build:
+      context: ./mock_api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${MOCK_API_PORT:-8088}:8080"
+    networks:
+      - backend
+
 volumes:
   openldap_data:

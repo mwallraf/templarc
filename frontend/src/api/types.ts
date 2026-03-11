@@ -24,6 +24,9 @@ export interface ProjectOut {
   description?: string
   git_path?: string
   output_comment_style: string
+  remote_url?: string
+  remote_branch: string
+  remote_credential_ref?: string
   created_at: string
   updated_at: string
 }
@@ -35,6 +38,9 @@ export interface ProjectCreate {
   description?: string
   git_path?: string
   output_comment_style?: string
+  remote_url?: string
+  remote_branch?: string
+  remote_credential_ref?: string
 }
 
 export interface ProjectUpdate {
@@ -42,6 +48,42 @@ export interface ProjectUpdate {
   description?: string
   git_path?: string
   output_comment_style?: string
+  remote_url?: string
+  remote_branch?: string
+  remote_credential_ref?: string
+}
+
+export type GitRemoteStatus =
+  | 'no_remote'
+  | 'not_cloned'
+  | 'in_sync'
+  | 'ahead'
+  | 'behind'
+  | 'diverged'
+  | 'error'
+
+export interface GitRemoteStatusOut {
+  has_remote: boolean
+  remote_url?: string
+  remote_branch: string
+  local_sha?: string
+  remote_sha?: string
+  ahead: number
+  behind: number
+  status: GitRemoteStatus
+  message?: string
+}
+
+export interface GitRemoteActionOut {
+  success: boolean
+  message: string
+  new_sha?: string
+}
+
+export interface GitRemoteTestOut {
+  success: boolean
+  message: string
+  branch_sha?: string
 }
 
 export interface TemplateTreeNode {

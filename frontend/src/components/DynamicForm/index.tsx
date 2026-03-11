@@ -532,27 +532,48 @@ export default function DynamicForm({
 
   const triggerOnChange = useCallback(
     async (paramName: string) => {
-      const currentParams = getValues() as Record<string, unknown>
+      // Read each param by name individually — avoids the literal vs nested key mismatch
+      // that occurs when getValues() is called with no arguments on dotted field names.
+      const currentParams: Record<string, unknown> = {}
+      for (const p of effectiveParams) {
+        currentParams[p.name] = getValues(p.name as never)
+      }
+      console.log('[datasource] on_change triggered for param:', paramName, '| current values:', currentParams)
       setLoadingFields((prev) => new Set(prev).add(paramName))
       try {
         const updates = await onChangeParam(templateId, paramName, {
           current_params: currentParams,
         })
+        console.log('[datasource] on_change response for param:', paramName, '| updates:', updates)
+
+        // Collect enrichments and prefills outside any state setter
+        const enrichmentUpdates: Record<string, Partial<EnrichedParameterOut>> = {}
+        for (const [name, enrichment] of Object.entries(updates)) {
+          if (typeof enrichment === 'object' && enrichment !== null) {
+            enrichmentUpdates[name] = enrichment as Partial<EnrichedParameterOut>
+          }
+        }
+
+        // Step 1: sync prefill values into RHF _formValues BEFORE triggering the React
+        // re-render. This ensures that when TextWidget remounts (due to key change on
+        // param.prefill), RHF's ref-callback reads the already-updated value and sets the
+        // input correctly — rather than restoring the stale empty value.
+        for (const [name, e] of Object.entries(enrichmentUpdates)) {
+          if (e.prefill !== undefined) {
+            setValue(name, e.prefill, { shouldDirty: false, shouldValidate: false })
+          }
+        }
+
+        // Step 2: trigger the React re-render that makes param.prefill visible to widgets
         setEnrichmentOverrides((prev) => {
           const next = { ...prev }
-          for (const [name, enrichment] of Object.entries(updates)) {
-            if (typeof enrichment === 'object' && enrichment !== null) {
-              next[name] = { ...next[name], ...(enrichment as Partial<EnrichedParameterOut>) }
-              const e = enrichment as Partial<EnrichedParameterOut>
-              if (e.prefill !== undefined) {
-                setValue(name, e.prefill, { shouldDirty: false })
-              }
-            }
+          for (const [name, e] of Object.entries(enrichmentUpdates)) {
+            next[name] = { ...next[name], ...e }
           }
           return next
         })
-      } catch {
-        // Silently ignore on-change errors
+      } catch (err) {
+        console.warn('[datasource] on_change error for param:', paramName, err)
       } finally {
         setLoadingFields((prev) => {
           const next = new Set(prev)
@@ -561,7 +582,7 @@ export default function DynamicForm({
         })
       }
     },
-    [templateId, getValues, setValue],
+    [templateId, effectiveParams, getValues, setValue],
   )
 
   useEffect(() => {
@@ -595,22 +616,26 @@ export default function DynamicForm({
     onSuccess: (result) => setRenderResult(result),
   })
 
-  function onSubmit(values: Record<string, unknown>) {
-    // Filter out params hidden by visible_when conditions
+  function onSubmit(_rhfValues: Record<string, unknown>) {
+    // RHF's handleSubmit callback has a mixed literal+nested key problem for dotted names
+    // (e.g. 'proj.hostname' initialised as literal '' AND nested { proj: { hostname: 'val' } }).
+    // Read each param individually via getValues(name) which correctly resolves the nested path.
+    const paramValues: Record<string, unknown> = {}
+    for (const p of effectiveParams) {
+      paramValues[p.name] = getValues(p.name as never)
+    }
+
     const filteredValues: Record<string, unknown> = {}
-    for (const [name, value] of Object.entries(values)) {
-      const param = effectiveParams.find((p) => p.name === name)
-      if (!param || isVisible(param, values)) {
-        filteredValues[name] = value
+    for (const p of effectiveParams) {
+      if (isVisible(p, paramValues)) {
+        filteredValues[p.name] = paramValues[p.name]
       }
     }
     // Also include values for enabled feature parameters
     for (const f of (definition.features ?? [])) {
       if (!enabledFeatureIds.has(f.id)) continue
       for (const fp of f.parameters) {
-        if (values[fp.name] !== undefined) {
-          filteredValues[fp.name] = values[fp.name]
-        }
+        filteredValues[fp.name] = getValues(fp.name as never)
       }
     }
     renderMut.mutate(filteredValues)

@@ -29,6 +29,11 @@ class Project(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     git_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    remote_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    remote_branch: Mapped[str] = mapped_column(
+        String(100), default="main", server_default="main", nullable=False
+    )
+    remote_credential_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
     output_comment_style: Mapped[str] = mapped_column(
         String(10), default="#", server_default="#", nullable=False
     )

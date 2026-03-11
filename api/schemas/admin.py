@@ -508,3 +508,42 @@ class CustomMacroDeleteOut(BaseModel):
     """Response for DELETE /admin/macros/{id}."""
 
     id: int
+
+
+# ---------------------------------------------------------------------------
+# Remote Git schemas
+# ---------------------------------------------------------------------------
+
+class GitRemoteStatusOut(BaseModel):
+    """Remote git status for a project."""
+
+    has_remote: bool
+    remote_url: str | None
+    remote_branch: str
+    local_sha: str | None
+    remote_sha: str | None
+    ahead: int
+    behind: int
+    status: str = Field(
+        ...,
+        description=(
+            "One of: no_remote, not_cloned, in_sync, ahead, behind, diverged, error"
+        ),
+    )
+    message: str | None
+
+
+class GitRemoteActionOut(BaseModel):
+    """Response for pull/push/clone operations."""
+
+    success: bool
+    message: str
+    new_sha: str | None = None
+
+
+class GitRemoteTestOut(BaseModel):
+    """Response for the test-connection endpoint."""
+
+    success: bool
+    message: str
+    branch_sha: str | None = None

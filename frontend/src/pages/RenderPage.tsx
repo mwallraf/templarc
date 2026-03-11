@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import { resolveParams, listPresets, createPreset } from '../api/render'
-import { getTemplate } from '../api/templates'
+import { getTemplate, getTemplateVariables } from '../api/templates'
 import type { RenderPresetOut } from '../api/types'
 import DynamicForm from '../components/DynamicForm'
 import ApiCodePanel, { getApiBase } from '../components/ApiCodePanel'
+import { useAuth } from '../contexts/AuthContext'
 
 function Spinner() {
   return (
@@ -201,6 +202,7 @@ export default function RenderPage() {
   const { templateId } = useParams<{ templateId: string }>()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const { isAdmin } = useAuth()
 
   const id = Number(templateId)
 
@@ -231,6 +233,15 @@ export default function RenderPage() {
     queryKey: ['resolve-params', id],
     queryFn: () => resolveParams(id),
     enabled: !!id,
+  })
+
+  // Fetch variable refs so we can filter the render form to only show
+  // parameters that are actually used in the template (full inheritance chain).
+  const { data: variableRefs } = useQuery({
+    queryKey: ['template-variables', id],
+    queryFn: () => getTemplateVariables(id),
+    enabled: !!id,
+    staleTime: 60_000,
   })
 
   const { data: presets = [] } = useQuery({
@@ -264,6 +275,21 @@ export default function RenderPage() {
   const isLoading = templateLoading || defLoading
   const error = templateError || defError
 
+  // Filter the resolved parameter set to only show parameters that are
+  // actually referenced in the template body (or its parent chain).
+  // Template-scope params are always shown (they're explicitly registered
+  // for this template). Project/global params are only shown if used.
+  const filteredDefinition = (() => {
+    if (!definition) return definition
+    if (!variableRefs || variableRefs.length === 0) return definition
+    const usedNames = new Set(variableRefs.map((v) => v.full_path))
+    const filtered = definition.parameters.filter((p) => {
+      if (p.scope === 'template') return true  // always show template-scope params
+      return usedNames.has(p.name)
+    })
+    return { ...definition, parameters: filtered }
+  })()
+
   if (isLoading) return <Spinner />
 
   if (error || !template || !definition) {
@@ -291,14 +317,29 @@ export default function RenderPage() {
             className="ml-auto font-mono text-xs px-2 py-0.5 rounded border"
             style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)', color: 'var(--c-muted-3)' }}
           >
-            {definition.parameters.length} param{definition.parameters.length !== 1 ? 's' : ''}
+            {filteredDefinition!.parameters.length} param{filteredDefinition!.parameters.length !== 1 ? 's' : ''}
           </span>
         </div>
 
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold text-white font-display">{template.display_name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-white font-display">{template.display_name}</h1>
+            {isAdmin && (
+              <Link
+                to={`/admin/templates/${id}/edit`}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition-colors mt-1"
+                style={{ color: 'var(--c-muted-3)', borderColor: 'var(--c-border)', backgroundColor: 'var(--c-card)' }}
+                title="Open in template editor"
+              >
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.5 2.5l2 2-8 8H3.5v-2l8-8z" />
+                </svg>
+                Edit
+              </Link>
+            )}
+          </div>
           <div className="shrink-0 mt-1">
-            <ApiCodePanel examples={buildRenderExamples(id, definition.parameters)} />
+            <ApiCodePanel examples={buildRenderExamples(id, filteredDefinition!.parameters)} />
           </div>
         </div>
         {template.description && (
@@ -318,7 +359,7 @@ export default function RenderPage() {
         />
       </div>
 
-      {definition.parameters.length === 0 ? (
+      {filteredDefinition!.parameters.length === 0 ? (
         <div
           className="rounded-xl border p-5"
           style={{ backgroundColor: 'rgba(251,191,36,0.06)', borderColor: 'rgba(251,191,36,0.2)' }}
@@ -342,7 +383,7 @@ export default function RenderPage() {
         <DynamicForm
           key={formKey}
           templateId={id}
-          definition={definition}
+          definition={filteredDefinition!}
           prefillValues={activePrefill}
         />
       )}

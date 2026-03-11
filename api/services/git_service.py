@@ -269,3 +269,274 @@ class GitService:
     def parse_frontmatter(content: str) -> tuple[dict, str]:
         """Thin wrapper — delegates to the module-level pure function."""
         return parse_frontmatter(content)
+
+    # ------------------------------------------------------------------
+    # Remote Git operations (per-project sub-repos)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _inject_credential(remote_url: str, credential: str | None) -> str:
+        """
+        Embed a personal access token into an HTTPS remote URL.
+
+        For ``https://`` URLs without embedded credentials, transforms:
+            https://github.com/org/repo.git
+        into:
+            https://oauth2:<token>@github.com/org/repo.git
+
+        SSH URLs are returned unchanged (SSH key auth must be configured
+        at the OS level via ssh-agent or ~/.ssh/config).
+        """
+        if not credential:
+            return remote_url
+        if remote_url.startswith("https://"):
+            host_and_path = remote_url[len("https://"):]
+            if "@" not in host_and_path.split("/")[0]:
+                return f"https://oauth2:{credential}@{host_and_path}"
+        return remote_url
+
+    def _project_repo(self, project_git_path: str) -> git.Repo:
+        """
+        Return a ``git.Repo`` for the project's subdirectory.
+
+        The subdirectory is expected to be a self-contained Git repository
+        (i.e. cloned from a remote). If it is not yet a repo, one is
+        initialised (useful before the first clone).
+        """
+        abs_dir = self._abs(project_git_path)
+        abs_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            return git.Repo(str(abs_dir))
+        except git.InvalidGitRepositoryError:
+            return git.Repo.init(str(abs_dir))
+
+    def clone_from_remote(
+        self,
+        project_git_path: str,
+        remote_url: str,
+        branch: str = "main",
+        credential: str | None = None,
+    ) -> None:
+        """
+        Clone *remote_url* into the project's local directory.
+
+        The directory is created if it does not exist. If it already
+        contains a Git repository, this call is a no-op (idempotent).
+
+        Raises:
+            GitServiceError: if the clone fails.
+        """
+        abs_dir = self._abs(project_git_path)
+        if abs_dir.exists() and (abs_dir / ".git").exists():
+            return  # already cloned
+        abs_dir.mkdir(parents=True, exist_ok=True)
+        url = self._inject_credential(remote_url, credential)
+        try:
+            git.Repo.clone_from(url, str(abs_dir), branch=branch)
+        except git.GitCommandError as exc:
+            raise GitServiceError(f"Clone failed: {exc}") from exc
+
+    def get_remote_status(
+        self,
+        project_git_path: str,
+        remote_url: str,
+        branch: str = "main",
+        credential: str | None = None,
+    ) -> dict:
+        """
+        Fetch the remote and compare local HEAD with ``origin/<branch>``.
+
+        Returns a dict with keys:
+          local_sha, remote_sha, ahead, behind,
+          status (in_sync | ahead | behind | diverged | not_cloned | error),
+          message
+        """
+        abs_dir = self._abs(project_git_path)
+        if not abs_dir.exists() or not (abs_dir / ".git").exists():
+            return {
+                "local_sha": None,
+                "remote_sha": None,
+                "ahead": 0,
+                "behind": 0,
+                "status": "not_cloned",
+                "message": "Project directory has not been cloned yet.",
+            }
+        try:
+            repo = git.Repo(str(abs_dir))
+            url = self._inject_credential(remote_url, credential)
+
+            # Ensure origin is configured
+            if "origin" not in [r.name for r in repo.remotes]:
+                repo.create_remote("origin", url)
+            else:
+                repo.remotes["origin"].set_url(url)
+
+            repo.remotes["origin"].fetch()
+
+            local_sha = repo.head.commit.hexsha if repo.head.is_valid() else None
+            remote_ref = f"origin/{branch}"
+            try:
+                remote_sha = repo.commit(remote_ref).hexsha
+            except (git.BadName, git.BadObject):
+                return {
+                    "local_sha": local_sha,
+                    "remote_sha": None,
+                    "ahead": 0,
+                    "behind": 0,
+                    "status": "error",
+                    "message": f"Remote branch '{branch}' not found.",
+                }
+
+            ahead = sum(1 for _ in repo.iter_commits(f"{remote_ref}..HEAD"))
+            behind = sum(1 for _ in repo.iter_commits(f"HEAD..{remote_ref}"))
+
+            if ahead == 0 and behind == 0:
+                status = "in_sync"
+            elif ahead > 0 and behind == 0:
+                status = "ahead"
+            elif behind > 0 and ahead == 0:
+                status = "behind"
+            else:
+                status = "diverged"
+
+            return {
+                "local_sha": local_sha,
+                "remote_sha": remote_sha,
+                "ahead": ahead,
+                "behind": behind,
+                "status": status,
+                "message": None,
+            }
+        except Exception as exc:
+            return {
+                "local_sha": None,
+                "remote_sha": None,
+                "ahead": 0,
+                "behind": 0,
+                "status": "error",
+                "message": str(exc),
+            }
+
+    def pull_remote(
+        self,
+        project_git_path: str,
+        remote_url: str,
+        branch: str = "main",
+        credential: str | None = None,
+    ) -> dict:
+        """
+        Pull from the remote using fast-forward-only merge.
+
+        Raises:
+            GitServiceError: if the pull fails or the merge is not fast-forward.
+        """
+        abs_dir = self._abs(project_git_path)
+        if not abs_dir.exists() or not (abs_dir / ".git").exists():
+            raise GitServiceError(
+                "Project has not been cloned yet. Run clone first."
+            )
+        try:
+            repo = git.Repo(str(abs_dir))
+            url = self._inject_credential(remote_url, credential)
+
+            if "origin" not in [r.name for r in repo.remotes]:
+                repo.create_remote("origin", url)
+            else:
+                repo.remotes["origin"].set_url(url)
+
+            repo.remotes["origin"].fetch()
+            repo.git.merge("--ff-only", f"origin/{branch}")
+            return {"new_sha": repo.head.commit.hexsha}
+        except git.GitCommandError as exc:
+            raise GitServiceError(f"Pull failed: {exc}") from exc
+
+    def push_remote(
+        self,
+        project_git_path: str,
+        remote_url: str,
+        branch: str = "main",
+        credential: str | None = None,
+    ) -> dict:
+        """
+        Push local commits to the remote.
+
+        Checks that local is not behind remote before pushing (refuses
+        force-push). Raises GitServiceError if local is behind or
+        the push otherwise fails.
+        """
+        abs_dir = self._abs(project_git_path)
+        if not abs_dir.exists() or not (abs_dir / ".git").exists():
+            raise GitServiceError(
+                "Project has not been cloned yet. Run clone first."
+            )
+        try:
+            repo = git.Repo(str(abs_dir))
+            url = self._inject_credential(remote_url, credential)
+
+            if "origin" not in [r.name for r in repo.remotes]:
+                repo.create_remote("origin", url)
+            else:
+                repo.remotes["origin"].set_url(url)
+
+            repo.remotes["origin"].fetch()
+            remote_ref = f"origin/{branch}"
+            try:
+                behind = sum(1 for _ in repo.iter_commits(f"HEAD..{remote_ref}"))
+                if behind > 0:
+                    raise GitServiceError(
+                        f"Cannot push: local branch is {behind} commit(s) behind remote. "
+                        "Pull first to avoid overwriting remote changes."
+                    )
+            except git.BadName:
+                pass  # Remote branch doesn't exist yet — first push is fine
+
+            push_infos = repo.remotes["origin"].push(refspec=f"HEAD:refs/heads/{branch}")
+            for info in push_infos:
+                if info.flags & git.remote.PushInfo.ERROR:
+                    raise GitServiceError(f"Push failed: {info.summary}")
+
+            return {"new_sha": repo.head.commit.hexsha}
+        except GitServiceError:
+            raise
+        except git.GitCommandError as exc:
+            raise GitServiceError(f"Push failed: {exc}") from exc
+
+    def test_remote_connection(
+        self,
+        remote_url: str,
+        branch: str = "main",
+        credential: str | None = None,
+    ) -> dict:
+        """
+        Test connectivity to a remote without cloning anything.
+
+        Uses ``git ls-remote --heads <url> refs/heads/<branch>`` — fast,
+        credential-aware, and requires no local repo state.
+
+        Returns a dict with keys: success (bool), message (str), branch_sha (str | None).
+        """
+        url = self._inject_credential(remote_url, credential)
+        try:
+            g = git.cmd.Git()
+            output = g.ls_remote("--heads", url, f"refs/heads/{branch}")
+            if output.strip():
+                sha = output.strip().split()[0]
+                return {
+                    "success": True,
+                    "message": f"Connection successful. Branch '{branch}' found.",
+                    "branch_sha": sha,
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"Remote is reachable but branch '{branch}' does not exist.",
+                    "branch_sha": None,
+                }
+        except git.GitCommandError as exc:
+            # Sanitize: strip credential from error message before returning
+            safe_msg = str(exc).replace(url, remote_url)
+            return {
+                "success": False,
+                "message": f"Connection failed: {safe_msg}",
+                "branch_sha": None,
+            }

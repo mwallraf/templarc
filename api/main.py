@@ -35,6 +35,7 @@ from api.database import AsyncSessionLocal, engine
 from api.routers import ai, admin, auth, catalog, features, parameters, quickpads, render, templates
 from api.routers import settings as settings_router
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 settings = get_settings()
 

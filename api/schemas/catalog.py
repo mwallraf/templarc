@@ -46,6 +46,18 @@ class ProjectCreate(BaseModel):
         "#", max_length=10,
         description="Comment prefix used in rendered output headers: #, !, //, or none"
     )
+    remote_url: str | None = Field(
+        None, max_length=500,
+        description="Remote Git clone URL (HTTPS or SSH). When set, enables pull/push via the git-remote admin endpoints."
+    )
+    remote_branch: str = Field(
+        "main", max_length=100,
+        description="Remote branch to track (default: main)."
+    )
+    remote_credential_ref: str | None = Field(
+        None, max_length=500,
+        description="Secret reference for remote auth (e.g. 'secret:my_git_token' or 'env:GIT_TOKEN')."
+    )
 
 
 class ProjectUpdate(BaseModel):
@@ -53,6 +65,9 @@ class ProjectUpdate(BaseModel):
     description: str | None = None
     git_path: str | None = Field(None, max_length=500)
     output_comment_style: str | None = Field(None, max_length=10)
+    remote_url: str | None = Field(None, max_length=500)
+    remote_branch: str | None = Field(None, max_length=100)
+    remote_credential_ref: str | None = Field(None, max_length=500)
 
 
 class ProjectOut(BaseModel):
@@ -77,6 +92,9 @@ class ProjectOut(BaseModel):
     description: str | None
     git_path: str | None
     output_comment_style: str
+    remote_url: str | None
+    remote_branch: str
+    remote_credential_ref: str | None
     created_at: datetime
     updated_at: datetime
 

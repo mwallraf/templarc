@@ -52,6 +52,9 @@ from api.schemas.admin import (
     DuplicatesReport,
     FilterTestRequest,
     FilterTestResult,
+    GitRemoteActionOut,
+    GitRemoteStatusOut,
+    GitRemoteTestOut,
     GitSyncRequest,
     PromoteReport,
     PromoteRequest,
@@ -59,9 +62,10 @@ from api.schemas.admin import (
     SyncReport,
     SyncStatusReport,
 )
+from api.core.secrets import SecretNotFoundError, SecretResolver
 from api.services import custom_filter_service, git_sync_service
 from api.services.audit_log_service import log_write
-from api.services.git_service import GitService, parse_frontmatter
+from api.services.git_service import GitService, GitServiceError, parse_frontmatter
 
 router = APIRouter()
 
@@ -724,3 +728,261 @@ async def promote_parameter(
         git_files_rewritten=git_files_rewritten,
         template_rewrites=template_rewrites,
     )
+
+
+# ---------------------------------------------------------------------------
+# Remote Git operations
+# ---------------------------------------------------------------------------
+
+async def _get_project_or_404(project_id: int, db: AsyncSession) -> "Project":
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+async def _resolve_remote_credential(
+    project: "Project",
+    db: AsyncSession,
+    token: TokenData,
+) -> str | None:
+    """Resolve the project's remote_credential_ref to a plaintext value, or None."""
+    if not project.remote_credential_ref:
+        return None
+    resolver = SecretResolver(db=db, org_id=token.org_id)
+    try:
+        return await resolver.resolve(project.remote_credential_ref)
+    except SecretNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Cannot resolve remote credential: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/git-remote/{project_id}/status",
+    response_model=GitRemoteStatusOut,
+    summary="Remote Git status — ahead/behind check",
+    description=(
+        "Fetch the configured remote and compare local HEAD with "
+        "``origin/<branch>``.\n\n"
+        "Returns one of the following statuses:\n"
+        "- ``no_remote`` — project has no ``remote_url`` configured\n"
+        "- ``not_cloned`` — project directory has not been cloned yet\n"
+        "- ``in_sync`` — local and remote are at the same commit\n"
+        "- ``ahead`` — local has commits not on remote (push available)\n"
+        "- ``behind`` — remote has commits not locally (pull available)\n"
+        "- ``diverged`` — both sides have unique commits\n"
+        "- ``error`` — fetch or comparison failed\n\n"
+        "Does **not** modify any data."
+    ),
+)
+async def get_remote_status(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    token: TokenData = Depends(require_admin),
+) -> GitRemoteStatusOut:
+    project = await _get_project_or_404(project_id, db)
+
+    if not project.remote_url:
+        return GitRemoteStatusOut(
+            has_remote=False,
+            remote_url=None,
+            remote_branch=project.remote_branch,
+            local_sha=None,
+            remote_sha=None,
+            ahead=0,
+            behind=0,
+            status="no_remote",
+            message="No remote_url configured for this project.",
+        )
+
+    credential = await _resolve_remote_credential(project, db, token)
+    git_path = project.git_path or project.name
+    result = git_svc.get_remote_status(
+        project_git_path=git_path,
+        remote_url=project.remote_url,
+        branch=project.remote_branch,
+        credential=credential,
+    )
+
+    return GitRemoteStatusOut(
+        has_remote=True,
+        remote_url=project.remote_url,
+        remote_branch=project.remote_branch,
+        **result,
+    )
+
+
+@router.post(
+    "/git-remote/{project_id}/clone",
+    response_model=GitRemoteActionOut,
+    summary="Remote Git — initial clone",
+    description=(
+        "Clone the project's ``remote_url`` into the local ``git_path`` "
+        "directory.\n\n"
+        "**Idempotent** — safe to call multiple times; if the directory is "
+        "already a Git repository the call is a no-op.\n\n"
+        "Requires ``remote_url`` to be set on the project."
+    ),
+)
+async def clone_remote(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    token: TokenData = Depends(require_admin),
+) -> GitRemoteActionOut:
+    project = await _get_project_or_404(project_id, db)
+
+    if not project.remote_url:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Project has no remote_url configured.",
+        )
+
+    credential = await _resolve_remote_credential(project, db, token)
+    git_path = project.git_path or project.name
+    try:
+        git_svc.clone_from_remote(
+            project_git_path=git_path,
+            remote_url=project.remote_url,
+            branch=project.remote_branch,
+            credential=credential,
+        )
+    except GitServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    await log_write(db, token.sub, "create", "project", project_id, {"action": "git_clone", "remote_url": project.remote_url})
+    await db.commit()
+
+    return GitRemoteActionOut(success=True, message="Clone completed successfully.")
+
+
+@router.post(
+    "/git-remote/{project_id}/pull",
+    response_model=GitRemoteActionOut,
+    summary="Remote Git — pull (fast-forward only)",
+    description=(
+        "Fetch from the remote and merge using ``--ff-only``.\n\n"
+        "Returns an error if the local branch has diverged from the remote "
+        "(force-push is never performed).\n\n"
+        "Requires the project to be cloned first (``POST /admin/git-remote/{id}/clone``)."
+    ),
+)
+async def pull_remote(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    token: TokenData = Depends(require_admin),
+) -> GitRemoteActionOut:
+    project = await _get_project_or_404(project_id, db)
+
+    if not project.remote_url:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Project has no remote_url configured.",
+        )
+
+    credential = await _resolve_remote_credential(project, db, token)
+    git_path = project.git_path or project.name
+    try:
+        result = git_svc.pull_remote(
+            project_git_path=git_path,
+            remote_url=project.remote_url,
+            branch=project.remote_branch,
+            credential=credential,
+        )
+    except GitServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    await log_write(db, token.sub, "update", "project", project_id, {"action": "git_pull", "new_sha": result["new_sha"]})
+    await db.commit()
+
+    return GitRemoteActionOut(
+        success=True,
+        message="Pull successful.",
+        new_sha=result["new_sha"],
+    )
+
+
+@router.post(
+    "/git-remote/{project_id}/push",
+    response_model=GitRemoteActionOut,
+    summary="Remote Git — push",
+    description=(
+        "Push local commits to the remote.\n\n"
+        "Checks that local is not behind remote before pushing. Returns "
+        "an error if the local branch is behind (pull first to resolve).\n\n"
+        "Force-push is **never** performed."
+    ),
+)
+async def push_remote(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    token: TokenData = Depends(require_admin),
+) -> GitRemoteActionOut:
+    project = await _get_project_or_404(project_id, db)
+
+    if not project.remote_url:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Project has no remote_url configured.",
+        )
+
+    credential = await _resolve_remote_credential(project, db, token)
+    git_path = project.git_path or project.name
+    try:
+        result = git_svc.push_remote(
+            project_git_path=git_path,
+            remote_url=project.remote_url,
+            branch=project.remote_branch,
+            credential=credential,
+        )
+    except GitServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    await log_write(db, token.sub, "update", "project", project_id, {"action": "git_push", "new_sha": result["new_sha"]})
+    await db.commit()
+
+    return GitRemoteActionOut(
+        success=True,
+        message="Push successful.",
+        new_sha=result["new_sha"],
+    )
+
+
+@router.post(
+    "/git-remote/{project_id}/test",
+    response_model=GitRemoteTestOut,
+    summary="Remote Git — test connection",
+    description=(
+        "Verify that the configured remote URL is reachable and the target branch "
+        "exists, using ``git ls-remote`` (no local clone required).\n\n"
+        "Safe to call at any time — does **not** modify any local or remote state."
+    ),
+)
+async def test_remote_connection(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    token: TokenData = Depends(require_admin),
+) -> GitRemoteTestOut:
+    project = await _get_project_or_404(project_id, db)
+
+    if not project.remote_url:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Project has no remote_url configured.",
+        )
+
+    credential = await _resolve_remote_credential(project, db, token)
+    result = git_svc.test_remote_connection(
+        remote_url=project.remote_url,
+        branch=project.remote_branch,
+        credential=credential,
+    )
+
+    return GitRemoteTestOut(**result)

@@ -357,7 +357,7 @@ export function ParameterPanel({
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                 placeholder="Search parameters…"
-                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
               />
               {showResults && (
                 <div className="space-y-1.5">
@@ -549,7 +549,7 @@ export function ParameterPanel({
                 value={metaDisplayName}
                 onChange={(e) => onChangeDisplayName(e.target.value)}
                 placeholder="Human-readable template name"
-                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <p className="mt-1 text-xs text-gray-400">Shown in the template catalog and admin lists.</p>
             </div>
@@ -561,7 +561,7 @@ export function ParameterPanel({
                 onChange={(e) => onChangeDescription(e.target.value)}
                 placeholder="Optional description of what this template generates"
                 rows={4}
-                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               />
             </div>
 
@@ -573,7 +573,7 @@ export function ParameterPanel({
                 onChange={(e) => onChangeSortOrder(Number(e.target.value))}
                 min={0}
                 step={10}
-                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <p className="mt-1 text-xs text-gray-400">
                 Controls the order within its parent group (lower = first).
@@ -594,7 +594,7 @@ export function ParameterPanel({
                 onChange={(e) =>
                   onSetParent(e.target.value ? Number(e.target.value) : undefined)
                 }
-                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">No parent (root template)</option>
                 {siblingsAndAncestors.map((t) => (

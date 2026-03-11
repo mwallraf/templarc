@@ -369,8 +369,12 @@ async def get_template_variables(
     git_svc: GitService,
 ) -> list[VariableRefOut]:
     """
-    Parse the template's .j2 file and return all variable references,
-    annotated with whether each is registered in the parameter registry.
+    Parse the template's .j2 file (and all parent templates in the inheritance
+    chain) and return all variable references, annotated with whether each is
+    registered in the parameter registry.
+
+    Walking the full chain ensures parent-only variables are included, so the
+    render form knows which proj.* / glob.* parameters are actually needed.
 
     Registration is checked against template-scope and project-scope parameters.
     glob.* parameters (global scope) require a separate org lookup and are
@@ -378,24 +382,49 @@ async def get_template_variables(
     """
     tmpl = await _get_template_or_404(db, template_id)
 
-    if not tmpl.git_path:
+    # Walk the full inheritance chain (current template + all parents)
+    all_refs: dict[str, VariableRefOut] = {}  # keyed by full_path for dedup
+    current_id: int | None = template_id
+    visited: set[int] = set()
+
+    while current_id is not None:
+        if current_id in visited:
+            break
+        visited.add(current_id)
+
+        chain_tmpl = await db.get(Template, current_id)
+        if chain_tmpl is None:
+            break
+
+        if chain_tmpl.git_path:
+            try:
+                content = git_svc.read_template(chain_tmpl.git_path)
+                _, body = git_svc.parse_frontmatter(content)
+                for ref in extract_variables(body):
+                    if ref.full_path not in all_refs:
+                        all_refs[ref.full_path] = VariableRefOut(
+                            name=ref.name,
+                            type=ref.type,
+                            full_path=ref.full_path,
+                            is_registered=False,  # filled in below
+                        )
+            except TemplateNotFoundError:
+                if current_id == template_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Git file not found for template {template_id}: {chain_tmpl.git_path!r}",
+                    )
+                # Parent file missing — skip silently
+
+        current_id = chain_tmpl.parent_template_id
+
+    if not all_refs:
         return []
 
-    try:
-        content = git_svc.read_template(tmpl.git_path)
-    except TemplateNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Git file not found for template {template_id}: {tmpl.git_path!r}",
-        )
-
-    _, body = git_svc.parse_frontmatter(content)
-    refs = extract_variables(body)
-
-    # Load registered parameter names (template + project scope)
+    # Load registered parameter names (template + project scope for any template in chain)
     stmt = select(Parameter.name).where(
         or_(
-            Parameter.template_id == template_id,
+            Parameter.template_id.in_(visited),
             Parameter.project_id == tmpl.project_id,
         ),
         Parameter.is_active == True,
@@ -410,7 +439,7 @@ async def get_template_variables(
             full_path=ref.full_path,
             is_registered=ref.full_path in registered,
         )
-        for ref in refs
+        for ref in all_refs.values()
     ]
 
 

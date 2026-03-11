@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { resolveParams } from '../../api/render'
+import { getTemplateVariables } from '../../api/templates'
 import DynamicForm from '../DynamicForm'
 
 interface PreviewModalProps {
@@ -22,6 +23,22 @@ export function PreviewModal({ templateId, onClose }: PreviewModalProps) {
     queryKey: ['resolve-params', templateId],
     queryFn: () => resolveParams(templateId),
   })
+
+  const { data: variableRefs } = useQuery({
+    queryKey: ['template-variables', templateId],
+    queryFn: () => getTemplateVariables(templateId),
+    staleTime: 60_000,
+  })
+
+  const filteredDefinition = (() => {
+    if (!definition) return definition
+    if (!variableRefs || variableRefs.length === 0) return definition
+    const usedNames = new Set(variableRefs.map((v) => v.full_path))
+    const filtered = definition.parameters.filter((p) =>
+      p.scope === 'template' || usedNames.has(p.name)
+    )
+    return { ...definition, parameters: filtered }
+  })()
 
   return (
     /* Backdrop */
@@ -64,10 +81,10 @@ export function PreviewModal({ templateId, onClose }: PreviewModalProps) {
             </div>
           )}
 
-          {definition && (
+          {filteredDefinition && (
             <DynamicForm
               templateId={templateId}
-              definition={definition}
+              definition={filteredDefinition}
               persist={false}
               user="preview"
             />

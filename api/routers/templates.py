@@ -334,6 +334,34 @@ async def get_template_content(
 
 
 # ---------------------------------------------------------------------------
+# Template data sources (frontmatter)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{template_id}/datasources",
+    summary="Get template data sources",
+    description=(
+        "Parse the template's `.j2` frontmatter and return the raw `data_sources` "
+        "list. Returns an empty list if the file has no data sources defined."
+    ),
+)
+async def get_template_datasources(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    git_svc: GitService = Depends(get_git_service),
+    _token: TokenData = Depends(get_current_user),
+) -> list[dict]:
+    from api.services.git_service import TemplateNotFoundError
+    tmpl = await catalog_service.get_template(db, template_id)
+    try:
+        raw = git_svc.read_template(tmpl.git_path)
+        fm, _ = git_svc.parse_frontmatter(raw)
+        return fm.get("data_sources") or []
+    except TemplateNotFoundError:
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Template variables
 # ---------------------------------------------------------------------------
 

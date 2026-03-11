@@ -14,6 +14,9 @@ import type {
   PromoteRequest,
   PromoteReport,
   AISettingsOut,
+  GitRemoteStatusOut,
+  GitRemoteActionOut,
+  GitRemoteTestOut,
 } from './types'
 
 // ── API Keys ────────────────────────────────────────────────────────────────
@@ -73,3 +76,20 @@ export const findDuplicateParameters = (project_id?: number) =>
 
 export const promoteParameter = (data: PromoteRequest) =>
   apiClient.post<PromoteReport>('/admin/parameters/promote', data).then((r) => r.data)
+
+// ── Remote Git ───────────────────────────────────────────────────────────────
+
+export const getRemoteStatus = (projectId: number) =>
+  apiClient.get<GitRemoteStatusOut>(`/admin/git-remote/${projectId}/status`).then((r) => r.data)
+
+export const cloneRemote = (projectId: number) =>
+  apiClient.post<GitRemoteActionOut>(`/admin/git-remote/${projectId}/clone`).then((r) => r.data)
+
+export const pullRemote = (projectId: number) =>
+  apiClient.post<GitRemoteActionOut>(`/admin/git-remote/${projectId}/pull`).then((r) => r.data)
+
+export const pushRemote = (projectId: number) =>
+  apiClient.post<GitRemoteActionOut>(`/admin/git-remote/${projectId}/push`).then((r) => r.data)
+
+export const testRemoteConnection = (projectId: number) =>
+  apiClient.post<GitRemoteTestOut>(`/admin/git-remote/${projectId}/test`).then((r) => r.data)

@@ -70,7 +70,8 @@ export function ParameterField({
 
   function renderWidget() {
     if (isReadonly) {
-      const displayValue = currentValues[param.name] ?? param.prefill ?? param.default_value
+      // Use || rather than ?? so that empty string '' also falls through to prefill
+      const displayValue = currentValues[param.name] || param.prefill || param.default_value
       return <ReadonlyWidget value={displayValue} />
     }
 

@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { listProjects, createProject, updateProject, deleteProject } from '../../api/catalog'
 import { listTemplates } from '../../api/templates'
 import { listParameters } from '../../api/parameters'
-import { listFilters, listObjects, listMacros } from '../../api/admin'
+import { listFilters, listObjects, listMacros, getRemoteStatus, cloneRemote, pullRemote, pushRemote, testRemoteConnection } from '../../api/admin'
 import type { ProjectOut, ProjectCreate, ProjectUpdate } from '../../api/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -21,6 +21,202 @@ const COMMENT_STYLES = [
 const inputCls = 'w-full rounded-lg px-3 py-2 text-sm text-slate-100 border transition-colors focus:outline-none'
 const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }
 
+// ── Remote git status badge ────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  no_remote:  { color: 'var(--c-muted-4)',          label: 'no remote' },
+  not_cloned: { color: '#f59e0b',                   label: 'not cloned' },
+  in_sync:    { color: '#34d399',                   label: 'in sync' },
+  ahead:      { color: '#60a5fa',                   label: 'ahead' },
+  behind:     { color: '#f59e0b',                   label: 'behind' },
+  diverged:   { color: '#f87171',                   label: 'diverged' },
+  error:      { color: '#f87171',                   label: 'error' },
+} as const
+
+function RemoteStatusBadge({ status, ahead, behind }: { status: string; ahead: number; behind: number }) {
+  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.error
+  const detail =
+    status === 'ahead' ? ` +${ahead}` :
+    status === 'behind' ? ` -${behind}` :
+    status === 'diverged' ? ` +${ahead}/-${behind}` : ''
+  return (
+    <span
+      className="text-xs px-1.5 py-0.5 rounded border font-mono"
+      style={{ color: cfg.color, borderColor: `${cfg.color}33`, backgroundColor: `${cfg.color}11` }}
+    >
+      {cfg.label}{detail}
+    </span>
+  )
+}
+
+// ── Remote git panel ──────────────────────────────────────────────────────────
+
+function RemoteGitPanel({ project }: { project: ProjectOut }) {
+  const qc = useQueryClient()
+  const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const statusQ = useQuery({
+    queryKey: ['git-remote-status', project.id],
+    queryFn: () => getRemoteStatus(project.id),
+    enabled: !!project.remote_url,
+    staleTime: 30_000,
+  })
+
+  const cloneMut = useMutation({
+    mutationFn: () => cloneRemote(project.id),
+    onSuccess: (data) => {
+      setActionMsg({ ok: true, text: data.message })
+      qc.invalidateQueries({ queryKey: ['git-remote-status', project.id] })
+    },
+    onError: (err: Error) => setActionMsg({ ok: false, text: err.message }),
+  })
+
+  const pullMut = useMutation({
+    mutationFn: () => pullRemote(project.id),
+    onSuccess: (data) => {
+      setActionMsg({ ok: true, text: `${data.message} (${data.new_sha?.slice(0, 7)})` })
+      qc.invalidateQueries({ queryKey: ['git-remote-status', project.id] })
+    },
+    onError: (err: Error) => setActionMsg({ ok: false, text: err.message }),
+  })
+
+  const pushMut = useMutation({
+    mutationFn: () => pushRemote(project.id),
+    onSuccess: (data) => {
+      setActionMsg({ ok: true, text: `${data.message} (${data.new_sha?.slice(0, 7)})` })
+      qc.invalidateQueries({ queryKey: ['git-remote-status', project.id] })
+    },
+    onError: (err: Error) => setActionMsg({ ok: false, text: err.message }),
+  })
+
+  const testMut = useMutation({
+    mutationFn: () => testRemoteConnection(project.id),
+    onSuccess: (data) => {
+      const detail = data.branch_sha ? ` (${data.branch_sha.slice(0, 7)})` : ''
+      setActionMsg({ ok: data.success, text: `${data.message}${detail}` })
+    },
+    onError: (err: Error) => setActionMsg({ ok: false, text: err.message }),
+  })
+
+  if (!project.remote_url) return null
+
+  const st = statusQ.data
+  const isPending = cloneMut.isPending || pullMut.isPending || pushMut.isPending || testMut.isPending
+
+  return (
+    <div
+      className="mt-3 rounded-lg border p-3"
+      style={{ backgroundColor: 'rgba(99,102,241,0.04)', borderColor: 'rgba(99,102,241,0.2)' }}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Globe icon */}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 shrink-0" style={{ color: '#818cf8' }}>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+        </svg>
+        <span className="text-xs font-mono truncate max-w-xs" style={{ color: 'var(--c-muted-3)' }}>
+          {project.remote_url}
+        </span>
+        <span className="text-xs font-mono" style={{ color: 'var(--c-muted-4)' }}>
+          @ {project.remote_branch}
+        </span>
+
+        {/* Status */}
+        {statusQ.isLoading && (
+          <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>checking…</span>
+        )}
+        {st && (
+          <RemoteStatusBadge status={st.status} ahead={st.ahead} behind={st.behind} />
+        )}
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {st?.status === 'not_cloned' && (
+            <button
+              onClick={() => { setActionMsg(null); cloneMut.mutate() }}
+              disabled={isPending}
+              className="px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-50"
+              style={{ borderColor: 'rgba(99,102,241,0.4)', color: '#818cf8', backgroundColor: 'rgba(99,102,241,0.08)' }}
+            >
+              {cloneMut.isPending ? 'Cloning…' : 'Clone'}
+            </button>
+          )}
+          {(st?.status === 'behind' || st?.status === 'in_sync') && (
+            <button
+              onClick={() => { setActionMsg(null); pullMut.mutate() }}
+              disabled={isPending}
+              className="px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-50"
+              style={{ borderColor: 'rgba(96,165,250,0.4)', color: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.08)' }}
+            >
+              {pullMut.isPending ? 'Pulling…' : 'Pull'}
+            </button>
+          )}
+          {(st?.status === 'ahead' || st?.status === 'in_sync') && (
+            <button
+              onClick={() => { setActionMsg(null); pushMut.mutate() }}
+              disabled={isPending}
+              className="px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-50"
+              style={{ borderColor: 'rgba(52,211,153,0.4)', color: '#34d399', backgroundColor: 'rgba(52,211,153,0.08)' }}
+            >
+              {pushMut.isPending ? 'Pushing…' : 'Push'}
+            </button>
+          )}
+          {/* Test connection — always visible */}
+          <button
+            onClick={() => { setActionMsg(null); testMut.mutate() }}
+            disabled={isPending}
+            className="px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-50"
+            style={{ borderColor: 'rgba(250,204,21,0.4)', color: '#fbbf24', backgroundColor: 'rgba(250,204,21,0.06)' }}
+            title="Test remote connection (git ls-remote)"
+          >
+            {testMut.isPending ? 'Testing…' : 'Test'}
+          </button>
+          <button
+            onClick={() => { setActionMsg(null); statusQ.refetch() }}
+            disabled={statusQ.isFetching || isPending}
+            className="p-1 rounded border transition-colors disabled:opacity-40"
+            style={{ borderColor: 'var(--c-border-bright)', color: 'var(--c-muted-4)' }}
+            title="Refresh remote status"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3">
+              <path d="M1 4v6h6M23 20v-6h-6" />
+              <path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* SHA display */}
+      {st && st.local_sha && (
+        <div className="mt-1.5 flex items-center gap-3 text-xs font-mono" style={{ color: 'var(--c-muted-4)' }}>
+          <span title="Local HEAD">local: {st.local_sha.slice(0, 7)}</span>
+          {st.remote_sha && <span title="Remote HEAD">remote: {st.remote_sha.slice(0, 7)}</span>}
+        </div>
+      )}
+
+      {/* Action feedback */}
+      {actionMsg && (
+        <div
+          className="mt-2 text-xs px-2 py-1 rounded"
+          style={{
+            color: actionMsg.ok ? '#34d399' : '#f87171',
+            backgroundColor: actionMsg.ok ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+          }}
+        >
+          {actionMsg.text}
+        </div>
+      )}
+
+      {/* Error / diverged warning */}
+      {(st?.status === 'error' || st?.status === 'diverged') && st.message && (
+        <div className="mt-2 text-xs px-2 py-1 rounded" style={{ color: '#f87171', backgroundColor: 'rgba(248,113,113,0.08)' }}>
+          {st.message}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── "New Project" inline form ─────────────────────────────────────────────────
 
 interface CreateFormProps {
@@ -29,8 +225,9 @@ interface CreateFormProps {
 }
 
 function CreateForm({ onClose, onSuccess }: CreateFormProps) {
+  const [showRemote, setShowRemote] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<ProjectCreate>({
-    defaultValues: { organization_id: 1, output_comment_style: '#' },
+    defaultValues: { organization_id: 1, output_comment_style: '#', remote_branch: 'main' },
   })
 
   const mut = useMutation({
@@ -106,6 +303,60 @@ function CreateForm({ onClose, onSuccess }: CreateFormProps) {
           />
         </div>
 
+        {/* Remote Git toggle */}
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => setShowRemote((v) => !v)}
+            className="flex items-center gap-1.5 text-xs transition-colors"
+            style={{ color: showRemote ? '#818cf8' : 'var(--c-muted-4)' }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+            </svg>
+            {showRemote ? 'Hide remote Git settings' : 'Configure remote Git (optional)'}
+          </button>
+        </div>
+
+        {showRemote && (
+          <>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate-400 mb-1">Remote URL</label>
+              <input
+                {...register('remote_url')}
+                placeholder="https://github.com/org/repo.git"
+                className={inputCls}
+                style={inputStyle}
+              />
+              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>
+                HTTPS or SSH clone URL. Leave blank for local-only.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Remote Branch</label>
+              <input
+                {...register('remote_branch')}
+                placeholder="main"
+                className={inputCls}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Credential</label>
+              <input
+                {...register('remote_credential_ref')}
+                placeholder="secret:my_git_token or env:GIT_TOKEN"
+                className={inputCls}
+                style={inputStyle}
+              />
+              <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>
+                Secret reference for HTTPS auth. Leave blank for public repos or SSH.
+              </p>
+            </div>
+          </>
+        )}
+
         {mut.error && (
           <div className="sm:col-span-2 text-xs rounded-lg px-3 py-2 border" style={{ color: '#f87171', backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }}>
             {mut.error instanceof Error ? mut.error.message : 'Failed to create project'}
@@ -144,12 +395,16 @@ interface EditFormProps {
 }
 
 function EditForm({ project, onClose, onSuccess }: EditFormProps) {
+  const [showRemote, setShowRemote] = useState(!!project.remote_url)
   const { register, handleSubmit } = useForm<ProjectUpdate>({
     defaultValues: {
       display_name: project.display_name,
       description: project.description ?? '',
       git_path: project.git_path ?? '',
       output_comment_style: project.output_comment_style,
+      remote_url: project.remote_url ?? '',
+      remote_branch: project.remote_branch ?? 'main',
+      remote_credential_ref: project.remote_credential_ref ?? '',
     },
   })
 
@@ -190,6 +445,49 @@ function EditForm({ project, onClose, onSuccess }: EditFormProps) {
           <label className="block text-xs text-slate-400 mb-1">Description</label>
           <input {...register('description')} className={inputCls} style={inputStyle} />
         </div>
+
+        {/* Remote Git toggle */}
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => setShowRemote((v) => !v)}
+            className="flex items-center gap-1.5 text-xs transition-colors"
+            style={{ color: showRemote ? '#818cf8' : 'var(--c-muted-4)' }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+            </svg>
+            {showRemote ? 'Hide remote Git settings' : 'Configure remote Git'}
+          </button>
+        </div>
+
+        {showRemote && (
+          <>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate-400 mb-1">Remote URL</label>
+              <input
+                {...register('remote_url')}
+                placeholder="https://github.com/org/repo.git"
+                className={inputCls}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Remote Branch</label>
+              <input {...register('remote_branch')} placeholder="main" className={inputCls} style={inputStyle} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Credential</label>
+              <input
+                {...register('remote_credential_ref')}
+                placeholder="secret:my_git_token or env:GIT_TOKEN"
+                className={inputCls}
+                style={inputStyle}
+              />
+            </div>
+          </>
+        )}
 
         {mut.error && (
           <div className="sm:col-span-2 text-xs rounded-lg px-3 py-2 border" style={{ color: '#f87171', backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }}>
@@ -413,6 +711,9 @@ function ProjectRow({ project, templateCount, paramCount, filterCount, objectCou
           </button>
         </div>
       </div>
+
+      {/* Remote Git panel — shown when remote_url is configured */}
+      {!editing && !confirming && <RemoteGitPanel project={project} />}
 
       {/* Inline edit */}
       {editing && (

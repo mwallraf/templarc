@@ -54,6 +54,11 @@ export async function getTemplateContent(templateId: number): Promise<string> {
   return res.data
 }
 
+export async function getTemplateDatasources(templateId: number): Promise<Record<string, unknown>[]> {
+  const res = await apiClient.get<Record<string, unknown>[]>(`/templates/${templateId}/datasources`)
+  return res.data
+}
+
 export async function getInheritanceChain(templateId: number): Promise<InheritanceChainItem[]> {
   const res = await apiClient.get<InheritanceChainItem[]>(
     `/templates/${templateId}/inheritance-chain`,

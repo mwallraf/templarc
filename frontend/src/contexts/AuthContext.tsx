@@ -13,11 +13,13 @@ import { getToken, setToken } from '../api/client'
 
 interface AuthUser {
   username: string
+  isAdmin: boolean
 }
 
 interface AuthContextValue {
   user: AuthUser | null
   isAuthenticated: boolean
+  isAdmin: boolean
   isLoading: boolean
   login: (data: LoginRequest) => Promise<void>
   logout: () => void
@@ -43,7 +45,7 @@ function restoreUserFromToken(): AuthUser | null {
     setToken(null) // clear expired token
     return null
   }
-  return { username: (payload?.sub as string) ?? '' }
+  return { username: (payload?.sub as string) ?? '', isAdmin: Boolean(payload?.is_admin) }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -66,7 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(response.access_token)
       const payload = parseJwtPayload(response.access_token)
       const username = (payload?.sub as string) ?? data.username
-      setUser({ username })
+      const isAdmin = Boolean(payload?.is_admin)
+      setUser({ username, isAdmin })
     } finally {
       setIsLoading(false)
     }
@@ -78,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isLoading, login, logout }),
+    () => ({ user, isAuthenticated: !!user, isAdmin: user?.isAdmin ?? false, isLoading, login, logout }),
     [user, isLoading, login, logout],
   )
 

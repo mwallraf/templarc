@@ -24,6 +24,7 @@ the template is resolved.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -46,6 +47,7 @@ from api.services.datasource_resolver import (
 )
 from api.services.environment_factory import EnvironmentFactory
 from api.services.git_service import GitService, TemplateNotFoundError, parse_frontmatter
+from api.services.jinja_parser import extract_variables
 from api.services.parameter_resolver import (
     ResolvedParameter,
     re_evaluate_derived_params,
@@ -218,10 +220,13 @@ def _parse_data_sources(raw: list[dict]) -> list[DataSourceConfig]:
             )
             for m in entry.get("mapping", [])
         ]
+        # Normalise trigger: strip accidental Jinja2 braces, e.g. "on_change:{{param}}" → "on_change:param"
+        raw_trigger = entry.get("trigger", "on_load")
+        normalised_trigger = re.sub(r"\{\{\s*([\w.]+)\s*\}\}", r"\1", raw_trigger)
         result.append(DataSourceConfig(
             id=entry["id"],
             url=entry["url"],
-            trigger=entry.get("trigger", "on_load"),
+            trigger=normalised_trigger,
             auth=entry.get("auth"),
             on_error=entry.get("on_error", "warn"),
             cache_ttl=int(entry.get("cache_ttl", 60)),
@@ -271,9 +276,13 @@ def _build_full_context(
             value = ep.prefill
         ctx[ep.name] = value
 
-    # User-provided values override defaults — but only for template-local params
+    # User-provided values override defaults.
+    # glob.* is always read-only (injected via Jinja2 env globals, never from user input).
+    # proj.* values ARE accepted here so they appear correctly in the header and render history;
+    # they are still excluded from local_ctx below, so the Jinja2 env globals take precedence
+    # for the actual template rendering.
     for k, v in provided_params.items():
-        if not k.startswith("glob.") and not k.startswith("proj."):
+        if not k.startswith("glob."):
             ctx[k] = v
 
     return ctx
@@ -416,6 +425,11 @@ class TemplateRenderer:
                 raw = self._git.read_template(template.git_path)
                 fm, _ = parse_frontmatter(raw)
                 data_sources = _parse_data_sources(fm.get("data_sources") or [])
+                logger.info(
+                    "[on_change] template %d — %d datasource(s) in frontmatter: %s",
+                    template_id, len(data_sources),
+                    [(ds.id, ds.trigger) for ds in data_sources],
+                )
                 if data_sources:
                     secret_resolver = SecretResolver(self._db, project.organization_id)
                     ds_resolver = DataSourceResolver(secret_resolver=secret_resolver)
@@ -424,7 +438,7 @@ class TemplateRenderer:
                     )
                     result.update(ds_enrichments)
             except TemplateNotFoundError:
-                pass
+                logger.warning("[on_change] template %d — git file not found at %s", template_id, template.git_path)
 
         # 2. Re-evaluate derived parameters against the updated context
         derived_values = await re_evaluate_derived_params(
@@ -494,11 +508,13 @@ class TemplateRenderer:
         # 6. Get Jinja2 environment (with glob/proj globals + builtin filters)
         env = await self._env_factory.get_environment(project.id)
 
-        # 7. Render — pass template-local params as nested context;
-        #    glob.* and proj.* are available via env.globals
+        # 7. Render — pass all non-glob params as nested context.
+        # proj.* user-provided values override the project-level env globals, allowing
+        # per-render overrides (e.g. service_id entered in the form, hostname from datasource).
+        # glob.* remains strictly read-only via env.globals only.
         local_ctx = {
             k: v for k, v in full_context.items()
-            if not k.startswith("glob.") and not k.startswith("proj.")
+            if not k.startswith("glob.")
         }
         try:
             rendered_body = env.from_string(template_body).render(**_to_nested(local_ctx))
@@ -514,8 +530,14 @@ class TemplateRenderer:
             if feature_blocks:
                 rendered_body = rendered_body + "\n" + "\n".join(feature_blocks)
 
-        # 8. Metadata header
+        # 8. Metadata header — only include params actually used in the template body
         rendered_at = datetime.now(timezone.utc).isoformat()
+        try:
+            used_vars = {ref.full_path for ref in extract_variables(template_body)}
+            header_context = {k: v for k, v in full_context.items() if k in used_vars}
+        except Exception:
+            # If parsing fails for any reason, fall back to showing all params
+            header_context = full_context
         header = build_metadata_header(
             template_name=template.name,
             template_display_name=template.display_name,
@@ -526,7 +548,7 @@ class TemplateRenderer:
             user=user,
             rendered_at=rendered_at,
             notes=notes,
-            full_context=full_context,
+            full_context=header_context,
             comment_style=project.output_comment_style,
         )
         raw_output = header + rendered_body
