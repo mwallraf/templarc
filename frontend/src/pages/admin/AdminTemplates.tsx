@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import {
@@ -88,6 +88,7 @@ const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-bor
 
 export default function AdminTemplates() {
   const navigate = useNavigate()
+  const location = useLocation()
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -105,7 +106,7 @@ export default function AdminTemplates() {
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['templates'],
-    queryFn: () => listTemplates({ active_only: false }),
+    queryFn: () => listTemplates({ active_only: true }),
   })
 
   const { data: projects } = useQuery({
@@ -144,9 +145,23 @@ export default function AdminTemplates() {
     },
   })
 
-  const { register, handleSubmit, reset, watch, formState: { errors: formErrors } } = useForm<TemplateCreate>()
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors: formErrors } } = useForm<TemplateCreate>()
   const watchIsSnippet = watch('is_snippet', false)
   const watchName = watch('name', '')
+  const watchParentId = watch('parent_template_id')
+
+  // Auto-open the create form when navigated here from the catalog
+  const locationState = location.state as { openCreate?: boolean; projectId?: number } | null
+  useEffect(() => {
+    if (locationState?.openCreate) {
+      setShowForm(true)
+      if (locationState.projectId) {
+        setValue('project_id', locationState.projectId)
+      }
+      // Clear the state so a refresh doesn't re-open the form
+      window.history.replaceState({}, '')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleCancel() {
     setShowForm(false)
@@ -279,6 +294,20 @@ export default function AdminTemplates() {
           if (data.is_snippet && !data.git_path && data.name) {
             data.git_path = `snippets/${data.name}.j2`
           }
+          // Auto-inject {% extends %} starter when a parent template is selected.
+          // Strip the project directory prefix (everything up to and including the
+          // first '/') because the Jinja2 env loader is rooted at the project dir.
+          if (data.parent_template_id && !data.content) {
+            const parentId = Number(data.parent_template_id)
+            const parent = templateMap.get(parentId)
+            if (parent?.git_path) {
+              const slashIdx = parent.git_path.indexOf('/')
+              const extendsPath = slashIdx !== -1
+                ? parent.git_path.slice(slashIdx + 1)
+                : parent.git_path
+              data.content = `{% extends "${extendsPath}" %}\n\n{% block content %}\n\n{% endblock %}\n`
+            }
+          }
           createMut.mutate(data)
         })}
           className="rounded-xl border p-5 mb-6 space-y-4"
@@ -353,6 +382,17 @@ export default function AdminTemplates() {
                   <option key={t.id} value={t.id} style={{ backgroundColor: 'var(--c-card)' }}>{t.display_name}</option>
                 ))}
               </select>
+              {watchParentId && (() => {
+                const parent = templateMap.get(Number(watchParentId))
+                if (!parent?.git_path) return null
+                const slashIdx = parent.git_path.indexOf('/')
+                const extendsPath = slashIdx !== -1 ? parent.git_path.slice(slashIdx + 1) : parent.git_path
+                return (
+                  <p className="text-xs mt-1 font-mono" style={{ color: '#818cf8' }}>
+                    ↳ will insert <span style={{ color: '#a5b4fc' }}>{`{% extends "${extendsPath}" %}`}</span>
+                  </p>
+                )
+              })()}
             </div>
           </div>
 

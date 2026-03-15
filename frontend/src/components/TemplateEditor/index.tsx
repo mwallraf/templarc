@@ -334,7 +334,16 @@ const JINJA_SNIPPETS: { label: string; insert: string; title: string }[] = [
   { label: '| replace',  insert: " | replace('old', 'new')",                          title: 'Replace string' },
 ]
 
+const JINJA_INHERITANCE_SNIPPETS: { label: string; insert: string; title: string }[] = [
+  { label: '{% extends %}',    insert: '{% extends "path/to/parent.j2" %}',                                    title: 'Extend a parent template — place at very first line' },
+  { label: '{% block %}',      insert: '{% block name %}\n\n{% endblock %}',                                   title: 'Define an overridable block' },
+  { label: '{{ super() }}',    insert: '{{ super() }}',                                                        title: 'Render parent block content inside a child block' },
+  { label: '{% block+super %}',insert: '{% block name %}\n{{ super() }}\n\n{% endblock %}',                    title: 'Block that also renders the parent content (extend, not replace)' },
+]
+
 function SnippetToolbar({ onInsert }: { onInsert: (text: string) => void }) {
+  const [showInheritance, setShowInheritance] = useState(false)
+
   const chipBase: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -350,30 +359,91 @@ function SnippetToolbar({ onInsert }: { onInsert: (text: string) => void }) {
 
   return (
     <div
-      className="flex flex-wrap items-center gap-x-1 gap-y-1 px-3 py-1.5 border-b shrink-0"
+      className="border-b shrink-0"
       style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-surface-alt)' }}
     >
-      {JINJA_SNIPPETS.map((s) => (
+      {/* Main snippets row */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-3 py-1.5">
+        {JINJA_SNIPPETS.map((s) => (
+          <button
+            key={s.label}
+            type="button"
+            title={s.title}
+            onClick={() => onInsert(s.insert)}
+            style={{
+              ...chipBase,
+              color: '#818cf8',
+              backgroundColor: 'rgba(99,102,241,0.08)',
+              borderColor: 'rgba(99,102,241,0.2)',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.75' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+          >
+            {s.label}
+          </button>
+        ))}
+
+        {/* Divider */}
+        <span style={{ width: '1px', height: '14px', backgroundColor: 'var(--c-border-bright)', margin: '0 4px', flexShrink: 0 }} />
+
+        {/* Inheritance toggle */}
         <button
-          key={s.label}
           type="button"
-          title={s.title}
-          onClick={() => onInsert(s.insert)}
+          title={showInheritance ? 'Hide inheritance snippets' : 'Show Jinja2 template inheritance snippets (extends / block / super)'}
+          onClick={() => setShowInheritance((v) => !v)}
           style={{
             ...chipBase,
-            color: '#818cf8',
-            backgroundColor: 'rgba(99,102,241,0.08)',
-            borderColor: 'rgba(99,102,241,0.2)',
+            color: showInheritance ? '#fbbf24' : 'var(--c-muted-4)',
+            backgroundColor: showInheritance ? 'rgba(251,191,36,0.1)' : 'transparent',
+            borderColor: showInheritance ? 'rgba(251,191,36,0.25)' : 'var(--c-border-bright)',
+            gap: '4px',
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.75' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
         >
-          {s.label}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 10, height: 10 }}>
+            <polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" />
+          </svg>
+          inheritance
         </button>
-      ))}
-      <span style={{ fontSize: '10px', color: 'var(--c-border-bright)', marginLeft: '4px', userSelect: 'none' }}>
-        type <span style={{ color: 'var(--c-muted-4)', fontFamily: 'monospace' }}>|</span> for filter autocomplete
-      </span>
+
+        <span style={{ fontSize: '10px', color: 'var(--c-border-bright)', marginLeft: '4px', userSelect: 'none' }}>
+          type <span style={{ color: 'var(--c-muted-4)', fontFamily: 'monospace' }}>|</span> for filter autocomplete
+        </span>
+      </div>
+
+      {/* Inheritance snippets row — shown on toggle */}
+      {showInheritance && (
+        <div
+          className="flex flex-wrap items-center gap-x-1 gap-y-1 px-3 py-1.5 border-t"
+          style={{ borderColor: 'rgba(251,191,36,0.15)', backgroundColor: 'rgba(251,191,36,0.04)' }}
+        >
+          <span style={{ fontSize: '10px', color: '#92400e', userSelect: 'none', marginRight: '4px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Inheritance
+          </span>
+          {JINJA_INHERITANCE_SNIPPETS.map((s) => (
+            <button
+              key={s.label}
+              type="button"
+              title={s.title}
+              onClick={() => onInsert(s.insert)}
+              style={{
+                ...chipBase,
+                color: '#fbbf24',
+                backgroundColor: 'rgba(251,191,36,0.08)',
+                borderColor: 'rgba(251,191,36,0.25)',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.75' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+            >
+              {s.label}
+            </button>
+          ))}
+          <span style={{ fontSize: '10px', color: 'var(--c-muted-4)', marginLeft: '6px', userSelect: 'none' }}>
+            extends must be the very first line · block overrides a parent section · super() renders parent content
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -754,6 +824,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   const [metaDisplayName, setMetaDisplayName] = useState(template.display_name)
   const [metaDescription, setMetaDescription] = useState(template.description ?? '')
   const [metaSortOrder, setMetaSortOrder] = useState(template.sort_order)
+  const [metaHistoryLabelParam, setMetaHistoryLabelParam] = useState(template.history_label_param ?? '')
 
   // UI state
   const [showPreview, setShowPreview] = useState(false)
@@ -902,6 +973,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
         display_name: metaDisplayName || undefined,
         description: metaDescription || undefined,
         sort_order: metaSortOrder,
+        history_label_param: metaHistoryLabelParam,
         commit_message: commitMessage || undefined,
         author: 'admin',
       })
@@ -1307,9 +1379,11 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
               metaDisplayName={metaDisplayName}
               metaDescription={metaDescription}
               metaSortOrder={metaSortOrder}
+              metaHistoryLabelParam={metaHistoryLabelParam}
               onChangeDisplayName={(v) => { setMetaDisplayName(v); markDirty() }}
               onChangeDescription={(v) => { setMetaDescription(v); markDirty() }}
               onChangeSortOrder={(v) => { setMetaSortOrder(v); markDirty() }}
+              onChangeHistoryLabelParam={(v) => { setMetaHistoryLabelParam(v); markDirty() }}
               onAssignParam={handleAssignParam}
               onUnassignParam={handleUnassignParam}
               onSetParent={(v) => { setParentTemplateId(v); markDirty() }}

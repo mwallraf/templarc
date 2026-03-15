@@ -246,6 +246,13 @@ class CustomFilterOut(BaseModel):
     created_by: str | None
 
 
+class CustomFilterUpdate(BaseModel):
+    """Request body for PUT /admin/filters/{id}."""
+
+    code: str = Field(..., min_length=10, max_length=65_536)
+    description: str | None = Field(None, max_length=500)
+
+
 class CustomFilterDeleteOut(BaseModel):
     """Response for DELETE /admin/filters/{id}.
 
@@ -352,6 +359,13 @@ class CustomObjectOut(BaseModel):
     @property
     def scope(self) -> str:
         return "project" if self.project_id is not None else "global"
+
+
+class CustomObjectUpdate(BaseModel):
+    """Request body for PUT /admin/objects/{id}."""
+
+    code: str = Field(..., min_length=1, max_length=65_536)
+    description: str | None = Field(None, max_length=500)
 
 
 class CustomObjectDeleteOut(BaseModel):
@@ -502,6 +516,13 @@ class CustomMacroOut(BaseModel):
     is_active: bool
     created_at: datetime
     created_by: str | None
+
+
+class CustomMacroUpdate(BaseModel):
+    """Request body for PUT /admin/macros/{id}."""
+
+    body: str = Field(..., min_length=1, max_length=65_536)
+    description: str | None = Field(None, max_length=500)
 
 
 class CustomMacroDeleteOut(BaseModel):

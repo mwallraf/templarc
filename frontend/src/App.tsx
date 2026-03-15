@@ -15,11 +15,13 @@ import AdminUsers from './pages/admin/AdminUsers'
 import AdminProjects from './pages/admin/AdminProjects'
 import AdminApiKeys from './pages/admin/AdminApiKeys'
 import AdminFeatures from './pages/admin/AdminFeatures'
+import AdminWebhooks from './pages/admin/AdminWebhooks'
 import AdminSettings from './pages/admin/AdminSettings'
 import TemplateEditorPage from './pages/admin/TemplateEditorPage'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
 import QuickpadsPage from './pages/Quickpads'
+import Sandbox from './pages/Sandbox'
 
 export default function App() {
   return (
@@ -37,6 +39,7 @@ export default function App() {
           <Route path="/history" element={<History />} />
           <Route path="/history/:renderId" element={<HistoryDetail />} />
           <Route path="/quickpads" element={<QuickpadsPage />} />
+          <Route path="/sandbox" element={<Sandbox />} />
           <Route path="/admin/projects" element={<AdminProjects />} />
           <Route path="/admin/templates" element={<AdminTemplates />} />
           <Route path="/admin/templates/:templateId/edit" element={<TemplateEditorPage />} />
@@ -46,6 +49,7 @@ export default function App() {
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/api-keys" element={<AdminApiKeys />} />
           <Route path="/admin/features" element={<AdminFeatures />} />
+          <Route path="/admin/webhooks" element={<AdminWebhooks />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/profile" element={<Profile />} />
         </Route>

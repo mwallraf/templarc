@@ -140,9 +140,11 @@ export interface ParameterPanelProps {
   metaDisplayName: string
   metaDescription: string
   metaSortOrder: number
+  metaHistoryLabelParam: string
   onChangeDisplayName: (v: string) => void
   onChangeDescription: (v: string) => void
   onChangeSortOrder: (v: number) => void
+  onChangeHistoryLabelParam: (v: string) => void
   onAssignParam: (param: ParameterOut) => void
   onUnassignParam: (paramId: number) => void
   onSetParent: (templateId: number | undefined) => void
@@ -161,9 +163,11 @@ export function ParameterPanel({
   metaDisplayName,
   metaDescription,
   metaSortOrder,
+  metaHistoryLabelParam,
   onChangeDisplayName,
   onChangeDescription,
   onChangeSortOrder,
+  onChangeHistoryLabelParam,
   onAssignParam,
   onUnassignParam,
   onSetParent,
@@ -577,6 +581,29 @@ export function ParameterPanel({
               />
               <p className="mt-1 text-xs text-gray-400">
                 Controls the order within its parent group (lower = first).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">History label parameter</label>
+              <select
+                value={metaHistoryLabelParam}
+                onChange={(e) => onChangeHistoryLabelParam(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">(none — no identity label in history)</option>
+                {assignedParams
+                  .filter((p) => p.scope === 'template')
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((p) => (
+                    <option key={p.id} value={p.name}>
+                      {p.name}{p.label ? ` — ${p.label}` : ''}
+                    </option>
+                  ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                The value of this parameter will be stored as a display label on every render
+                (e.g. hostname, service ID). Makes renders searchable and groupable in history.
               </p>
             </div>
           </div>

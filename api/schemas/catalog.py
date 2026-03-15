@@ -178,6 +178,11 @@ class TemplateUpdate(BaseModel):
     is_active: bool | None = None
     is_snippet: bool | None = None
     is_hidden: bool | None = None
+    history_label_param: str | None = Field(
+        None,
+        max_length=200,
+        description="Parameter name whose value is extracted as the render history display label (e.g. 'router.hostname'). Pass empty string to clear.",
+    )
     content: str | None = Field(
         None,
         max_length=512_000,  # 500 KB max
@@ -218,6 +223,7 @@ class TemplateOut(BaseModel):
     is_snippet: bool
     is_hidden: bool
     sort_order: int
+    history_label_param: str | None = None
     created_at: datetime
     updated_at: datetime
 

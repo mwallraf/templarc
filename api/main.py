@@ -32,7 +32,7 @@ from sqlalchemy import text
 from api.config import get_settings
 from api.core.rate_limit import limiter
 from api.database import AsyncSessionLocal, engine
-from api.routers import ai, admin, auth, catalog, features, parameters, quickpads, render, templates
+from api.routers import ai, admin, auth, catalog, features, parameters, quickpads, render, sandbox, templates, webhooks
 from api.routers import settings as settings_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
@@ -200,6 +200,8 @@ app.include_router(quickpads.router,  prefix="/quickpads",  tags=["Quickpads"])
 app.include_router(features.router,   prefix="/features",   tags=["Features"])
 app.include_router(ai.router,         prefix="/ai",         tags=["AI Assistant"])
 app.include_router(settings_router.router, prefix="/settings", tags=["Settings"])
+app.include_router(webhooks.router,   prefix="/webhooks",   tags=["Webhooks"])
+app.include_router(sandbox.router,    prefix="/sandbox",    tags=["Sandbox"])
 
 
 # ---------------------------------------------------------------------------

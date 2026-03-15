@@ -210,9 +210,8 @@ function ReRenderResult({ result, label }: { result: RenderOut; label: string })
 
 // ── API example builder ───────────────────────────────────────────────────────
 
-function buildHistoryExamples(renderId: number, resolvedParams: Record<string, unknown>) {
+function buildHistoryExamples(renderId: number, _resolvedParams: Record<string, unknown>) {
   const base = getApiBase()
-  const body = JSON.stringify({ params: resolvedParams }, null, 2)
 
   const curl = `# Fetch stored render
 curl -s "${base}/render-history/${renderId}" \
@@ -332,7 +331,17 @@ export default function HistoryDetail() {
           </div>
         )}
 
-        <h1 className="text-2xl font-bold text-white font-display">{currentTemplateName}</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold text-white font-display">{currentTemplateName}</h1>
+          {history.display_label && (
+            <span
+              className="text-sm px-2.5 py-0.5 rounded-full border font-mono"
+              style={{ color: '#34d399', backgroundColor: 'rgba(52,211,153,0.08)', borderColor: 'rgba(52,211,153,0.25)' }}
+            >
+              {history.display_label}
+            </span>
+          )}
+        </div>
 
         {/* Meta row */}
         <div className="flex flex-wrap items-center gap-3 mt-2.5">
@@ -344,10 +353,12 @@ export default function HistoryDetail() {
           >
             {history.template_git_sha.slice(0, 12)}
           </span>
-          {history.rendered_by && (
+          {(history.rendered_by_username || history.rendered_by) && (
             <>
               <span style={{ color: 'var(--c-border-bright)' }}>·</span>
-              <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>user #{history.rendered_by}</span>
+              <span className="text-xs" style={{ color: 'var(--c-muted-3)' }}>
+                {history.rendered_by_username ?? `user #${history.rendered_by}`}
+              </span>
             </>
           )}
           <span style={{ color: 'var(--c-border-bright)' }}>·</span>

@@ -280,7 +280,7 @@ async def update_template(
 
 
 # ---------------------------------------------------------------------------
-# Template delete (soft)
+# Template delete
 # ---------------------------------------------------------------------------
 
 @router.delete(
@@ -289,16 +289,16 @@ async def update_template(
     response_model=None,
     summary="Delete template",
     description=(
-        "Soft-delete a template by setting `is_active=False`. "
-        "The `.j2` file is **not** removed from Git — history is preserved."
+        "Delete a template: removes the `.j2` file from Git and the DB record."
     ),
 )
 async def delete_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
+    git_svc: GitService = Depends(get_git_service),
 ) -> None:
-    await catalog_service.delete_template(db, template_id)
+    await catalog_service.delete_template(db, template_id, git_svc, author=token.sub)
     await log_write(db, token.sub, "delete", "template", template_id)
     await db.commit()
 

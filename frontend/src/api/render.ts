@@ -43,6 +43,10 @@ export async function listRenderHistory(params?: {
   template_id?: number
   date_from?: string
   date_to?: string
+  search?: string
+  display_label?: string
+  rendered_by_me?: boolean
+  grouped?: boolean
   limit?: number
   offset?: number
 }): Promise<RenderHistoryListOut> {

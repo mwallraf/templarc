@@ -3,7 +3,7 @@ Catalog service — project and template business logic.
 
 This module contains all database operations for:
   - Project CRUD (list, get, create, update)
-  - Template CRUD (get, create, update content, soft delete)
+  - Template CRUD (get, create, update content, delete)
   - Template tree building (nested parent/child structure)
   - Template inheritance chain resolution
   - Template variable extraction with registration status
@@ -308,6 +308,10 @@ async def update_template(
         if value is not None:
             setattr(tmpl, field, value)
 
+    # history_label_param: None = unchanged, empty string = clear, non-empty = set
+    if data.history_label_param is not None:
+        tmpl.history_label_param = data.history_label_param or None
+
     suggested: list[VariableRefOut] = []
 
     if data.content is not None:
@@ -352,10 +356,23 @@ async def update_template(
     )
 
 
-async def delete_template(db: AsyncSession, template_id: int) -> None:
-    """Soft-delete a template (sets is_active=False). Does not touch Git."""
+async def delete_template(
+    db: AsyncSession,
+    template_id: int,
+    git_svc: GitService,
+    author: str = "templarc",
+) -> None:
+    """Hard-delete a template: remove the .j2 file from Git and the DB record."""
     tmpl = await _get_template_or_404(db, template_id)
-    tmpl.is_active = False
+
+    if tmpl.git_path:
+        try:
+            git_svc.delete_template(tmpl.git_path, author=author)
+        except TemplateNotFoundError:
+            # File already absent from disk — still remove the DB record
+            pass
+
+    await db.delete(tmpl)
     await db.flush()
 
 

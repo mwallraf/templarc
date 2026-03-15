@@ -35,6 +35,8 @@ class RenderHistory(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 10: resolved value of template.history_label_param at render time (for fast search)
+    display_label: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Relationships — SET NULL FKs: history survives template/user deletion
     template: Mapped["Template | None"] = relationship(

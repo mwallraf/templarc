@@ -13,6 +13,8 @@ Adding new filters
 
 from __future__ import annotations
 
+import base64
+
 from api.jinja_filters.network import (
     cidr_to_wildcard,
     int_to_ip,
@@ -22,6 +24,12 @@ from api.jinja_filters.network import (
     mb_to_kbps,
 )
 
+
+def b64encode(value: str) -> str:
+    """Base64-encode a string. Useful for embedding config blobs in JSON payloads."""
+    return base64.b64encode(value.encode()).decode()
+
+
 BUILTIN_FILTERS: dict[str, object] = {
     "mb_to_kbps": mb_to_kbps,
     "mb_to_bps": mb_to_bps,
@@ -29,4 +37,5 @@ BUILTIN_FILTERS: dict[str, object] = {
     "ip_to_int": ip_to_int,
     "int_to_ip": int_to_ip,
     "ipaddr": ipaddr,
+    "b64encode": b64encode,
 }

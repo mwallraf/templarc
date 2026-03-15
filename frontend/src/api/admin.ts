@@ -5,11 +5,14 @@ import type {
   ApiKeyOut,
   CustomFilterCreate,
   CustomFilterOut,
+  CustomFilterUpdate,
   FilterTestResult,
   CustomObjectCreate,
   CustomObjectOut,
+  CustomObjectUpdate,
   CustomMacroCreate,
   CustomMacroOut,
+  CustomMacroUpdate,
   DuplicatesReport,
   PromoteRequest,
   PromoteReport,
@@ -17,6 +20,11 @@ import type {
   GitRemoteStatusOut,
   GitRemoteActionOut,
   GitRemoteTestOut,
+  RenderWebhookCreate,
+  RenderWebhookUpdate,
+  RenderWebhookOut,
+  RenderWebhookListOut,
+  WebhookTestResult,
 } from './types'
 
 // ── API Keys ────────────────────────────────────────────────────────────────
@@ -41,6 +49,9 @@ export const testFilter = (code: string, test_input = 'test_value') =>
     .post<FilterTestResult>('/admin/filters/test', { code, test_input })
     .then((r) => r.data)
 
+export const updateFilter = (id: number, data: CustomFilterUpdate) =>
+  apiClient.put<CustomFilterOut>(`/admin/filters/${id}`, data).then((r) => r.data)
+
 export const deleteFilter = (id: number) =>
   apiClient
     .delete<{ id: number; used_in_templates: string[] }>(`/admin/filters/${id}`)
@@ -52,6 +63,9 @@ export const listObjects = (params?: { project_id?: number }) =>
 export const createObject = (data: CustomObjectCreate) =>
   apiClient.post<CustomObjectOut>('/admin/objects', data).then((r) => r.data)
 
+export const updateObject = (id: number, data: CustomObjectUpdate) =>
+  apiClient.put<CustomObjectOut>(`/admin/objects/${id}`, data).then((r) => r.data)
+
 export const deleteObject = (id: number) =>
   apiClient.delete<{ id: number }>(`/admin/objects/${id}`).then((r) => r.data)
 
@@ -60,6 +74,9 @@ export const listMacros = (params?: { scope?: string; project_id?: number }) =>
 
 export const createMacro = (data: CustomMacroCreate) =>
   apiClient.post<CustomMacroOut>('/admin/macros', data).then((r) => r.data)
+
+export const updateMacro = (id: number, data: CustomMacroUpdate) =>
+  apiClient.put<CustomMacroOut>(`/admin/macros/${id}`, data).then((r) => r.data)
 
 export const deleteMacro = (id: number) =>
   apiClient.delete<{ id: number }>(`/admin/macros/${id}`).then((r) => r.data)
@@ -93,3 +110,23 @@ export const pushRemote = (projectId: number) =>
 
 export const testRemoteConnection = (projectId: number) =>
   apiClient.post<GitRemoteTestOut>(`/admin/git-remote/${projectId}/test`).then((r) => r.data)
+
+// ── Render Webhooks ───────────────────────────────────────────────────────────
+
+export const listWebhooks = (params?: { project_id?: number; template_id?: number; is_active?: boolean }) =>
+  apiClient.get<RenderWebhookListOut>('/webhooks', { params }).then((r) => r.data)
+
+export const createWebhook = (data: RenderWebhookCreate) =>
+  apiClient.post<RenderWebhookOut>('/webhooks', data).then((r) => r.data)
+
+export const getWebhook = (id: number) =>
+  apiClient.get<RenderWebhookOut>(`/webhooks/${id}`).then((r) => r.data)
+
+export const updateWebhook = (id: number, data: RenderWebhookUpdate) =>
+  apiClient.put<RenderWebhookOut>(`/webhooks/${id}`, data).then((r) => r.data)
+
+export const deleteWebhook = (id: number) =>
+  apiClient.delete(`/webhooks/${id}`)
+
+export const testWebhook = (id: number) =>
+  apiClient.post<WebhookTestResult>(`/webhooks/${id}/test`).then((r) => r.data)

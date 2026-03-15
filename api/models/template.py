@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from api.models.render_history import RenderHistory
     from api.models.render_preset import RenderPreset
     from api.models.feature import TemplateFeature
+    from api.models.render_webhook import RenderWebhook
 
 
 class Template(Base):
@@ -38,6 +39,8 @@ class Template(Base):
     is_snippet: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    # Phase 10: which parameter name to extract as the render history display label
+    history_label_param: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -87,6 +90,9 @@ class Template(Base):
     )
     template_features: Mapped[List["TemplateFeature"]] = relationship(
         "TemplateFeature", back_populates="template", cascade="all, delete-orphan", lazy="raise"
+    )
+    webhooks: Mapped[List["RenderWebhook"]] = relationship(
+        "RenderWebhook", back_populates="template", cascade="all, delete-orphan", lazy="raise"
     )
 
     def __repr__(self) -> str:

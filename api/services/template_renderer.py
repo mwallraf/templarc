@@ -36,10 +36,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.secrets import SecretResolver
 from api.models.feature import Feature, TemplateFeature
+from api.services.webhook_dispatcher import WebhookContext, WebhookError, dispatch_webhooks
 from api.models.parameter import Parameter
 from api.models.project import Project
 from api.models.render_history import RenderHistory
 from api.models.template import Template
+from api.models.user import User
 from api.services.datasource_resolver import (
     DataSourceConfig,
     DataSourceResolver,
@@ -360,6 +362,7 @@ class TemplateRenderer:
         2. Parse template frontmatter from Git for data_sources.
         3. Run datasource_resolver.resolve_on_load in parallel.
         4. Merge enrichments (prefill, options, readonly) into params.
+        5. Filter glob/proj params to only those referenced in the template body.
         """
         # 1. Resolve parameters from DB
         resolution = await resolve_template_parameters(self._db, template_id)
@@ -367,20 +370,43 @@ class TemplateRenderer:
         # 2. Load template + project for datasource resolution context
         template, project = await self._load_template_and_project(template_id)
 
-        # 3. Parse data_sources from frontmatter
+        # 3. Parse template body + frontmatter from Git
         data_sources: list[DataSourceConfig] = []
+        template_body: str = ""
         if template.git_path:
             try:
                 raw = self._git.read_template(template.git_path)
-                fm, _ = parse_frontmatter(raw)
+                fm, template_body = parse_frontmatter(raw)
                 data_sources = _parse_data_sources(fm.get("data_sources") or [])
             except TemplateNotFoundError:
                 logger.warning("Template file missing from git: %s", template.git_path)
 
-        # 4. Build initial context from defaults for datasource URL rendering
-        initial_ctx = {p.name: p.default_value or "" for p in resolution.parameters}
+        # 4. Build set of variable names actually used in the template body.
+        #    Template-local params are always included (they are explicitly registered
+        #    for this template). Only glob.* and proj.* are filtered.
+        used_var_paths: set[str] | None = None
+        if template_body:
+            try:
+                used_var_paths = {ref.full_path for ref in extract_variables(template_body)}
+            except Exception as exc:
+                logger.warning(
+                    "extract_variables failed for template %d: %s — showing all params",
+                    template_id, exc,
+                )
 
-        # 5. Resolve on_load data sources
+        def _is_relevant(p: "ResolvedParameter") -> bool:
+            if p.scope == "template":
+                return True  # always include explicitly defined template params
+            if used_var_paths is None:
+                return True  # parse failed — fall back to showing everything
+            return p.name in used_var_paths
+
+        filtered_params = [p for p in resolution.parameters if _is_relevant(p)]
+
+        # 5. Build initial context from defaults for datasource URL rendering
+        initial_ctx = {p.name: p.default_value or "" for p in filtered_params}
+
+        # 6. Resolve on_load data sources
         enrichments: dict = {}
         if data_sources:
             secret_resolver = SecretResolver(self._db, project.organization_id)
@@ -395,10 +421,10 @@ class TemplateRenderer:
                     template_id, exc,
                 )
 
-        # 6. Build EnrichedParameter list
-        enriched = _enrich_parameters(resolution.parameters, enrichments)
+        # 7. Build EnrichedParameter list
+        enriched = _enrich_parameters(filtered_params, enrichments)
 
-        # 7. Load available features for this template
+        # 8. Load available features for this template
         available_features = await self._load_available_features(template_id)
 
         return FormDefinition(
@@ -554,6 +580,21 @@ class TemplateRenderer:
         raw_output = header + rendered_body
 
         # 9. Persist
+        # Resolve user ID from username (best-effort; None if not found)
+        rendered_by_id: int | None = None
+        if persist or True:  # always resolve for display_label extraction below
+            user_result = await self._db.execute(
+                select(User.id).where(User.username == user)
+            )
+            rendered_by_id = user_result.scalar_one_or_none()
+
+        # Extract display_label from resolved params using template.history_label_param
+        display_label: str | None = None
+        if template.history_label_param:
+            raw_label = full_context.get(template.history_label_param)
+            if raw_label is not None:
+                display_label = str(raw_label)[:500] or None
+
         render_id: int | None = None
         if persist:
             history = RenderHistory(
@@ -561,14 +602,42 @@ class TemplateRenderer:
                 template_git_sha=git_sha,
                 resolved_parameters=full_context,
                 raw_output=raw_output,
-                rendered_by=None,   # user-ID lookup deferred to Phase 6 auth
+                rendered_by=rendered_by_id,
                 notes=notes,
+                display_label=display_label,
             )
             self._db.add(history)
             await self._db.flush()
             await self._db.commit()
             await self._db.refresh(history)
             render_id = history.id
+
+        # 10. Dispatch webhooks
+        webhook_ctx = WebhookContext(
+            render_id=render_id,
+            template_id=template_id,
+            template_name=template.name,
+            project_name=project.name,
+            git_sha=git_sha,
+            rendered_by=user,
+            rendered_at=rendered_at,
+            parameters=full_context,
+            output=raw_output,
+        )
+        try:
+            await dispatch_webhooks(
+                db=self._db,
+                template_id=template_id,
+                project_id=project.id,
+                organization_id=project.organization_id,
+                ctx=webhook_ctx,
+                persist=persist,
+            )
+        except WebhookError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Blocking webhook failed: {exc}",
+            )
 
         return RenderResult(
             output=raw_output,

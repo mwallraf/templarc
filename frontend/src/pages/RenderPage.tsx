@@ -359,34 +359,23 @@ export default function RenderPage() {
         />
       </div>
 
-      {filteredDefinition!.parameters.length === 0 ? (
+      {filteredDefinition!.parameters.length === 0 && (
         <div
-          className="rounded-xl border p-5"
+          className="rounded-xl border p-4 mb-4"
           style={{ backgroundColor: 'rgba(251,191,36,0.06)', borderColor: 'rgba(251,191,36,0.2)' }}
         >
           <p className="text-sm text-amber-300">
             This template has no registered parameters. Click Render to generate with defaults.
           </p>
-          <div className="mt-4">
-            <button
-              className="px-5 py-2 text-sm font-semibold text-white rounded-lg transition-all duration-150"
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
-              }}
-            >
-              Render
-            </button>
-          </div>
         </div>
-      ) : (
-        <DynamicForm
-          key={formKey}
-          templateId={id}
-          definition={filteredDefinition!}
-          prefillValues={activePrefill}
-        />
       )}
+
+      <DynamicForm
+        key={formKey}
+        templateId={id}
+        definition={filteredDefinition!}
+        prefillValues={activePrefill}
+      />
 
       {/* Save preset dialog */}
       {showSaveDialog && (

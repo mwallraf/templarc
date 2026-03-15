@@ -139,6 +139,7 @@ export interface TemplateOut {
   is_snippet: boolean
   is_hidden: boolean
   sort_order: number
+  history_label_param?: string
   created_at: string
   updated_at: string
 }
@@ -168,6 +169,7 @@ export interface TemplateUpdate {
   is_active?: boolean
   is_snippet?: boolean
   is_hidden?: boolean
+  history_label_param?: string
 }
 
 export interface VariableRefOut {
@@ -461,6 +463,8 @@ export interface RenderHistoryOut {
   rendered_by?: number
   rendered_at: string
   notes?: string
+  display_label?: string
+  rendered_by_username?: string
 }
 
 export interface RenderHistoryListOut {
@@ -594,6 +598,11 @@ export interface CustomFilterOut {
   created_by?: string
 }
 
+export interface CustomFilterUpdate {
+  code: string
+  description?: string
+}
+
 export interface FilterTestRequest {
   code: string
   test_input?: string
@@ -625,6 +634,11 @@ export interface CustomObjectOut {
   created_by?: string
 }
 
+export interface CustomObjectUpdate {
+  code: string
+  description?: string
+}
+
 export interface CustomMacroCreate {
   name: string
   body: string
@@ -643,6 +657,11 @@ export interface CustomMacroOut {
   is_active: boolean
   created_at: string
   created_by?: string
+}
+
+export interface CustomMacroUpdate {
+  body: string
+  description?: string
 }
 
 // ── AI Settings ────────────────────────────────────────────────────────────
@@ -798,4 +817,67 @@ export interface QuickpadRenderRequest {
 export interface QuickpadRenderOut {
   output: string
   variables_used: string[]
+}
+
+// ── Render Webhooks ─────────────────────────────────────────────────────────
+
+export type WebhookHttpMethod = 'POST' | 'PUT' | 'PATCH'
+export type WebhookTriggerOn = 'persist' | 'always'
+export type WebhookOnError = 'warn' | 'block'
+
+export interface RenderWebhookCreate {
+  name: string
+  is_active?: boolean
+  project_id?: number | null
+  template_id?: number | null
+  url: string
+  http_method?: WebhookHttpMethod
+  auth_header?: string | null
+  payload_template?: string | null
+  trigger_on?: WebhookTriggerOn
+  on_error?: WebhookOnError
+  timeout_seconds?: number
+}
+
+export interface RenderWebhookUpdate {
+  name?: string
+  is_active?: boolean
+  url?: string
+  http_method?: WebhookHttpMethod
+  auth_header?: string | null
+  payload_template?: string | null
+  trigger_on?: WebhookTriggerOn
+  on_error?: WebhookOnError
+  timeout_seconds?: number
+}
+
+export interface RenderWebhookOut {
+  id: number
+  organization_id: number
+  project_id: number | null
+  template_id: number | null
+  name: string
+  is_active: boolean
+  url: string
+  http_method: string
+  auth_header: string | null
+  payload_template: string | null
+  trigger_on: string
+  on_error: string
+  timeout_seconds: number
+  created_at: string
+  updated_at: string
+}
+
+export interface RenderWebhookListOut {
+  items: RenderWebhookOut[]
+  total: number
+}
+
+export interface WebhookTestResult {
+  webhook_id: number
+  success: boolean
+  status_code: number | null
+  response_body: string | null
+  error: string | null
 }

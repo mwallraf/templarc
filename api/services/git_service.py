@@ -189,6 +189,34 @@ class GitService:
         )
         return commit.hexsha
 
+    def delete_template(
+        self,
+        git_path: str,
+        author: str = "templarc",
+    ) -> str:
+        """
+        Remove a .j2 file from the repo, stage the removal, and commit.
+
+        Returns:
+            The new commit SHA (hex string).
+
+        Raises:
+            TemplateNotFoundError: if the file does not exist on disk.
+        """
+        abs_path = self._abs(git_path)
+        if not abs_path.exists():
+            raise TemplateNotFoundError(f"Template file not found: {git_path!r}")
+
+        self._repo.index.remove([str(abs_path)], working_tree=True)
+
+        actor = git.Actor(author, f"{author}@templarc")
+        commit = self._repo.index.commit(
+            f"chore: delete {git_path}",
+            author=actor,
+            committer=actor,
+        )
+        return commit.hexsha
+
     def get_commit_sha(self, git_path: str) -> str:
         """
         Return the SHA of the most recent commit that modified ``git_path``.

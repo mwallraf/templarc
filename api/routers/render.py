@@ -23,7 +23,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from api.core.rate_limit import limiter
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.auth import TokenData, get_current_user
@@ -31,6 +31,7 @@ from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.render_history import RenderHistory
 from api.models.template import Template
+from api.models.user import User
 from api.schemas.render import (
     AvailableFeatureOut,
     EnrichedParameterOut,
@@ -236,37 +237,84 @@ async def on_change(
     "/render-history",
     response_model=RenderHistoryListOut,
     summary="List render history",
-    description="Return render history records, newest first, with optional filters.",
+    description=(
+        "Return render history records, newest first, with optional filters.\n\n"
+        "New Phase 10 filters:\n"
+        "- `search`: searches across `display_label`, `notes`, and template name (ILIKE)\n"
+        "- `display_label`: substring match on the stored display label\n"
+        "- `rendered_by_me`: filter to current user's renders only\n"
+        "- `grouped`: sort by (template_id, display_label, rendered_at DESC) for client-side grouping\n\n"
+        "Response includes `rendered_by_username` (populated via JOIN)."
+    ),
     tags=["Render History"],
 )
 async def list_render_history(
     template_id: int | None = Query(None),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
+    search: str | None = Query(None, description="Search across display_label, notes, and template name"),
+    display_label: str | None = Query(None, description="Substring match on display_label"),
+    rendered_by_me: bool = Query(False, description="Filter to current user's renders only"),
+    grouped: bool = Query(False, description="Sort by (template_id, display_label, rendered_at DESC) for grouping"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(get_current_user),
+    token: TokenData = Depends(get_current_user),
 ) -> RenderHistoryListOut:
-    q = select(RenderHistory)
+    # Base query with LEFT JOIN on users for username and LEFT JOIN on templates for name search
+    q = (
+        select(RenderHistory, User.username.label("rendered_by_username"), Template.display_name.label("template_display_name"))
+        .outerjoin(User, User.id == RenderHistory.rendered_by)
+        .outerjoin(Template, Template.id == RenderHistory.template_id)
+    )
+
     if template_id is not None:
         q = q.where(RenderHistory.template_id == template_id)
     if date_from is not None:
         q = q.where(RenderHistory.rendered_at >= date_from)
     if date_to is not None:
         q = q.where(RenderHistory.rendered_at <= date_to)
+    if display_label:
+        q = q.where(RenderHistory.display_label.ilike(f"%{display_label}%"))
+    if search:
+        search_pattern = f"%{search}%"
+        q = q.where(
+            or_(
+                RenderHistory.display_label.ilike(search_pattern),
+                RenderHistory.notes.ilike(search_pattern),
+                Template.display_name.ilike(search_pattern),
+            )
+        )
+    if rendered_by_me:
+        # Resolve current user's DB id
+        user_result = await db.execute(select(User.id).where(User.username == token.sub))
+        current_user_id = user_result.scalar_one_or_none()
+        if current_user_id is not None:
+            q = q.where(RenderHistory.rendered_by == current_user_id)
+        else:
+            # Unknown user — return empty
+            return RenderHistoryListOut(items=[], total=0)
 
     total_result = await db.execute(select(func.count()).select_from(q.subquery()))
     total: int = total_result.scalar_one()
 
-    items_result = await db.execute(
-        q.order_by(RenderHistory.rendered_at.desc()).limit(limit).offset(offset)
-    )
-    items = list(items_result.scalars().all())
-    return RenderHistoryListOut(
-        items=[RenderHistoryOut.model_validate(h) for h in items],
-        total=total,
-    )
+    if grouped:
+        order = [RenderHistory.template_id, RenderHistory.display_label, RenderHistory.rendered_at.desc()]
+    else:
+        order = [RenderHistory.rendered_at.desc()]
+
+    rows = await db.execute(q.order_by(*order).limit(limit).offset(offset))
+    results = rows.all()
+
+    items_out = []
+    for row in results:
+        h = row[0]
+        username = row[1]
+        out = RenderHistoryOut.model_validate(h)
+        out.rendered_by_username = username
+        items_out.append(out)
+
+    return RenderHistoryListOut(items=items_out, total=total)
 
 
 # ---------------------------------------------------------------------------
@@ -290,15 +338,20 @@ async def get_render_history(
     _token: TokenData = Depends(get_current_user),
 ) -> RenderHistoryOut:
     result = await db.execute(
-        select(RenderHistory).where(RenderHistory.id == history_id)
+        select(RenderHistory, User.username.label("rendered_by_username"))
+        .outerjoin(User, User.id == RenderHistory.rendered_by)
+        .where(RenderHistory.id == history_id)
     )
-    history = result.scalar_one_or_none()
-    if history is None:
+    row = result.one_or_none()
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"RenderHistory {history_id} not found",
         )
-    return RenderHistoryOut.model_validate(history)
+    history, username = row[0], row[1]
+    out = RenderHistoryOut.model_validate(history)
+    out.rendered_by_username = username
+    return out
 
 
 # ---------------------------------------------------------------------------

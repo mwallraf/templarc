@@ -31,7 +31,14 @@ from api.models.custom_macro import CustomMacro
 from api.models.custom_object import CustomObject
 from api.models.project import Project
 from api.models.template import Template
-from api.schemas.admin import CustomFilterCreate, CustomMacroCreate, CustomObjectCreate
+from api.schemas.admin import (
+    CustomFilterCreate,
+    CustomFilterUpdate,
+    CustomMacroCreate,
+    CustomMacroUpdate,
+    CustomObjectCreate,
+    CustomObjectUpdate,
+)
 from api.services.environment_factory import EnvironmentFactory
 from api.services.git_service import GitService, parse_frontmatter
 from api.services.jinja_parser import extract_filters_used
@@ -80,6 +87,21 @@ async def create_filter(
     db.add(cf)
     await db.flush()
     await _invalidate_caches(db, data.scope, data.project_id)
+    return cf
+
+
+async def update_filter(db: AsyncSession, filter_id: int, data: CustomFilterUpdate) -> CustomFilter:
+    """Update code and description of an existing filter."""
+    result = await db.execute(
+        select(CustomFilter).where(CustomFilter.id == filter_id, CustomFilter.is_active.is_(True))
+    )
+    cf = result.scalar_one_or_none()
+    if cf is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Custom filter {filter_id} not found")
+    cf.code = data.code
+    cf.description = data.description
+    await db.flush()
+    await _invalidate_caches(db, cf.scope, cf.project_id)
     return cf
 
 
@@ -187,6 +209,22 @@ async def create_object(
     return co
 
 
+async def update_object(db: AsyncSession, object_id: int, data: CustomObjectUpdate) -> CustomObject:
+    """Update code and description of an existing object."""
+    result = await db.execute(
+        select(CustomObject).where(CustomObject.id == object_id, CustomObject.is_active.is_(True))
+    )
+    co = result.scalar_one_or_none()
+    if co is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Custom object {object_id} not found")
+    co.code = data.code
+    co.description = data.description
+    await db.flush()
+    scope = "project" if co.project_id else "global"
+    await _invalidate_caches(db, scope, co.project_id)
+    return co
+
+
 async def delete_object(db: AsyncSession, object_id: int) -> CustomObject:
     """Soft-delete a custom object. Raises 404 if not found."""
     result = await db.execute(
@@ -244,6 +282,21 @@ async def create_macro(
     db.add(cm)
     await db.flush()
     await _invalidate_caches(db, data.scope, data.project_id)
+    return cm
+
+
+async def update_macro(db: AsyncSession, macro_id: int, data: CustomMacroUpdate) -> CustomMacro:
+    """Update body and description of an existing macro."""
+    result = await db.execute(
+        select(CustomMacro).where(CustomMacro.id == macro_id, CustomMacro.is_active.is_(True))
+    )
+    cm = result.scalar_one_or_none()
+    if cm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Custom macro {macro_id} not found")
+    cm.body = data.body
+    cm.description = data.description
+    await db.flush()
+    await _invalidate_caches(db, cm.scope, cm.project_id)
     return cm
 
 

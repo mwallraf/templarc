@@ -5,17 +5,28 @@ import Editor from '@monaco-editor/react'
 import {
   listFilters,
   createFilter,
+  updateFilter,
   deleteFilter,
   testFilter,
   listObjects,
   createObject,
+  updateObject,
   deleteObject,
   listMacros,
   createMacro,
+  updateMacro,
   deleteMacro,
 } from '../../api/admin'
 import { listProjects } from '../../api/catalog'
-import type { CustomFilterCreate, CustomObjectCreate, CustomMacroCreate, FilterTestResult } from '../../api/types'
+import type {
+  CustomFilterCreate,
+  CustomFilterUpdate,
+  CustomObjectCreate,
+  CustomObjectUpdate,
+  CustomMacroCreate,
+  CustomMacroUpdate,
+  FilterTestResult,
+} from '../../api/types'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -96,6 +107,9 @@ function FiltersTab() {
   const [testResult, setTestResult] = useState<FilterTestResult | null>(null)
   const [testRunning, setTestRunning] = useState(false)
   const [deleteWarning, setDeleteWarning] = useState<{ id: number; name: string; used: string[] } | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editCode, setEditCode] = useState('')
+  const [editDescription, setEditDescription] = useState('')
 
   const { data: filters, isLoading } = useQuery({
     queryKey: ['admin-filters'],
@@ -120,6 +134,17 @@ function FiltersTab() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-filters'] }); setDeleteWarning(null) },
   })
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: CustomFilterUpdate }) => updateFilter(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-filters'] }); setEditingId(null) },
+  })
+
+  function startEdit(f: { id: number; code: string; description?: string | null }) {
+    setEditingId(f.id)
+    setEditCode(f.code)
+    setEditDescription(f.description ?? '')
+  }
+
   async function handleTest() {
     if (!code.trim()) return
     setTestRunning(true)
@@ -138,8 +163,13 @@ function FiltersTab() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-white font-display">Custom Filters</h2>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white font-display">Custom Filters</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--c-muted-4)' }}>
+            Python functions exposed as Jinja2 pipe filters — use them in any template
+          </p>
+        </div>
         <button
           onClick={() => { setShowForm((v) => !v); setTestResult(null) }}
           className="px-4 py-2 text-sm font-semibold rounded-lg transition-all"
@@ -150,6 +180,22 @@ function FiltersTab() {
         >
           {showForm ? 'Cancel' : 'New Filter'}
         </button>
+      </div>
+
+      {/* Syntax hint */}
+      <div
+        className="mb-5 rounded-lg p-3 flex gap-3 items-start"
+        style={{ backgroundColor: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#818cf8' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+        </svg>
+        <div className="text-xs space-y-1" style={{ color: 'var(--c-muted-3)' }}>
+          <p>Write a Python function whose first argument is the value being filtered. The function name becomes the filter name.</p>
+          <p className="font-mono" style={{ color: 'var(--c-muted-4)' }}>{'def mb_to_kbps(value): return int(value) * 1000'}</p>
+          <p>Use it in templates with the pipe syntax: <span className="font-mono" style={{ color: '#818cf8' }}>{'{{ bandwidth | mb_to_kbps }}'}</span></p>
+          <p>Filters can be scoped to a single project or shared across all projects (global).</p>
+        </div>
       </div>
 
       {deleteWarning && (
@@ -272,27 +318,68 @@ function FiltersTab() {
               </thead>
               <tbody>
                 {filters.map((f, idx) => (
-                  <tr key={f.id} style={{ borderBottom: idx < filters.length - 1 ? '1px solid var(--c-border)' : 'none' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{f.name}</td>
-                    <td className="px-4 py-3">
-                      <ScopeBadge scope={f.scope} projectId={f.project_id} />
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{f.description ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{f.created_by ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleDelete(f.id, f.name)}
-                        disabled={deleteMut.isPending}
-                        className="text-xs font-medium disabled:opacity-50 transition-colors"
-                        style={{ color: '#ef4444' }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
+                  <>
+                    <tr key={f.id} style={{ borderBottom: editingId === f.id ? 'none' : idx < filters.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{f.name}</td>
+                      <td className="px-4 py-3">
+                        <ScopeBadge scope={f.scope} projectId={f.project_id} />
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{f.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{f.created_by ?? '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => editingId === f.id ? setEditingId(null) : startEdit(f)}
+                          className="text-xs font-medium transition-colors mr-3"
+                          style={{ color: editingId === f.id ? 'var(--c-muted-3)' : '#818cf8' }}
+                        >
+                          {editingId === f.id ? 'Cancel' : 'Edit'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(f.id, f.name)}
+                          disabled={deleteMut.isPending}
+                          className="text-xs font-medium disabled:opacity-50 transition-colors"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                    {editingId === f.id && (
+                      <tr key={`edit-${f.id}`} style={{ borderBottom: idx < filters.length - 1 ? '1px solid var(--c-border)' : 'none' }}>
+                        <td colSpan={5} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
+                              <input
+                                className={inputClass}
+                                style={inputStyle}
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Filter code</label>
+                              <CodeEditor value={editCode} onChange={setEditCode} />
+                            </div>
+                            {updateMut.isError && (
+                              <p className="text-xs text-red-400">{(updateMut.error as Error)?.message ?? 'Save failed'}</p>
+                            )}
+                            <button
+                              onClick={() => updateMut.mutate({ id: f.id, data: { code: editCode, description: editDescription || undefined } })}
+                              disabled={updateMut.isPending || !editCode.trim()}
+                              className="px-4 py-1.5 text-sm font-semibold text-white rounded-lg disabled:opacity-50 transition-all"
+                              style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '0 4px 14px rgba(99,102,241,0.3)' }}
+                            >
+                              {updateMut.isPending ? 'Saving…' : 'Save Changes'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>
@@ -333,6 +420,9 @@ function ObjectsTab() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [code, setCode] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editCode, setEditCode] = useState('')
+  const [editDescription, setEditDescription] = useState('')
 
   const { data: objects, isLoading } = useQuery({
     queryKey: ['admin-objects'],
@@ -357,10 +447,26 @@ function ObjectsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-objects'] }),
   })
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: CustomObjectUpdate }) => updateObject(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-objects'] }); setEditingId(null) },
+  })
+
+  function startEdit(o: { id: number; code: string; description?: string | null }) {
+    setEditingId(o.id)
+    setEditCode(o.code)
+    setEditDescription(o.description ?? '')
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-white font-display">Custom Objects</h2>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white font-display">Custom Objects</h2>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--c-muted-4)' }}>
+            Python objects injected into every template's Jinja2 context as named variables
+          </p>
+        </div>
         <button
           onClick={() => setShowForm((v) => !v)}
           className="px-4 py-2 text-sm font-semibold rounded-lg transition-all"
@@ -371,6 +477,22 @@ function ObjectsTab() {
         >
           {showForm ? 'Cancel' : 'New Object'}
         </button>
+      </div>
+
+      {/* Syntax hint */}
+      <div
+        className="mb-5 rounded-lg p-3 flex gap-3 items-start"
+        style={{ backgroundColor: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#818cf8' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+        </svg>
+        <div className="text-xs space-y-1" style={{ color: 'var(--c-muted-3)' }}>
+          <p>Write Python code that produces a value — a dict, list, class instance, or any object. Assign the final result to a variable with the <strong style={{ color: 'var(--c-muted-2)' }}>same name</strong> as the object name field.</p>
+          <p className="font-mono" style={{ color: 'var(--c-muted-4)' }}>{'vlans = {"voice": 10, "data": 20, "mgmt": 99}'}</p>
+          <p>The object is then available in templates as a top-level variable: <span className="font-mono" style={{ color: '#818cf8' }}>{'{{ vlans.voice }}'}</span> or <span className="font-mono" style={{ color: '#818cf8' }}>{'{% for name, id in vlans.items() %}'}</span></p>
+          <p>Objects can be scoped to a single project or shared across all projects (global).</p>
+        </div>
       </div>
 
       {showForm && (
@@ -447,27 +569,68 @@ function ObjectsTab() {
               </thead>
               <tbody>
                 {objects.map((o, idx) => (
-                  <tr key={o.id} style={{ borderBottom: idx < objects.length - 1 ? '1px solid var(--c-border)' : 'none' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{o.name}</td>
-                    <td className="px-4 py-3">
-                      <ScopeBadge scope={o.scope} projectId={o.project_id} />
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{o.description ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{o.created_by ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => { if (confirm(`Delete object "${o.name}"?`)) deleteMut.mutate(o.id) }}
-                        disabled={deleteMut.isPending}
-                        className="text-xs font-medium disabled:opacity-50 transition-colors"
-                        style={{ color: '#ef4444' }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
+                  <>
+                    <tr key={o.id} style={{ borderBottom: editingId === o.id ? 'none' : idx < objects.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{o.name}</td>
+                      <td className="px-4 py-3">
+                        <ScopeBadge scope={o.scope} projectId={o.project_id} />
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{o.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{o.created_by ?? '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => editingId === o.id ? setEditingId(null) : startEdit(o)}
+                          className="text-xs font-medium transition-colors mr-3"
+                          style={{ color: editingId === o.id ? 'var(--c-muted-3)' : '#818cf8' }}
+                        >
+                          {editingId === o.id ? 'Cancel' : 'Edit'}
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Delete object "${o.name}"?`)) deleteMut.mutate(o.id) }}
+                          disabled={deleteMut.isPending}
+                          className="text-xs font-medium disabled:opacity-50 transition-colors"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                    {editingId === o.id && (
+                      <tr key={`edit-${o.id}`} style={{ borderBottom: idx < objects.length - 1 ? '1px solid var(--c-border)' : 'none' }}>
+                        <td colSpan={5} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
+                              <input
+                                className={inputClass}
+                                style={inputStyle}
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Object code</label>
+                              <CodeEditor value={editCode} onChange={setEditCode} />
+                            </div>
+                            {updateMut.isError && (
+                              <p className="text-xs text-red-400">{(updateMut.error as Error)?.message ?? 'Save failed'}</p>
+                            )}
+                            <button
+                              onClick={() => updateMut.mutate({ id: o.id, data: { code: editCode, description: editDescription || undefined } })}
+                              disabled={updateMut.isPending || !editCode.trim()}
+                              className="px-4 py-1.5 text-sm font-semibold text-white rounded-lg disabled:opacity-50 transition-all"
+                              style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '0 4px 14px rgba(99,102,241,0.3)' }}
+                            >
+                              {updateMut.isPending ? 'Saving…' : 'Save Changes'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>
@@ -484,6 +647,9 @@ function MacrosTab() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [body, setBody] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editBody, setEditBody] = useState('')
+  const [editDescription, setEditDescription] = useState('')
 
   const { data: macros, isLoading } = useQuery({
     queryKey: ['admin-macros'],
@@ -507,6 +673,17 @@ function MacrosTab() {
     mutationFn: deleteMacro,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-macros'] }),
   })
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: CustomMacroUpdate }) => updateMacro(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-macros'] }); setEditingId(null) },
+  })
+
+  function startEdit(m: { id: number; body: string; description?: string | null }) {
+    setEditingId(m.id)
+    setEditBody(m.body)
+    setEditDescription(m.description ?? '')
+  }
 
   return (
     <div>
@@ -625,30 +802,71 @@ function MacrosTab() {
               </thead>
               <tbody>
                 {macros.map((m, idx) => (
-                  <tr key={m.id} style={{ borderBottom: idx < macros.length - 1 ? '1px solid var(--c-border)' : 'none' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{m.name}</span>
-                      <span className="ml-2 font-mono text-xs" style={{ color: 'var(--c-muted-4)' }}>{'(…)'}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ScopeBadge scope={m.scope} projectId={m.project_id} />
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{m.description ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{m.created_by ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => { if (confirm(`Delete macro "${m.name}"?`)) deleteMut.mutate(m.id) }}
-                        disabled={deleteMut.isPending}
-                        className="text-xs font-medium disabled:opacity-50 transition-colors"
-                        style={{ color: '#ef4444' }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
+                  <>
+                    <tr key={m.id} style={{ borderBottom: editingId === m.id ? 'none' : idx < macros.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{m.name}</span>
+                        <span className="ml-2 font-mono text-xs" style={{ color: 'var(--c-muted-4)' }}>{'(…)'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ScopeBadge scope={m.scope} projectId={m.project_id} />
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{m.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{m.created_by ?? '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => editingId === m.id ? setEditingId(null) : startEdit(m)}
+                          className="text-xs font-medium transition-colors mr-3"
+                          style={{ color: editingId === m.id ? 'var(--c-muted-3)' : '#818cf8' }}
+                        >
+                          {editingId === m.id ? 'Cancel' : 'Edit'}
+                        </button>
+                        <button
+                          onClick={() => { if (confirm(`Delete macro "${m.name}"?`)) deleteMut.mutate(m.id) }}
+                          disabled={deleteMut.isPending}
+                          className="text-xs font-medium disabled:opacity-50 transition-colors"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                    {editingId === m.id && (
+                      <tr key={`edit-${m.id}`} style={{ borderBottom: idx < macros.length - 1 ? '1px solid var(--c-border)' : 'none' }}>
+                        <td colSpan={5} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
+                              <input
+                                className={inputClass}
+                                style={inputStyle}
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Macro body (Jinja2)</label>
+                              <CodeEditor value={editBody} onChange={setEditBody} language="html" />
+                            </div>
+                            {updateMut.isError && (
+                              <p className="text-xs text-red-400">{(updateMut.error as Error)?.message ?? 'Save failed'}</p>
+                            )}
+                            <button
+                              onClick={() => updateMut.mutate({ id: m.id, data: { body: editBody, description: editDescription || undefined } })}
+                              disabled={updateMut.isPending || !editBody.trim()}
+                              className="px-4 py-1.5 text-sm font-semibold text-white rounded-lg disabled:opacity-50 transition-all"
+                              style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '0 4px 14px rgba(99,102,241,0.3)' }}
+                            >
+                              {updateMut.isPending ? 'Saving…' : 'Save Changes'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>

@@ -18,6 +18,7 @@ Auth: all endpoints require admin privileges.
 
 from __future__ import annotations
 
+import inspect
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -41,12 +42,15 @@ from api.schemas.admin import (
     CustomFilterCreate,
     CustomFilterDeleteOut,
     CustomFilterOut,
+    CustomFilterUpdate,
     CustomMacroCreate,
     CustomMacroDeleteOut,
     CustomMacroOut,
+    CustomMacroUpdate,
     CustomObjectCreate,
     CustomObjectDeleteOut,
     CustomObjectOut,
+    CustomObjectUpdate,
     DuplicateParameterGroup,
     DuplicateTemplateRef,
     DuplicatesReport,
@@ -251,6 +255,32 @@ async def test_filter(
         return FilterTestResult(ok=False, error=str(exc))
 
 
+@router.put(
+    "/filters/{filter_id}",
+    response_model=CustomFilterOut,
+    summary="Update custom filter",
+    description="Update the code and/or description of an existing custom filter. Code is re-validated in the sandbox.",
+)
+async def update_filter(
+    filter_id: int,
+    data: CustomFilterUpdate,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> CustomFilterOut:
+    try:
+        func = validate_and_compile(data.code)
+        await sandbox_test(func)
+    except SandboxError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Sandbox validation failed: {exc}",
+        ) from exc
+    cf = await custom_filter_service.update_filter(db, filter_id, data)
+    await log_write(db, token.sub, "update", "custom_filter", filter_id, {"description": data.description})
+    await db.commit()
+    return CustomFilterOut.model_validate(cf)
+
+
 @router.delete(
     "/filters/{filter_id}",
     response_model=CustomFilterDeleteOut,
@@ -299,7 +329,10 @@ async def create_object(
 ) -> CustomObjectOut:
     try:
         func = validate_and_compile(data.code)
-        await sandbox_test(func)
+        # Classes are used as namespace objects (not called with arguments),
+        # so skip the argument-passing test — syntax/AST validation is enough.
+        if not inspect.isclass(func):
+            await sandbox_test(func)
     except SandboxError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -325,6 +358,33 @@ async def list_objects(
 ) -> list[CustomObjectOut]:
     objects = await custom_filter_service.list_objects(db, project_id=project_id)
     return [CustomObjectOut.model_validate(o) for o in objects]
+
+
+@router.put(
+    "/objects/{object_id}",
+    response_model=CustomObjectOut,
+    summary="Update custom context object",
+    description="Update the code and/or description of an existing custom context object. Code is re-validated in the sandbox.",
+)
+async def update_object(
+    object_id: int,
+    data: CustomObjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> CustomObjectOut:
+    try:
+        func = validate_and_compile(data.code)
+        if not inspect.isclass(func):
+            await sandbox_test(func)
+    except SandboxError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Sandbox validation failed: {exc}",
+        ) from exc
+    co = await custom_filter_service.update_object(db, object_id, data)
+    await log_write(db, token.sub, "update", "custom_object", object_id, {"description": data.description})
+    await db.commit()
+    return CustomObjectOut.model_validate(co)
 
 
 @router.delete(
@@ -406,6 +466,50 @@ async def list_macros(
 ) -> list[CustomMacroOut]:
     macros = await custom_filter_service.list_macros(db, scope=scope, project_id=project_id)
     return [CustomMacroOut.model_validate(m) for m in macros]
+
+
+@router.put(
+    "/macros/{macro_id}",
+    response_model=CustomMacroOut,
+    summary="Update custom macro",
+    description="Update the body and/or description of an existing custom macro. Body is re-validated before saving.",
+)
+async def update_macro(
+    macro_id: int,
+    data: CustomMacroUpdate,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_admin),
+) -> CustomMacroOut:
+    import jinja2 as _jinja2
+
+    # Load existing macro to get its name for validation
+    from sqlalchemy import select as _select
+    from api.models.custom_macro import CustomMacro as _CustomMacro
+    result = await db.execute(
+        _select(_CustomMacro).where(_CustomMacro.id == macro_id, _CustomMacro.is_active.is_(True))
+    )
+    existing = result.scalar_one_or_none()
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Custom macro {macro_id} not found")
+
+    try:
+        env = _jinja2.Environment(undefined=_jinja2.Undefined, autoescape=False)
+        tmpl = env.from_string(data.body)
+        if not hasattr(tmpl.module, existing.name):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Macro body does not define a macro named '{existing.name}'.",
+            )
+    except _jinja2.exceptions.TemplateSyntaxError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Jinja2 syntax error: {exc}",
+        ) from exc
+
+    cm = await custom_filter_service.update_macro(db, macro_id, data)
+    await log_write(db, token.sub, "update", "custom_macro", macro_id, {"description": data.description})
+    await db.commit()
+    return CustomMacroOut.model_validate(cm)
 
 
 @router.delete(

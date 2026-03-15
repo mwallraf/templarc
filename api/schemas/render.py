@@ -174,6 +174,10 @@ class RenderHistoryOut(BaseModel):
     rendered_by: int | None
     rendered_at: datetime
     notes: str | None
+    # Phase 10: identity label (e.g. hostname) extracted at render time
+    display_label: str | None = None
+    # Phase 10: username of the renderer (populated via JOIN in list endpoint)
+    rendered_by_username: str | None = None
 
 
 class RenderHistoryListOut(BaseModel):
