@@ -35,7 +35,7 @@ services:
   # ── Postgres: expose port to host so local tools can connect ───────────────
   db:
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
 
   # ── OpenLDAP ───────────────────────────────────────────────────────────────
   # bitnami/openldap bootstraps the directory on first start using the env
@@ -59,7 +59,7 @@ services:
       LDAP_GROUP: users    # auto-adds user to cn=users,ou=groups,<root>
     ports:
       # bitnami/openldap listens on 1389 internally (unprivileged).
-      - "389:1389"
+      - "${LDAP_PORT:-389}:1389"
     healthcheck:
       # Wait until slapd accepts TCP connections before declaring healthy.
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/1389"]
