@@ -131,6 +131,56 @@ async def run_git_sync(
     proj = await _get_project_or_404(db, project_id)
     project_git_path = proj.git_path or proj.name
 
+    # ---------------------------------------------------------------------------
+    # Import project.yaml (project metadata + proj.* params)
+    # Only imports fields/params not already present in DB (DB wins after first write).
+    # project.yaml itself is a .yaml file and is never picked up as a template.
+    # ---------------------------------------------------------------------------
+    project_yaml = git_svc.read_project_yaml(project_git_path)
+    if project_yaml:
+        proj_updated = False
+        if project_yaml.get("display_name") and proj.display_name == proj.name:
+            proj.display_name = str(project_yaml["display_name"])
+            proj_updated = True
+        if project_yaml.get("description") and proj.description is None:
+            proj.description = str(project_yaml["description"])
+            proj_updated = True
+        if project_yaml.get("output_comment_style") and proj.output_comment_style == "#":
+            proj.output_comment_style = str(project_yaml["output_comment_style"])
+            proj_updated = True
+        if proj_updated:
+            await db.flush()
+
+        for sort_idx, p_data in enumerate(project_yaml.get("parameters") or []):
+            if not isinstance(p_data, dict):
+                continue
+            p_name: str | None = p_data.get("name")
+            if not p_name or not p_name.startswith("proj."):
+                continue  # project.yaml only defines proj.* params
+            exists = await db.execute(
+                select(Parameter.id).where(
+                    Parameter.name == p_name,
+                    Parameter.scope == ParameterScope.project,
+                    Parameter.project_id == project_id,
+                )
+            )
+            if exists.scalar_one_or_none() is not None:
+                continue  # already in DB — DB is authoritative
+            default_raw = p_data.get("default_value") or p_data.get("default")
+            param = Parameter(
+                name=p_name,
+                scope=ParameterScope.project,
+                project_id=project_id,
+                widget_type=_parse_widget_type(p_data.get("widget", "text")),
+                label=p_data.get("label"),
+                description=p_data.get("description"),
+                default_value=str(default_raw) if default_raw is not None else None,
+                required=bool(p_data.get("required", False)),
+                sort_order=sort_idx,
+            )
+            db.add(param)
+            await db.flush()
+
     git_files = git_svc.list_templates(project_git_path)
 
     # Load all git_paths already registered for this project

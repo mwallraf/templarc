@@ -19,11 +19,13 @@ Auth:
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.auth import TokenData, get_current_user, require_admin
 from api.database import get_db
-from api.models.parameter import ParameterScope
+from api.dependencies import get_git_service
+from api.models.parameter import Parameter, ParameterScope
 from api.schemas.parameter import (
     PaginatedResponse,
     ParameterCreate,
@@ -32,8 +34,9 @@ from api.schemas.parameter import (
     ParameterOut,
     ParameterUpdate,
 )
-from api.services import parameter_service
+from api.services import parameter_service, project_yaml_service
 from api.services.audit_log_service import log_write
+from api.services.git_service import GitService
 from api.services.parameter_service import compute_pages
 
 router = APIRouter()
@@ -104,10 +107,13 @@ async def create_parameter(
     data: ParameterCreate,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
+    git_svc: GitService = Depends(get_git_service),
 ) -> ParameterOut:
     param = await parameter_service.create_parameter(db, data)
     await log_write(db, token.sub, "create", "parameter", param.id, data.model_dump())
     await db.commit()
+    if param.scope == ParameterScope.project and param.project_id:
+        await project_yaml_service.write_project_yaml(db, param.project_id, git_svc, author=token.sub)
     return ParameterOut.model_validate(param)
 
 
@@ -148,10 +154,13 @@ async def update_parameter(
     data: ParameterUpdate,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
+    git_svc: GitService = Depends(get_git_service),
 ) -> ParameterOut:
     param = await parameter_service.update_parameter(db, parameter_id, data)
     await log_write(db, token.sub, "update", "parameter", parameter_id, data.model_dump(exclude_none=True))
     await db.commit()
+    if param.scope == ParameterScope.project and param.project_id:
+        await project_yaml_service.write_project_yaml(db, param.project_id, git_svc, author=token.sub)
     return ParameterOut.model_validate(param)
 
 
@@ -170,10 +179,19 @@ async def delete_parameter(
     parameter_id: int,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
+    git_svc: GitService = Depends(get_git_service),
 ) -> None:
+    # Capture scope info before soft-delete for write-back decision
+    row = (await db.execute(
+        select(Parameter.scope, Parameter.project_id).where(
+            Parameter.id == parameter_id, Parameter.is_active.is_(True)
+        )
+    )).one_or_none()
     await parameter_service.delete_parameter(db, parameter_id)
     await log_write(db, token.sub, "delete", "parameter", parameter_id)
     await db.commit()
+    if row and row[0] == ParameterScope.project and row[1]:
+        await project_yaml_service.write_project_yaml(db, row[1], git_svc, author=token.sub)
 
 
 # ---------------------------------------------------------------------------

@@ -299,6 +299,52 @@ class GitService:
         return parse_frontmatter(content)
 
     # ------------------------------------------------------------------
+    # project.yaml helpers
+    # ------------------------------------------------------------------
+
+    _PROJECT_YAML = "project.yaml"
+
+    def read_project_yaml(self, project_git_path: str) -> dict | None:
+        """
+        Read and parse project.yaml from the project's git directory.
+
+        Returns the parsed dict, or None if the file does not exist or
+        cannot be parsed.
+        """
+        yaml_path = self._abs(f"{project_git_path}/{self._PROJECT_YAML}")
+        if not yaml_path.is_file():
+            return None
+        try:
+            return yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            return None
+
+    def write_project_yaml(
+        self,
+        project_git_path: str,
+        project_data: dict,
+        author: str = "templarc",
+    ) -> str:
+        """
+        Serialise *project_data* as YAML and write/commit project.yaml.
+
+        project_data keys: name, display_name, description (optional),
+        output_comment_style, parameters (list of dicts, optional).
+
+        Returns the new commit SHA.
+        """
+        content = (
+            "# templarc project definition — managed automatically\n"
+            + yaml.dump(project_data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        )
+        return self.write_template(
+            f"{project_git_path}/{self._PROJECT_YAML}",
+            content,
+            message=f"chore: update {self._PROJECT_YAML}",
+            author=author,
+        )
+
+    # ------------------------------------------------------------------
     # Remote Git operations (per-project sub-repos)
     # ------------------------------------------------------------------
 

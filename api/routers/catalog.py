@@ -34,7 +34,7 @@ from api.schemas.catalog import (
     ProjectUpdate,
     TemplateTreeNode,
 )
-from api.services import catalog_service
+from api.services import catalog_service, project_yaml_service
 from api.services.audit_log_service import log_write
 from api.services.git_service import GitService
 
@@ -129,11 +129,13 @@ async def update_project(
     data: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
+    git_svc: GitService = Depends(get_git_service),
 ) -> ProjectOut:
     proj = await catalog_service.update_project(db, project_id, data)
     out = ProjectOut.model_validate(proj)
     await log_write(db, token.sub, "update", "project", project_id, data.model_dump(exclude_none=True))
     await db.commit()
+    await project_yaml_service.write_project_yaml(db, project_id, git_svc, author=token.sub)
     return out
 
 
