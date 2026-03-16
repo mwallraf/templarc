@@ -11,7 +11,7 @@
 
 COMPOSE    := docker compose
 DEV_FILES  := -f docker-compose.yml -f docker-compose.dev.yml
-PROD_FILES := -f docker-compose.yml
+PROD_FILES := -f docker-compose.yml -f docker-compose.prod.yml
 
 DEV  := $(COMPOSE) $(DEV_FILES)
 PROD := $(COMPOSE) $(PROD_FILES)

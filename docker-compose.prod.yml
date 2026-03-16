@@ -1,0 +1,20 @@
+# ─── Production overlay ───────────────────────────────────────────────────────
+#
+# Apply on top of docker-compose.yml for production deployments:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# (Use 'make prod' — the Makefile handles the -f flags automatically.)
+#
+# What this adds over the base compose:
+#   • Frontend nginx port exposed on FRONTEND_PORT (default 80)
+#   • nginx proxies /api/* to the FastAPI container internally
+#   • For TLS, place a reverse proxy (nginx, Caddy, Traefik) in front
+
+services:
+  frontend:
+    ports:
+      # Single public entry-point. nginx proxies /api/* to the api service
+      # internally; everything else is served as static files.
+      # For HTTPS, put a TLS-terminating reverse proxy in front of this port.
+      - "${FRONTEND_PORT:-80}:80"

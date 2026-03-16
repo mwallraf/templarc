@@ -1,17 +1,15 @@
-# ─── Production deployment ────────────────────────────────────────────────────
+# ─── Base service definitions ─────────────────────────────────────────────────
 #
-# Intended for production or staging environments.
-# Before running, ensure .env contains secure values for:
-#   POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, SECRET_KEY,
-#   LDAP_SERVER, LDAP_BASE_DN, LDAP_ADMIN_GROUP
+# Shared by all environments. Do NOT run this file alone — always combine with
+# an environment overlay that adds port bindings:
 #
-# Start:  docker compose up -d
-# Stop:   docker compose down
+#   Dev:   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   Prod:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up
 #
-# The database and API ports are NOT exposed to the host.
-# The frontend (nginx) is the single public entry-point on FRONTEND_PORT (80).
-# It proxies /api/* to the FastAPI container internally.
-# For TLS, place a reverse proxy (nginx, Caddy, Traefik) in front of port 80.
+# (The Makefile targets 'make dev' and 'make prod' do this automatically.)
+#
+# Port bindings are intentionally absent here to prevent the "double mapping"
+# problem that occurs when Compose merges port lists from overlapping files.
 
 services:
   db:
@@ -69,10 +67,7 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY:    ${NO_PROXY:-}
     restart: unless-stopped
-    ports:
-      # This is the only publicly exposed port. nginx proxies /api/* to the api
-      # service internally; everything else is served as static files.
-      - "${FRONTEND_PORT:-80}:80"
+    # No ports here — added by docker-compose.prod.yml or docker-compose.dev.yml.
     depends_on:
       - api
     networks:
