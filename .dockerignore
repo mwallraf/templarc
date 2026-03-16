@@ -10,3 +10,5 @@ frontend/
 *.md
 .env
 .gitignore
+
+templates_repo/
