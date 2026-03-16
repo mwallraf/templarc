@@ -1,0 +1,23 @@
+{#-
+  CPE Device: Cisco 1111
+  ───────────────────────
+  Sets ns.d with Cisco 1111 device-specific config.
+  IOS-XE — integrated WAN + LAN switch, compact form factor.
+  Supports VLANs, QoS on sub-interfaces. No SFP or AUX port.
+-#}
+{%- set ns.d = {
+    'vendor':              'CISCO',
+    'os':                  'IOS-XE',
+    'model':               'C1111',
+    'wan_interface':       'GigabitEthernet0/0/0',
+    'lan_vlan_interface':  'Vlan',
+    'loopback_interface':  'Loopback',
+    'ppp_interface':       'Dialer',
+    'tunnel_interface':    'Tunnel',
+    'supports_vlans':      True,
+    'qos_on_subint':       True,
+    'nat_capable':         True,
+    'vtp_mode':            'transparent',
+    'mgmt_vlan':           99,
+    'qos_policy_out':      'WAN-QOS-STD',
+} -%}

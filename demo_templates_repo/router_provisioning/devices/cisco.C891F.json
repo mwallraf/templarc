@@ -1,0 +1,27 @@
+{
+  "VENDOR": "CISCO",
+  "HARDWARE": "C891F",
+  "SOFTWARE": "IOS",
+  "LOOPBACK_INTERFACE": "Loopback",
+  "WAN_HW_INTERFACE": "GigabitEthernet8",
+  "LAN_VLAN_INTERFACE": "Vlan",
+  "PPP_INTERFACE": "Dialer",
+  "TUNNEL_INTERFACE": "Tunnel",
+  "INTERFACE_STARTINDEX": 0,
+  "LAN_SUPPORTS_VLANS": true,
+  "VTP_MODE": "transparent",
+  "SUPPORTS_SFP": true,
+  "HAS_AUX_PORT": true,
+  "QOS_SUPPORTED_ON_SUBINT": true,
+  "PHYSICAL_INTERFACES": [
+    {"int": "GigabitEthernet0", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet1", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet2", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet3", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet4", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet5", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet6", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet7", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet8", "TYPE": "wan", "routed": true, "supports_sfp": false}
+  ]
+}

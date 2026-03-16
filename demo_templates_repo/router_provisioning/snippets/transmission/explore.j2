@@ -1,0 +1,18 @@
+{#-
+  Transmission: Explore (4G/LTE Cellular)
+  ─────────────────────────────────────────
+  Sets ns.t with 4G/LTE cellular defaults.
+  Used for primary mobile connectivity or WAN backup.
+  No VLAN tagging; WAN interface is the cellular controller.
+  Note: WAN_HW_INTERFACE will be overridden by the CPE device snippet
+        to point to the cellular interface (e.g. cellular 0/0/0).
+-#}
+{%- set ns.t = {
+    'type':         'explore',
+    'encap':        'cellular',
+    'dot1q':        False,
+    'mtu':          1500,
+    'requires_ppp': False,
+    'is_backup':    True,
+    'description':  'Explore 4G/LTE Cellular WAN',
+} -%}

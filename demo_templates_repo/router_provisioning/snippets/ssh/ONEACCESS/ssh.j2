@@ -1,0 +1,7 @@
+{#- OneAccess SSH configuration -#}
+crypto key generate dsa 1024 no-confirm
+ip ssh enable
+ip ssh timeout 900
+ip ssh auth-timeout 30
+ip ssh auth-retries 3
+!

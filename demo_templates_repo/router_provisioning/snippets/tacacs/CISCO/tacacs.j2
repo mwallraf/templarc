@@ -1,0 +1,13 @@
+{#- Cisco TACACS+ server configuration -#}
+{% if proj.tacacs_servers is defined %}
+{% for _tacacs in proj.tacacs_servers.split(',') %}
+tacacs-server host {{ _tacacs | trim }}
+{% endfor %}
+{% endif %}
+{% if proj.tacacs_key is defined and proj.tacacs_key %}
+tacacs-server key {{ proj.tacacs_key }}
+{% endif %}
+{% if management_interface is defined %}
+ip tacacs source-interface {{ management_interface }}
+{% endif %}
+!

@@ -1,0 +1,22 @@
+{#-
+  CPE Device: OneAccess LBB150
+  ──────────────────────────────
+  Sets ns.d with LBB150 device-specific config.
+  ONEOS — entry-level CPE, 4x LAN GigE + 1x WAN GigE.
+  No VLAN trunk support; uses BVI (Bridge Virtual Interface) for LAN.
+-#}
+{%- set ns.d = {
+    'vendor':              'ONEACCESS',
+    'os':                  'ONEOS',
+    'model':               'LBB150',
+    'wan_interface':       'GigabitEthernet 1/0',
+    'lan_vlan_interface':  'Bvi',
+    'loopback_interface':  'Loopback ',
+    'ppp_interface':       'virtual-template ppp ',
+    'tunnel_interface':    'Tunnel ',
+    'supports_vlans':      False,
+    'qos_on_subint':       False,
+    'nat_capable':         True,
+    'mgmt_vlan':           None,
+    'qos_policy_out':      'WAN-QOS-STD',
+} -%}

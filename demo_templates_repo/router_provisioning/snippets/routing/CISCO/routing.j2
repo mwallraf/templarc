@@ -1,0 +1,19 @@
+{#- Cisco BGP routing for L3VPN -#}
+{% if cpe_dynamic_routing is defined and cpe_dynamic_routing %}
+router bgp {{ bgp_private_as | default(proj.as_number | default('65000')) }}
+ no synchronization
+ bgp log-neighbor-changes
+{% if vrf is defined and vrf %}
+ address-family ipv4 vrf {{ vrf }}
+{% endif %}
+{% if wan_p2p_network is defined %}
+  neighbor {{ wan_p2p_network | ipaddr('1') | ipaddr('address') }} remote-as {{ proj.as_number | default('65000') }}
+  neighbor {{ wan_p2p_network | ipaddr('1') | ipaddr('address') }} activate
+  neighbor {{ wan_p2p_network | ipaddr('1') | ipaddr('address') }} send-community
+  neighbor {{ wan_p2p_network | ipaddr('1') | ipaddr('address') }} soft-reconfiguration inbound
+{% endif %}
+{% if vrf is defined and vrf %}
+ exit-address-family
+{% endif %}
+!
+{% endif %}

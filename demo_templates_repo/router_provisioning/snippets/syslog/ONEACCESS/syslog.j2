@@ -1,0 +1,12 @@
+{#- OneAccess syslog configuration -#}
+{% if proj.syslog_servers is defined %}
+{% for _syslog in proj.syslog_servers.split(',') %}
+syslog server {{ _syslog | trim }} {% if management_interface is defined %}{{ management_interface }}{% endif %}
+
+{% endfor %}
+{% elif proj.syslog_server is defined %}
+syslog server {{ proj.syslog_server }} {% if management_interface is defined %}{{ management_interface }}{% endif %}
+
+{% endif %}
+syslog-server enable
+!

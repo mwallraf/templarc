@@ -1,0 +1,52 @@
+{#-
+  Corporate Internet - VDSL2 Shared VLAN
+
+  Hardware: LBB150, LBB154, LBB156, LBB157 (OneAccess)
+  Transmission: VDSL2 with shared VLAN
+
+  Required parameters:
+    proj.hostname, proj.loopback_ip, proj.service_id, proj.gsid
+    proj.wan_p2p_network, proj.bw_down_mb, proj.bw_up_mb, proj.router_function
+    proj.vendor, proj.hardware (from device profile datasource)
+-#}
+{%- set _VENDOR = 'CISCO' if (proj.hardware | default('') | string).startswith('cisco.') else 'ONEACCESS' -%}
+{%- include "snippets/device_profile/device_profile.j2" ignore missing -%}
+{%- set _HARDWARE = proj.hardware | default('LBB154') -%}
+
+{%- macro include_snippet(name) -%}
+{%- set _DEVICES = {
+    'cisco.C891F':           {'WAN_HW_INTERFACE': 'GigabitEthernet8',      'LAN_VLAN_INTERFACE': 'Vlan'},
+    'cisco.C1111':           {'WAN_HW_INTERFACE': 'GigabitEthernet0/0/0',  'LAN_VLAN_INTERFACE': 'Vlan'},
+    'cisco.C2921':           {'WAN_HW_INTERFACE': 'GigabitEthernet0/0',    'LAN_VLAN_INTERFACE': 'Vlan'},
+    'cisco.ASR1001-X':       {'WAN_HW_INTERFACE': 'GigabitEthernet0/0/0',  'LAN_VLAN_INTERFACE': 'BDI'},
+    'cisco.C8300-1N1S-4T2X': {'WAN_HW_INTERFACE': 'GigabitEthernet0/0/0', 'LAN_VLAN_INTERFACE': 'Vlan'},
+    'cisco.C8300-1N1S-6T':   {'WAN_HW_INTERFACE': 'GigabitEthernet0/0/0', 'LAN_VLAN_INTERFACE': 'Vlan'},
+    'oneaccess.LBB150':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB154':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB156':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB157':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB320':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB400':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB500':      {'WAN_HW_INTERFACE': 'GigabitEthernet 1/0',   'LAN_VLAN_INTERFACE': 'Bvi'},
+    'oneaccess.LBB4G':       {'WAN_HW_INTERFACE': 'cellular 0',            'LAN_VLAN_INTERFACE': 'Bvi'},
+} -%}
+{%- set _HW = proj.hardware | default('') | string -%}
+{%- set WAN_HW_INTERFACE   = _DEVICES[_HW]['WAN_HW_INTERFACE']   if _HW in _DEVICES else '' -%}
+{%- set LAN_VLAN_INTERFACE = _DEVICES[_HW]['LAN_VLAN_INTERFACE'] if _HW in _DEVICES else 'Vlan' -%}
+{%- include [
+    "snippets/" ~ name ~ "/" ~ _VENDOR ~ "/" ~ name ~ ".j2",
+    "snippets/" ~ name ~ "/" ~ name ~ ".j2"
+] ignore missing -%}
+{%- endmacro %}
+
+{{ include_snippet("banner") }}
+{{ include_snippet("aaa") }}
+{{ include_snippet("proj.hostname") }}
+{{ include_snippet("logging") }}
+{{ include_snippet("ssh") }}
+{{ include_snippet("interfaces") }}
+{{ include_snippet("routing") }}
+{{ include_snippet("ntp") }}
+{{ include_snippet("snmp") }}
+{{ include_snippet("syslog") }}
+{{ include_snippet("tacacs") }}

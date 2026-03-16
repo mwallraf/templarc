@@ -1,0 +1,10 @@
+{#- Cisco SNMP configuration -#}
+{% if proj.snmp_community is defined and proj.snmp_community %}
+snmp-server community {{ proj.snmp_community }} RO
+snmp-server ifindex persist
+snmp-server enable traps tty
+{% if management_interface is defined %}
+snmp-server trap-source {{ management_interface }}
+{% endif %}
+!
+{% endif %}

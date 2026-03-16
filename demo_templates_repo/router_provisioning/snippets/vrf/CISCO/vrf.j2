@@ -1,0 +1,8 @@
+{#- Cisco-specific vrf configuration -#}
+{% if vrf is defined and vrf %}
+ip vrf {{ vrf }}
+ rd {{ proj.as_number | default('65000') }}:1
+ route-target export {{ proj.as_number | default('65000') }}:1
+ route-target import {{ proj.as_number | default('65000') }}:1
+!
+{% endif %}

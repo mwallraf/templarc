@@ -1,0 +1,21 @@
+---
+parameters:
+  - name: my_random_parameter
+    widget: text
+data_sources:
+  - id: mockup_api
+    url: "http://mock-api:8080/devices/{{proj.service_id}}"
+    trigger: on_change:proj.service_id
+    cache_ttl: 300
+    mapping:
+      - remote_field: "short_name"
+        to_parameter: proj.hostname
+        auto_fill: true
+---
+# Template: test
+
+service id = {{ proj.service_id }}
+
+my hostname = {{ proj.hostname }}
+
+and some other parameter = {{ my_random_parameter }}

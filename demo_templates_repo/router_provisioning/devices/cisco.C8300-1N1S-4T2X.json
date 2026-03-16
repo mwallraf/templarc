@@ -1,0 +1,24 @@
+{
+  "VENDOR": "CISCO",
+  "HARDWARE": "C8300-1N1S-4T2X",
+  "SOFTWARE": "IOS-XE",
+  "LOOPBACK_INTERFACE": "Loopback",
+  "WAN_HW_INTERFACE": "GigabitEthernet0/0/0",
+  "LAN_VLAN_INTERFACE": "Vlan",
+  "PPP_INTERFACE": "Dialer",
+  "TUNNEL_INTERFACE": "Tunnel",
+  "INTERFACE_STARTINDEX": 0,
+  "LAN_SUPPORTS_VLANS": true,
+  "VTP_MODE": "transparent",
+  "SUPPORTS_SFP": true,
+  "HAS_AUX_PORT": false,
+  "QOS_SUPPORTED_ON_SUBINT": true,
+  "PHYSICAL_INTERFACES": [
+    {"int": "GigabitEthernet0/0/1", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet0/0/2", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet0/0/3", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "TwoGigabitEthernet0/0/0", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "TwoGigabitEthernet0/0/1", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet0/0/0", "TYPE": "wan", "routed": true, "supports_sfp": false}
+  ]
+}

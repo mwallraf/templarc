@@ -1,0 +1,23 @@
+{#-
+  CPE Device: OneAccess LBB154
+  ──────────────────────────────
+  Sets ns.d with LBB154 device-specific config.
+  ONEOS — mid-range CPE with integrated VDSL2 modem, 4x LAN + 1x WAN GigE.
+  Supports SFP. No VLAN trunking; BVI-based LAN.
+-#}
+{%- set ns.d = {
+    'vendor':              'ONEACCESS',
+    'os':                  'ONEOS',
+    'model':               'LBB154',
+    'wan_interface':       'GigabitEthernet 1/0',
+    'lan_vlan_interface':  'Bvi',
+    'loopback_interface':  'Loopback ',
+    'ppp_interface':       'virtual-template ppp ',
+    'tunnel_interface':    'Tunnel ',
+    'supports_vlans':      False,
+    'supports_sfp':        True,
+    'qos_on_subint':       False,
+    'nat_capable':         True,
+    'mgmt_vlan':           None,
+    'qos_policy_out':      'WAN-QOS-STD',
+} -%}

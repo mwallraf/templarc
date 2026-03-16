@@ -1,0 +1,176 @@
+---
+parameters:
+  - name: product
+    widget: select
+    label: "Product"
+    description: "Service product type"
+    required: true
+    options:
+      - value: "ipvpn"
+        label: "IPVPN (L3VPN)"
+      - value: "corp_internet"
+        label: "Corporate Internet"
+
+  - name: transmission
+    widget: select
+    label: "Transmission Type"
+    description: "Access layer technology"
+    required: true
+    options:
+      - value: "ethernet"
+        label: "Ethernet / Direct Fiber"
+      - value: "gpon"
+        label: "GPON"
+      - value: "vdsl_shared"
+        label: "VDSL2 Shared VLAN"
+      - value: "vdsl_dedicated"
+        label: "VDSL2 Dedicated VLAN"
+      - value: "explore"
+        label: "Explore (4G/LTE)"
+      - value: "ipsec"
+        label: "IPsec Tunnel"
+
+  - name: cpe_model
+    widget: select
+    label: "CPE Model"
+    description: "Customer premises equipment model"
+    required: true
+    options:
+      - value: "cisco.c891f"
+        label: "Cisco 891F"
+      - value: "cisco.c1111"
+        label: "Cisco 1111"
+      - value: "oneaccess.lbb150"
+        label: "OneAccess LBB150"
+      - value: "oneaccess.lbb154"
+        label: "OneAccess LBB154"
+      - value: "oneaccess.lbb400"
+        label: "OneAccess LBB400"
+
+  - name: vrf
+    widget: text
+    label: "VRF Name"
+    description: "Customer VRF name (IPVPN only)"
+
+  - name: pe_hostname
+    widget: text
+    label: "PE Hostname"
+    description: "Provider Edge router hostname"
+
+  - name: pe_interface
+    widget: text
+    label: "PE Interface"
+    description: "Provider Edge interface facing this CPE"
+
+  - name: wan_vlan
+    widget: number
+    label: "WAN VLAN ID"
+    description: "Dot1Q VLAN tag on WAN uplink (GPON / VDSL)"
+
+  - name: cpe_wan_dhcp
+    widget: select
+    label: "WAN IP Assignment"
+    options:
+      - value: "false"
+        label: "Static (from wan_p2p_network)"
+      - value: "true"
+        label: "DHCP"
+---
+{#-
+  CPE Provisioning — Universal Single Template
+  =============================================
+  Products:     IPVPN (L3VPN) | Corporate Internet
+  Transmission: ethernet, gpon, vdsl_shared, vdsl_dedicated, explore, ipsec
+  CPE:          Cisco C891F, C1111  |  OneAccess LBB150, LBB154, LBB400
+
+  Architecture (namespace pattern):
+    ns.t  = transmission config (set by snippets/transmission/<type>.j2)
+    ns.d  = CPE device overrides (set by snippets/cpe/<model>.j2)
+
+  The router and net Custom Objects provide lookup tables for interface names,
+  CLI syntax, QoS profiles, and standard network values.
+
+  Project parameters used (proj.*):
+    proj.hostname, proj.loopback_ip, proj.service_id, proj.gsid
+    proj.wan_p2p_network, proj.bw_down_mb, proj.bw_up_mb
+    proj.vendor, proj.hardware
+-#}
+
+{#- ── Vendor detection ──────────────────────────────────────────────────── -#}
+{%- set _cpe    = cpe_model | default('cisco.c891f') | lower -%}
+{%- set _VENDOR = 'CISCO' if _cpe.startswith('cisco.') else 'ONEACCESS' -%}
+
+{#- ── Interface lookup from router Custom Object ────────────────────────── -#}
+{%- set _hw = router.CPE_MODELS[_cpe] if _cpe in router.CPE_MODELS else router.CPE_MODELS['cisco.c891f'] -%}
+{%- set WAN_HW_INTERFACE   = _hw.wan_interface -%}
+{%- set LAN_VLAN_INTERFACE = _hw.lan_vlan_interface -%}
+{%- set LOOPBACK_INTERFACE = _hw.loopback_interface -%}
+
+{#- ── Namespace for cross-snippet shared state ──────────────────────────── -#}
+{%- set ns = namespace(t={}, d={}) -%}
+
+{#- ── Transmission snippet: populates ns.t ──────────────────────────────── -#}
+{%- set _tx = transmission | default('ethernet') | lower -%}
+{%- include [
+    "snippets/transmission/" ~ _tx ~ ".j2",
+    "snippets/transmission/ethernet.j2"
+] ignore missing -%}
+
+{#- ── CPE device snippet: populates ns.d ───────────────────────────────── -#}
+{%- include ["snippets/cpe/" ~ _cpe ~ ".j2"] ignore missing -%}
+
+{#- ── Vendor-aware snippet dispatcher (existing pattern) ────────────────── -#}
+{%- macro include_snippet(name) -%}
+{%- include [
+    "snippets/" ~ name ~ "/" ~ _VENDOR ~ "/" ~ name ~ ".j2",
+    "snippets/" ~ name ~ "/" ~ name ~ ".j2"
+] ignore missing -%}
+{%- endmacro -%}
+
+{#- ════════════════════════════════════════════════════════════════════════ -#}
+{#-  RENDERED OUTPUT                                                         -#}
+{#- ════════════════════════════════════════════════════════════════════════ -#}
+{{ include_snippet("banner") }}
+{{ include_snippet("aaa") }}
+{{ include_snippet("hostname") }}
+{{ include_snippet("logging") }}
+{{ include_snippet("ssh") }}
+
+{%- if product | default('ipvpn') == 'ipvpn' %}
+{{ include_snippet("vrf") }}
+{%- endif %}
+
+{#- WAN interface — rendered inline using ns.t (transmission) context -#}
+{%- if proj.loopback_ip is defined and proj.loopback_ip %}
+interface {{ LOOPBACK_INTERFACE }}0
+ description Management Loopback - {{ proj.service_id | default('') }}
+ ip address {{ proj.loopback_ip | ipaddr('address') }} {{ proj.loopback_ip | ipaddr('netmask') }}
+ no shutdown
+!
+{%- endif %}
+
+{%- if ns.t.get('dot1q') and wan_vlan is defined and wan_vlan %}
+interface {{ WAN_HW_INTERFACE }}.{{ wan_vlan }}
+ description WAN - {{ pe_hostname | default('PE') }} {{ pe_interface | default('') }} - {{ proj.service_id | default('') }}
+ encapsulation dot1Q {{ wan_vlan }}
+{%- else %}
+interface {{ WAN_HW_INTERFACE }}
+ description WAN - {{ pe_hostname | default('PE') }} {{ pe_interface | default('') }} - {{ proj.service_id | default('') }}
+{%- endif %}
+{%- if cpe_wan_dhcp | default('false') == 'true' %}
+ ip address dhcp
+{%- elif proj.wan_p2p_network is defined and proj.wan_p2p_network %}
+ ip address {{ proj.wan_p2p_network | ipaddr('2') | ipaddr('address') }} {{ proj.wan_p2p_network | ipaddr('netmask') }}
+{%- endif %}
+{%- if product | default('ipvpn') == 'ipvpn' and vrf is defined and vrf %}
+ ip vrf forwarding {{ vrf }}
+{%- endif %}
+ mtu {{ ns.t.get('mtu', 1500) }}
+ no shutdown
+!
+
+{{ include_snippet("routing") }}
+{{ include_snippet("ntp") }}
+{{ include_snippet("snmp") }}
+{{ include_snippet("syslog") }}
+{{ include_snippet("tacacs") }}

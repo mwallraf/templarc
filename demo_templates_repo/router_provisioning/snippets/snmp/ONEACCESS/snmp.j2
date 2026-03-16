@@ -1,0 +1,12 @@
+{#- OneAccess SNMP configuration -#}
+{% if proj.snmp_community is defined and proj.snmp_community %}
+snmp set-read-community "{{ proj.snmp_community }}"
+no snmp set-write-community private
+no snmp set-read-community public
+!
+{% if management_interface is defined %}
+snmp trap-source {{ management_interface }}
+{% endif %}
+snmp vrf default-router
+!
+{% endif %}

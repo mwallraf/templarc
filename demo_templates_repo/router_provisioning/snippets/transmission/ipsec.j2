@@ -1,0 +1,33 @@
+{#-
+  Transmission: IPsec Tunnel
+  ───────────────────────────
+  Sets ns.t with IPsec tunnel defaults.
+  The physical WAN uplink is typically ethernet; the IPsec tunnel
+  is the logical WAN interface carrying customer traffic.
+  MTU is reduced to account for IPsec/ESP overhead (~100 bytes).
+-#}
+{%- set ns.t = {
+    'type':            'ipsec',
+    'encap':           'ipsec',
+    'dot1q':           False,
+    'mtu':             1400,
+    'requires_ppp':    False,
+    'overhead_bytes':  100,
+    'description':     'IPsec Tunnel WAN',
+} -%}
+
+{#- IPsec tunnel interface configuration -#}
+{%- if proj.wan_p2p_network is defined %}
+interface Tunnel0
+ description IPsec Tunnel - {{ proj.service_id | default('') }}
+ ip address {{ proj.wan_p2p_network | ipaddr('2') | ipaddr('address') }} {{ proj.wan_p2p_network | ipaddr('netmask') }}
+{%- if product | default('ipvpn') == 'ipvpn' and vrf is defined and vrf %}
+ ip vrf forwarding {{ vrf }}
+{%- endif %}
+ tunnel source {{ WAN_HW_INTERFACE }}
+ tunnel destination {{ pe_hostname | default('0.0.0.0') }}
+ ip mtu {{ ns.t.mtu }}
+ ip tcp adjust-mss {{ ns.t.mtu - 40 }}
+ no shutdown
+!
+{%- endif %}

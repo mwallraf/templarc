@@ -1,0 +1,12 @@
+{#- Cisco syslog configuration -#}
+{% if proj.syslog_servers is defined %}
+{% for _syslog in proj.syslog_servers.split(',') %}
+logging {{ _syslog | trim }}
+{% endfor %}
+{% elif proj.syslog_server is defined %}
+logging {{ proj.syslog_server }}
+{% endif %}
+{% if management_interface is defined %}
+logging source-interface {{ management_interface }}
+{% endif %}
+!

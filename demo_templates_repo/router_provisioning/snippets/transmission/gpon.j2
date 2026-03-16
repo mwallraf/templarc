@@ -1,0 +1,15 @@
+{#-
+  Transmission: GPON (Gigabit Passive Optical Network)
+  ──────────────────────────────────────────────────────
+  Sets ns.t with GPON-specific defaults.
+  Typically uses PPPoE over a dot1Q VLAN on the ONT uplink.
+  wan_vlan: VLAN assigned by the GPON operator (required).
+-#}
+{%- set ns.t = {
+    'type':         'gpon',
+    'encap':        'pppoe',
+    'dot1q':        True,
+    'mtu':          1492,
+    'requires_ppp': True,
+    'description':  'GPON xDSL WAN',
+} -%}

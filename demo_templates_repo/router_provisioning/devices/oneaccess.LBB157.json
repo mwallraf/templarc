@@ -1,0 +1,23 @@
+{
+  "VENDOR": "ONEACCESS",
+  "HARDWARE": "LBB157",
+  "SOFTWARE": "ONEOS",
+  "LOOPBACK_INTERFACE": "Loopback ",
+  "WAN_HW_INTERFACE": "GigabitEthernet 1/0",
+  "LAN_VLAN_INTERFACE": "Bvi ",
+  "PPP_INTERFACE": "virtual-template ppp ",
+  "CELLULAR_CONTROLLER": "cellular ",
+  "TUNNEL_INTERFACE": "Tunnel ",
+  "CONTROLLER_STARTINDEX": 0,
+  "INTERFACE_STARTINDEX": 1,
+  "LAN_SUPPORTS_VLANS": false,
+  "HAS_AUX_PORT": false,
+  "QOS_SUPPORTED_ON_SUBINT": false,
+  "PHYSICAL_INTERFACES": [
+    {"int": "GigabitEthernet 0/0", "TYPE": "lan", "routed": true, "supports_sfp": false},
+    {"int": "GigabitEthernet 0/1", "TYPE": "lan", "routed": true, "supports_sfp": false},
+    {"int": "GigabitEthernet 0/2", "TYPE": "lan", "routed": true, "supports_sfp": false},
+    {"int": "GigabitEthernet 0/3", "TYPE": "lan", "routed": true, "supports_sfp": false},
+    {"int": "GigabitEthernet 1/0", "TYPE": "wan", "routed": true, "supports_sfp": false}
+  ]
+}

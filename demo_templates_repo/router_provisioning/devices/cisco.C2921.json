@@ -1,0 +1,21 @@
+{
+  "VENDOR": "CISCO",
+  "HARDWARE": "C2921",
+  "SOFTWARE": "IOS",
+  "LOOPBACK_INTERFACE": "Loopback",
+  "WAN_HW_INTERFACE": "GigabitEthernet0/0",
+  "LAN_VLAN_INTERFACE": "Vlan",
+  "PPP_INTERFACE": "Dialer",
+  "TUNNEL_INTERFACE": "Tunnel",
+  "INTERFACE_STARTINDEX": 0,
+  "LAN_SUPPORTS_VLANS": true,
+  "VTP_MODE": "transparent",
+  "SUPPORTS_SFP": false,
+  "HAS_AUX_PORT": true,
+  "QOS_SUPPORTED_ON_SUBINT": true,
+  "PHYSICAL_INTERFACES": [
+    {"int": "GigabitEthernet0/1", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet0/2", "TYPE": "lan", "routed": false, "supports_sfp": false},
+    {"int": "GigabitEthernet0/0", "TYPE": "wan", "routed": true, "supports_sfp": false}
+  ]
+}

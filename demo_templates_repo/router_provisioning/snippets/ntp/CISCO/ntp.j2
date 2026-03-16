@@ -1,0 +1,12 @@
+{#- Cisco NTP configuration -#}
+{% if proj.ntp_servers is defined %}
+{% for _ntp in proj.ntp_servers.split(',') %}
+ntp server {{ _ntp | trim }}
+{% endfor %}
+{% elif proj.ntp_server is defined %}
+ntp server {{ proj.ntp_server }}
+{% endif %}
+{% if management_interface is defined %}
+ntp source {{ management_interface }}
+{% endif %}
+!

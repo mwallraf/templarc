@@ -1,0 +1,14 @@
+{#-
+  Transmission: Ethernet / Direct Fiber
+  ──────────────────────────────────────
+  Sets ns.t with ethernet-specific defaults.
+  No VLAN tagging, no PPP — plain routed WAN interface.
+-#}
+{%- set ns.t = {
+    'type':         'ethernet',
+    'encap':        'none',
+    'dot1q':        False,
+    'mtu':          1500,
+    'requires_ppp': False,
+    'description':  'Ethernet / Direct Fiber WAN',
+} -%}

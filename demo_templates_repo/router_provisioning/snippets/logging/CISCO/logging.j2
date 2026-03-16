@@ -1,0 +1,13 @@
+{#- Cisco logging configuration -#}
+logging buffered 4096 debugging
+no logging console
+!
+login on-failure log
+login on-success log
+logging userinfo
+logging esm config
+!
+archive
+ log config
+  hidekeys
+!

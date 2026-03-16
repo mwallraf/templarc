@@ -1,0 +1,23 @@
+{#-
+  CPE Device: Cisco 891F
+  ───────────────────────
+  Sets ns.d with Cisco 891F device-specific config.
+  IOS — 8-port switch + 1 WAN GigE.
+  Supports VLANs (802.1Q), SFP, QoS on sub-interfaces.
+-#}
+{%- set ns.d = {
+    'vendor':              'CISCO',
+    'os':                  'IOS',
+    'model':               'C891F',
+    'wan_interface':       'GigabitEthernet8',
+    'lan_vlan_interface':  'Vlan',
+    'loopback_interface':  'Loopback',
+    'ppp_interface':       'Dialer',
+    'tunnel_interface':    'Tunnel',
+    'supports_vlans':      True,
+    'qos_on_subint':       True,
+    'nat_capable':         True,
+    'vtp_mode':            'transparent',
+    'mgmt_vlan':           99,
+    'qos_policy_out':      'WAN-QOS-STD',
+} -%}

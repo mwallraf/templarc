@@ -1,0 +1,18 @@
+{#- OneAccess TACACS+ server configuration -#}
+{% if proj.tacacs_servers is defined and proj.tacacs_key is defined %}
+{% for _tacacs in proj.tacacs_servers.split(',') %}
+tacacs-server {{ _tacacs | trim }} "{{ proj.tacacs_key }}" {% if management_interface is defined %}{{ management_interface }}{% endif %}
+
+{% endfor %}
+{% endif %}
+!
+{% if proj.tacacs_group is defined %}
+aaa group server tacacs {{ proj.tacacs_group }}
+{% if proj.tacacs_servers is defined %}
+{% for _tacacs in proj.tacacs_servers.split(',') %}
+ server {{ _tacacs | trim }}
+{% endfor %}
+{% endif %}
+exit
+{% endif %}
+!

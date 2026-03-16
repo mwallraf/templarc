@@ -1,0 +1,25 @@
+---
+parameters:
+  - name: router.hostname
+    widget: text
+    label: Hostname
+    required: true
+  - name: router.mgmt_ip
+    widget: text
+    label: Management IP
+    required: true
+  - name: router.mgmt_mask
+    widget: text
+    label: Management Mask
+    required: false
+---
+hostname {{ router.hostname }}
+!
+ntp server {{ glob.ntp_server }}
+ip name-server {{ glob.dns_server }}
+!
+ip vrf {{ proj.default_vrf }}
+!
+interface Loopback0
+ description Management
+ ip address {{ router.mgmt_ip }} {{ router.mgmt_mask | default('255.255.255.0') }}

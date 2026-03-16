@@ -1,0 +1,24 @@
+---
+parameters:
+  - name: cisco891.bandwidth_mb
+    widget: number
+    label: "WAN Bandwidth (Mbps)"
+    required: false
+---
+! Cisco 891 -- {{ router.hostname }}
+hostname {{ router.hostname }}
+!
+! IOS Version: {{ cisco.ios_version | default('15.x') }}
+enable secret {{ cisco.enable_secret | default('cisco') }}
+!
+ntp server {{ glob.ntp_server }}
+ip name-server {{ glob.dns_server }}
+!
+ip vrf {{ proj.default_vrf }}
+!
+interface Loopback0
+ ip address {{ router.mgmt_ip }} {{ router.mgmt_mask | default('255.255.255.0') }}
+!
+interface FastEthernet0
+ bandwidth {{ cisco891.bandwidth_mb | default(100) | mb_to_kbps }}
+ no shutdown

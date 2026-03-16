@@ -1,0 +1,14 @@
+{#- OneAccess AAA configuration -#}
+aaa authentication login default group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa authentication login console group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa authentication login console local
+aaa authentication enable default group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa authorization exec default if-authenticated tacacs+
+aaa authorization command 1 group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa authorization command 15 group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa accounting exec default start-stop group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa accounting commands 1 default stop-only group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa accounting commands 15 default stop-only group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa accounting system default start-stop group {{ proj.tacacs_group | default('TACACS_GROUP') }}
+aaa authentication banner sequence 1 *-TACACS SERVER UNAVAILABLE-*
+!

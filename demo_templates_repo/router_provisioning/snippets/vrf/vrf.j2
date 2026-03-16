@@ -1,0 +1,6 @@
+{#- Generic vrf snippet -#}
+{% if vrf is defined and vrf %}
+ip vrf {{ vrf }}
+ rd {{ proj.as_number }}:{{ VRF_RD | default('1') }}
+!
+{% endif %}

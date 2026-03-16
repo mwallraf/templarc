@@ -1,0 +1,16 @@
+{#-
+  Transmission: VDSL2 Dedicated VLAN
+  ────────────────────────────────────
+  Sets ns.t with VDSL dedicated VLAN defaults.
+  Each customer gets their own VLAN on the DSLAM; static IP, no PPP.
+  wan_vlan: operator-assigned dedicated VLAN ID (required).
+-#}
+{%- set ns.t = {
+    'type':         'vdsl_dedicated',
+    'encap':        'dot1q',
+    'dot1q':        True,
+    'mtu':          1500,
+    'requires_ppp': False,
+    'shared_vlan':  False,
+    'description':  'VDSL2 Dedicated VLAN WAN',
+} -%}

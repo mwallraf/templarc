@@ -1,0 +1,17 @@
+{#-
+  Transmission: VDSL2 Shared VLAN
+  ────────────────────────────────
+  Sets ns.t with VDSL shared VLAN defaults.
+  Multiple customers share the same VLAN on the DSLAM uplink;
+  PPPoE is used for per-session authentication.
+  wan_vlan: operator-assigned shared VLAN ID (required).
+-#}
+{%- set ns.t = {
+    'type':         'vdsl_shared',
+    'encap':        'pppoe',
+    'dot1q':        True,
+    'mtu':          1492,
+    'requires_ppp': True,
+    'shared_vlan':  True,
+    'description':  'VDSL2 Shared VLAN WAN',
+} -%}

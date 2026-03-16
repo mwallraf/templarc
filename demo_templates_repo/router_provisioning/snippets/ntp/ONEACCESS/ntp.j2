@@ -1,0 +1,11 @@
+{#- OneAccess NTP configuration -#}
+{% if proj.ntp_servers is defined %}
+{% for _ntp in proj.ntp_servers.split(',') %}
+sntp server {{ _ntp | trim }} {% if management_interface is defined %}{{ management_interface }}{% endif %}
+
+{% endfor %}
+{% elif proj.ntp_server is defined %}
+sntp server {{ proj.ntp_server }} {% if management_interface is defined %}{{ management_interface }}{% endif %}
+
+{% endif %}
+!

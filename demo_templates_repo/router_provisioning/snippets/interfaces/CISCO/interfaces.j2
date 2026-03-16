@@ -1,0 +1,29 @@
+{#- Cisco WAN + Loopback interface configuration for Direct Fiber MPA -#}
+{% if loopback_ip is defined and loopback_ip %}
+interface Loopback0
+ description Management Loopback - {{ service_id }}
+ ip address {{ loopback_ip | ipaddr('address') }} {{ loopback_ip | ipaddr('netmask') }}
+ no shutdown
+!
+{% endif %}
+{% if WAN_HW_INTERFACE is defined and wan_p2p_network is defined %}
+{% if wan_vlanid_mpa is defined %}
+interface {{ WAN_HW_INTERFACE }}.{{ wan_vlanid_mpa }}
+ description WAN - {{ pe_hostname }} {{ pe_interface }} - {{ service_id }}
+ encapsulation dot1Q {{ wan_vlanid_mpa }}
+{% else %}
+interface {{ WAN_HW_INTERFACE }}
+ description WAN - {{ pe_hostname }} {{ pe_interface }} - {{ service_id }}
+{% endif %}
+{% if cpe_wan_dhcp is defined and cpe_wan_dhcp %}
+ ip address dhcp
+{% else %}
+ ip address {{ wan_p2p_network | ipaddr('2') | ipaddr('address') }} {{ wan_p2p_network | ipaddr('netmask') }}
+{% endif %}
+{% if vrf is defined and vrf %}
+ ip vrf forwarding {{ vrf }}
+{% endif %}
+ mtu 4000
+ no shutdown
+!
+{% endif %}
