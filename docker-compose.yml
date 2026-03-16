@@ -47,6 +47,12 @@ services:
       # Overrides the DATABASE_URL in .env with the Docker service hostname.
       DATABASE_URL:        postgresql+asyncpg://${POSTGRES_USER:-templarc}:${POSTGRES_PASSWORD:-templarcpwd}@db:5432/${POSTGRES_DB:-templarc}
       TEMPLATES_REPO_PATH: /app/templates_repo
+      # Pass proxy settings at runtime so httpx (datasource resolver) respects them.
+      # NO_PROXY must include all internal Docker service names so datasource calls
+      # to e.g. http://mock-api:8080/ are never sent through a corporate proxy.
+      HTTP_PROXY:  ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY:    ${NO_PROXY:-localhost,127.0.0.1,db,ldap,mock-api,api,frontend}
     # No host-port binding — only the frontend nginx container reaches the API.
     depends_on:
       db:
