@@ -35,6 +35,7 @@ from api.core.auth import TokenData, get_current_user, require_admin
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.parameter import Parameter, ParameterScope
+from api.models.project import Project
 from api.models.render_preset import RenderPreset
 from api.schemas.catalog import (
     InheritanceChainItem,
@@ -121,6 +122,11 @@ async def upload_template(
     if fm.get("is_fragment"):
         raise HTTPException(status_code=400, detail="Fragment files (is_fragment: true) cannot be imported as catalog templates.")
 
+    # Look up project — needed for org_id (global params) and is_snippet detection
+    proj = await db.get(Project, project_id)
+    if proj is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
     # Derive template name from filename, sanitise to [a-zA-Z0-9_]+
     stem = Path(file.filename or "imported").stem
     name = re.sub(r"[^a-zA-Z0-9_]", "_", stem).strip("_") or "imported"
@@ -129,11 +135,16 @@ async def upload_template(
     display_name: str = fm.get("display_name") or name.replace("_", " ").title()
     description: str | None = fm.get("description") or None
 
+    # Auto-detect is_snippet: frontmatter flag OR filename is under a snippets/ path
+    filename_path = (file.filename or "").replace("\\", "/")
+    is_snippet = bool(fm.get("is_snippet")) or "snippets/" in filename_path
+
     data = TemplateCreate(
         project_id=project_id,
         name=name,
         display_name=display_name,
         description=description,
+        is_snippet=is_snippet,
         content=content,
         author=author or token.sub,
     )
@@ -147,7 +158,12 @@ async def upload_template(
             detail=f"A template named '{name}' already exists in this project.",
         )
 
-    # Register parameters declared in frontmatter
+    # Register parameters declared in frontmatter.
+    # Scope is inferred from the parameter name prefix:
+    #   glob.*  → global scope (linked to organization)
+    #   proj.*  → project scope (linked to project)
+    #   others  → template scope (linked to this template)
+    # For proj/glob params that already exist, insertion is skipped gracefully.
     params_data = fm.get("parameters") or []
     registered_names: set[str] = set()
     params_registered = 0
@@ -160,23 +176,50 @@ async def upload_template(
         w = str(p_data.get("widget", "text")).lower()
         widget = w if w in _VALID_WIDGET_TYPES else "text"
         default_raw = p_data.get("default")
+
+        if p_name.startswith("glob."):
+            scope = ParameterScope.global_
+            kwargs = {"organization_id": proj.organization_id}
+            exists_stmt = select(Parameter.id).where(
+                Parameter.name == p_name,
+                Parameter.scope == ParameterScope.global_,
+                Parameter.organization_id == proj.organization_id,
+            )
+        elif p_name.startswith("proj."):
+            scope = ParameterScope.project
+            kwargs = {"project_id": project_id}
+            exists_stmt = select(Parameter.id).where(
+                Parameter.name == p_name,
+                Parameter.scope == ParameterScope.project,
+                Parameter.project_id == project_id,
+            )
+        else:
+            scope = ParameterScope.template
+            kwargs = {"template_id": tmpl.id}
+            exists_stmt = None  # always new — template was just created
+
+        registered_names.add(p_name)
+
+        # Skip proj/glob params that already exist (idempotent)
+        if exists_stmt is not None:
+            existing = await db.execute(exists_stmt)
+            if existing.scalar_one_or_none() is not None:
+                continue
+
         param = Parameter(
             name=p_name,
-            scope=ParameterScope.template,
-            template_id=tmpl.id,
+            scope=scope,
             widget_type=widget,
             label=p_data.get("label"),
             description=p_data.get("description"),
             default_value=str(default_raw) if default_raw is not None else None,
             required=bool(p_data.get("required", False)),
             sort_order=sort_idx,
+            **kwargs,
         )
         db.add(param)
-        registered_names.add(p_name)
-        params_registered += 1
-
-    if params_registered:
         await db.flush()
+        params_registered += 1
 
     # Suggested parameters: AST variables not covered by frontmatter
     from api.services.jinja_parser import extract_variables

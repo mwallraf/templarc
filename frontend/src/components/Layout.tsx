@@ -161,6 +161,9 @@ const SYSTEM_LINKS = [
   },
 ]
 
+// Route namespaces that have no standalone page — links to them would 404.
+const _NO_LINK_SEGMENTS = new Set(['render', 'history'])
+
 function Breadcrumbs() {
   const { pathname } = useLocation()
   const segments = pathname.split('/').filter(Boolean)
@@ -174,15 +177,18 @@ function Breadcrumbs() {
       {segments.map((seg, i) => {
         const to = '/' + segments.slice(0, i + 1).join('/')
         const isLast = i === segments.length - 1
+        const isLinkable = !isLast && !_NO_LINK_SEGMENTS.has(seg)
         return (
           <span key={to} className="flex items-center gap-1.5">
             <span style={{ color: 'var(--c-border-bright)' }}>/</span>
-            {isLast ? (
-              <span className="text-slate-300 font-medium capitalize">{decodeURIComponent(seg)}</span>
-            ) : (
+            {isLinkable ? (
               <Link to={to} className="hover:text-slate-300 transition-colors capitalize">
                 {decodeURIComponent(seg)}
               </Link>
+            ) : (
+              <span className={isLast ? 'text-slate-300 font-medium capitalize' : 'capitalize'} style={isLast ? undefined : { color: 'var(--c-muted-3)' }}>
+                {decodeURIComponent(seg)}
+              </span>
             )}
           </span>
         )

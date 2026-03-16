@@ -241,10 +241,11 @@ class TestRunGitSync:
         self, db: AsyncSession, git_repo: GitService
     ) -> None:
         """Raises 404 when the project_id does not exist."""
+        import uuid
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            await run_git_sync(db, 999999, git_repo)
+            await run_git_sync(db, str(uuid.uuid4()), git_repo)
         assert exc_info.value.status_code == 404
 
     async def test_subdirectory_name_derived(
@@ -260,6 +261,155 @@ class TestRunGitSync:
         report = await run_git_sync(db, test_project.id, git_repo)
         assert report.imported == 1
         assert report.imported_templates[0].name == "ios_base"
+
+    async def test_proj_params_created_on_clean_db(
+        self, db: AsyncSession, test_project: Project, git_repo: GitService
+    ) -> None:
+        """proj.* parameters are created with project scope on a clean DB (regression test)."""
+        content = (
+            "---\n"
+            "parameters:\n"
+            "  - name: proj.service_id\n"
+            "    widget: text\n"
+            "    label: Service ID\n"
+            "  - name: proj.hostname\n"
+            "    widget: text\n"
+            "    label: Hostname\n"
+            "  - name: local.param\n"
+            "    widget: text\n"
+            "---\n"
+            "{{ proj.service_id }} {{ proj.hostname }} {{ local.param }}\n"
+        )
+        _write_j2(git_repo, "sync_proj/test.j2", content)
+
+        report = await run_git_sync(db, test_project.id, git_repo)
+        assert report.errors == []
+        assert report.imported == 1
+
+        # proj.* params must be project-scoped
+        stmt = select(Parameter).where(
+            Parameter.scope == "project",
+            Parameter.project_id == test_project.id,
+        ).order_by(Parameter.name)
+        result = await db.execute(stmt)
+        proj_params = result.scalars().all()
+        assert len(proj_params) == 2
+        names = {p.name for p in proj_params}
+        assert names == {"proj.hostname", "proj.service_id"}
+
+        # template-scoped param must be template-scoped (filter by this test's template)
+        from sqlalchemy import join as sql_join
+        from api.models.template import Template as Tmpl
+        tmpl_stmt = select(Parameter).join(
+            Tmpl, Parameter.template_id == Tmpl.id
+        ).where(
+            Tmpl.project_id == test_project.id,
+            Parameter.scope == "template",
+        )
+        result = await db.execute(tmpl_stmt)
+        tmpl_params = result.scalars().all()
+        assert len(tmpl_params) == 1
+        assert tmpl_params[0].name == "local.param"
+
+    async def test_proj_params_not_duplicated_across_templates(
+        self, db: AsyncSession, test_project: Project, git_repo: GitService
+    ) -> None:
+        """When two templates share proj.* params, only one DB record is created per param."""
+        shared_fm = (
+            "---\n"
+            "parameters:\n"
+            "  - name: proj.service_id\n"
+            "    widget: text\n"
+            "---\n"
+        )
+        _write_j2(git_repo, "sync_proj/a.j2", shared_fm + "body a\n")
+        _write_j2(git_repo, "sync_proj/b.j2", shared_fm + "body b\n")
+
+        report = await run_git_sync(db, test_project.id, git_repo)
+        assert report.errors == []
+        assert report.imported == 2
+
+        # Exactly one proj.service_id in the DB
+        stmt = select(Parameter).where(
+            Parameter.name == "proj.service_id",
+            Parameter.scope == "project",
+            Parameter.project_id == test_project.id,
+        )
+        result = await db.execute(stmt)
+        assert len(result.scalars().all()) == 1
+
+    async def test_glob_params_created_on_clean_db(
+        self, db: AsyncSession, test_project: Project, test_org: Organization, git_repo: GitService
+    ) -> None:
+        """glob.* parameters are created with global scope (org FK)."""
+        content = (
+            "---\n"
+            "parameters:\n"
+            "  - name: glob.ntp_server\n"
+            "    widget: text\n"
+            "    label: NTP Server\n"
+            "---\n"
+            "ntp server {{ glob.ntp_server }}\n"
+        )
+        _write_j2(git_repo, "sync_proj/ntp.j2", content)
+
+        report = await run_git_sync(db, test_project.id, git_repo)
+        assert report.errors == []
+        assert report.imported == 1
+
+        stmt = select(Parameter).where(
+            Parameter.name == "glob.ntp_server",
+            Parameter.scope == "global",
+            Parameter.organization_id == test_org.id,
+        )
+        result = await db.execute(stmt)
+        glob_params = result.scalars().all()
+        assert len(glob_params) == 1
+
+    async def test_snippets_folder_flagged_as_snippet(
+        self, db: AsyncSession, test_project: Project, git_repo: GitService
+    ) -> None:
+        """Templates under snippets/ subdirectory are auto-flagged as is_snippet=True."""
+        _write_j2(
+            git_repo,
+            "sync_proj/snippets/banner.j2",
+            "---\nparameters: []\n---\n! Banner\n",
+        )
+        _write_j2(
+            git_repo,
+            "sync_proj/normal.j2",
+            "---\nparameters: []\n---\nhostname {{ x }}\n",
+        )
+
+        report = await run_git_sync(db, test_project.id, git_repo)
+        assert report.imported == 2
+
+        stmt = select(Template).where(Template.project_id == test_project.id)
+        result = await db.execute(stmt)
+        templates = {t.name: t for t in result.scalars().all()}
+
+        assert templates["snippets_banner"].is_snippet is True
+        assert templates["normal"].is_snippet is False
+
+    async def test_frontmatter_is_snippet_flag(
+        self, db: AsyncSession, test_project: Project, git_repo: GitService
+    ) -> None:
+        """is_snippet: true in frontmatter flags a template as snippet regardless of path."""
+        _write_j2(
+            git_repo,
+            "sync_proj/not_in_snippets_dir.j2",
+            "---\nis_snippet: true\nparameters: []\n---\n",
+        )
+
+        await run_git_sync(db, test_project.id, git_repo)
+
+        stmt = select(Template).where(
+            Template.project_id == test_project.id,
+            Template.name == "not_in_snippets_dir",
+        )
+        result = await db.execute(stmt)
+        tmpl = result.scalar_one()
+        assert tmpl.is_snippet is True
 
 
 # ---------------------------------------------------------------------------
@@ -335,8 +485,9 @@ class TestGetSyncStatus:
         self, db: AsyncSession, git_repo: GitService
     ) -> None:
         """Raises 404 for unknown project_id."""
+        import uuid
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_sync_status(db, 999999, git_repo)
+            await get_sync_status(db, str(uuid.uuid4()), git_repo)
         assert exc_info.value.status_code == 404

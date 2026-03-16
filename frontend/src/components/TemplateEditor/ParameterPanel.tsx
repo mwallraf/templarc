@@ -244,6 +244,17 @@ export function ParameterPanel({
     (t) => t.id !== templateId && !t.is_snippet && t.is_active,
   )
 
+  // Project-scope and global-scope params for history label dropdown
+  const { data: projParamsData } = useQuery({
+    queryKey: ['parameters', 'project', projectId],
+    queryFn: () => listParameters({ project_id: projectId, scope: 'project', page_size: 200 }),
+    enabled: !!projectId,
+  })
+  const { data: globParamsData } = useQuery({
+    queryKey: ['parameters', 'global'],
+    queryFn: () => listParameters({ scope: 'global', page_size: 200 }),
+  })
+
   // Features data
   const { data: allFeaturesData } = useQuery({
     queryKey: ['features', projectId],
@@ -592,14 +603,27 @@ export function ParameterPanel({
                 className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">(none — no identity label in history)</option>
-                {assignedParams
-                  .filter((p) => p.scope === 'template')
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name}{p.label ? ` — ${p.label}` : ''}
-                    </option>
-                  ))}
+                {(['template', 'project', 'global'] as const).map((scope) => {
+                  const allScopeParams =
+                    scope === 'project'
+                      ? (projParamsData?.items ?? [])
+                      : scope === 'global'
+                        ? (globParamsData?.items ?? [])
+                        : assignedParams.filter((p) => p.scope === 'template')
+                  const scopeParams = allScopeParams
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                  if (scopeParams.length === 0) return null
+                  const label = scope === 'template' ? 'Template' : scope === 'project' ? 'Project (proj.*)' : 'Global (glob.*)'
+                  return (
+                    <optgroup key={scope} label={label}>
+                      {scopeParams.map((p) => (
+                        <option key={p.id} value={p.name}>
+                          {p.name}{p.label ? ` — ${p.label}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
               </select>
               <p className="mt-1 text-xs text-gray-400">
                 The value of this parameter will be stored as a display label on every render

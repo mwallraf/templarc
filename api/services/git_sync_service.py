@@ -187,18 +187,28 @@ async def run_git_sync(
                 display_name: str = fm.get("display_name") or name.replace("_", " ").title()
                 description: str | None = fm.get("description") or None
 
+                # Auto-detect is_snippet: frontmatter flag OR path under snippets/
+                is_snippet = bool(fm.get("is_snippet")) or f"{project_git_path}/snippets/" in git_path
+
                 tmpl = Template(
                     project_id=project_id,
                     name=name,
                     display_name=display_name,
                     description=description,
                     git_path=git_path,
+                    is_snippet=is_snippet,
                     sort_order=0,
                 )
                 db.add(tmpl)
                 await db.flush()  # obtain tmpl.id
 
-                # Register parameters declared in frontmatter
+                # Register parameters declared in frontmatter.
+                # Scope inferred from name prefix:
+                #   glob.*  → global (organization)
+                #   proj.*  → project
+                #   others  → template
+                # proj/glob params that already exist in the DB are skipped
+                # (SELECT-first check avoids silent savepoint swallowing).
                 params_data = fm.get("parameters") or []
                 for sort_idx, p_data in enumerate(params_data):
                     if not isinstance(p_data, dict):
@@ -208,16 +218,44 @@ async def run_git_sync(
                         continue
 
                     default_raw = p_data.get("default")
+
+                    if p_name.startswith("glob."):
+                        p_scope = ParameterScope.global_
+                        p_kwargs: dict = {"organization_id": proj.organization_id}
+                        exists_stmt = select(Parameter.id).where(
+                            Parameter.name == p_name,
+                            Parameter.scope == ParameterScope.global_,
+                            Parameter.organization_id == proj.organization_id,
+                        )
+                    elif p_name.startswith("proj."):
+                        p_scope = ParameterScope.project
+                        p_kwargs = {"project_id": project_id}
+                        exists_stmt = select(Parameter.id).where(
+                            Parameter.name == p_name,
+                            Parameter.scope == ParameterScope.project,
+                            Parameter.project_id == project_id,
+                        )
+                    else:
+                        p_scope = ParameterScope.template
+                        p_kwargs = {"template_id": tmpl.id}
+                        exists_stmt = None  # always new — template was just created
+
+                    # Skip proj/glob params that already exist (idempotent)
+                    if exists_stmt is not None:
+                        existing = await db.execute(exists_stmt)
+                        if existing.scalar_one_or_none() is not None:
+                            continue
+
                     param = Parameter(
                         name=p_name,
-                        scope=ParameterScope.template,
-                        template_id=tmpl.id,
+                        scope=p_scope,
                         widget_type=_parse_widget_type(p_data.get("widget", "text")),
                         label=p_data.get("label"),
                         description=p_data.get("description"),
                         default_value=str(default_raw) if default_raw is not None else None,
                         required=bool(p_data.get("required", False)),
                         sort_order=sort_idx,
+                        **p_kwargs,
                     )
                     db.add(param)
                     await db.flush()  # obtain param.id for options
@@ -238,8 +276,6 @@ async def run_git_sync(
                             condition_value=opt.get("condition_value"),
                             sort_order=opt_idx,
                         ))
-
-                await db.flush()
 
             # Savepoint released (insert staged in outer transaction)
             imported += 1
