@@ -39,6 +39,10 @@ services:
       context: .
       dockerfile: api/Dockerfile
       target: production      # use the lean, baked-in production stage
+      args:
+        HTTP_PROXY:  ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY:    ${NO_PROXY:-}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -60,6 +64,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: production      # nginx serving the Vite build output
+      args:
+        HTTP_PROXY:  ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY:    ${NO_PROXY:-}
     restart: unless-stopped
     ports:
       # This is the only publicly exposed port. nginx proxies /api/* to the api

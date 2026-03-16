@@ -2,6 +2,12 @@
 # Install node_modules once; reused by every subsequent stage.
 FROM node:20-alpine AS base
 
+# Build-time proxy support — pass via --build-arg or compose build.args.
+# Only active during RUN steps (npm ci); not baked into image.
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
 WORKDIR /app
 
 # Install deps before copying source so this layer is cached until

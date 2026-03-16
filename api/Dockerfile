@@ -4,6 +4,12 @@
 # reused by both the production and dev targets.
 FROM python:3.12-slim AS base
 
+# Build-time proxy support — pass via --build-arg or compose build.args.
+# Only active during RUN steps (apt-get, uv pip install); not baked into image.
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
 # git is required by GitPython to read the templates repository.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \

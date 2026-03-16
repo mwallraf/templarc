@@ -78,6 +78,10 @@ services:
       context: .
       dockerfile: api/Dockerfile
       target: dev        # uses the dev stage (no source COPY; expects bind-mount)
+      args:
+        HTTP_PROXY:  ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY:    ${NO_PROXY:-}
     environment:
       # ── Database ─────────────────────────────────────────────────────────
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-templarc}:${POSTGRES_PASSWORD:-templarcpwd}@db:5432/${POSTGRES_DB:-templarc}
@@ -119,6 +123,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: dev        # Vite dev server; no nginx, no static build
+      args:
+        HTTP_PROXY:  ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY:    ${NO_PROXY:-}
     environment:
       # Vite reads this at server-start time (not build time) to point the
       # /api proxy at the 'api' Docker service instead of localhost.
@@ -149,6 +157,10 @@ services:
     build:
       context: ./mock_api
       dockerfile: Dockerfile
+      args:
+        HTTP_PROXY:  ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY:    ${NO_PROXY:-}
     restart: unless-stopped
     ports:
       - "${MOCK_API_PORT:-8088}:8080"
