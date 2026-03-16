@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import type { UseFormRegister } from 'react-hook-form'
@@ -308,6 +308,7 @@ function FiltersTab() {
           {!filters?.length ? (
             <p className="px-4 py-8 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No custom filters registered.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
@@ -320,8 +321,8 @@ function FiltersTab() {
               </thead>
               <tbody>
                 {filters.map((f, idx) => (
-                  <>
-                    <tr key={f.id} style={{ borderBottom: editingId === f.id ? 'none' : idx < filters.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                  <Fragment key={f.id}>
+                    <tr style={{ borderBottom: editingId === f.id ? 'none' : idx < filters.length - 1 ? '1px solid var(--c-border)' : 'none' }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
@@ -381,10 +382,11 @@ function FiltersTab() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}
@@ -559,6 +561,7 @@ function ObjectsTab() {
           {!objects?.length ? (
             <p className="px-4 py-8 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No custom objects registered.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
@@ -571,8 +574,8 @@ function ObjectsTab() {
               </thead>
               <tbody>
                 {objects.map((o, idx) => (
-                  <>
-                    <tr key={o.id} style={{ borderBottom: editingId === o.id ? 'none' : idx < objects.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                  <Fragment key={o.id}>
+                    <tr style={{ borderBottom: editingId === o.id ? 'none' : idx < objects.length - 1 ? '1px solid var(--c-border)' : 'none' }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
@@ -632,10 +635,11 @@ function ObjectsTab() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}
@@ -792,6 +796,7 @@ function MacrosTab() {
           {!macros?.length ? (
             <p className="px-4 py-8 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No custom macros registered.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
@@ -804,8 +809,8 @@ function MacrosTab() {
               </thead>
               <tbody>
                 {macros.map((m, idx) => (
-                  <>
-                    <tr key={m.id} style={{ borderBottom: editingId === m.id ? 'none' : idx < macros.length - 1 ? '1px solid var(--c-border)' : 'none' }}
+                  <Fragment key={m.id}>
+                    <tr style={{ borderBottom: editingId === m.id ? 'none' : idx < macros.length - 1 ? '1px solid var(--c-border)' : 'none' }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
@@ -868,10 +873,11 @@ function MacrosTab() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

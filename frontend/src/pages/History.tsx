@@ -888,6 +888,7 @@ export default function History() {
             </div>
           ) : (
             <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}>
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                   <tr>
@@ -935,6 +936,7 @@ export default function History() {
                   )}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination footer (hidden in grouped mode) */}
               {!isGroupedFetch && (

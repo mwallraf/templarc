@@ -161,6 +161,7 @@ export default function AdminUsers() {
           {!users?.length ? (
             <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No users found.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
@@ -260,6 +261,7 @@ export default function AdminUsers() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

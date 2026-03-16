@@ -10,6 +10,9 @@ export default defineConfig({
     // Has no effect when running on the host directly.
     host: true,
     port: 5173,
+    // Allow any hostname (corporate FQDNs, container names, etc.).
+    // Network-level access control is handled outside Vite in dev.
+    allowedHosts: true,
     proxy: {
       '/api': {
         // Override with API_PROXY_TARGET when running inside Docker so the

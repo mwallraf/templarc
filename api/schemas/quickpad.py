@@ -26,7 +26,7 @@ class QuickpadOut(BaseModel):
     body: str
     is_public: bool
     owner_username: str | None
-    organization_id: int
+    organization_id: str
     created_at: datetime
     updated_at: datetime
 

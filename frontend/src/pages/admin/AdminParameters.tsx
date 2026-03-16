@@ -251,35 +251,37 @@ function ParamSubSection({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <table className="w-full text-sm">
-        <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
-          <tr>
-            <th className="px-2 py-2.5 w-8" />
-            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
-            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Widget</th>
-            <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Req.</th>
-            <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Info</th>
-            <th className="px-4 py-2.5" />
-          </tr>
-        </thead>
-        <SortableContext items={sorted.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-          <tbody>
-            {sorted.map((p, idx) => (
-              <SortableParamRow
-                key={p.id}
-                param={p}
-                idx={idx}
-                total={sorted.length}
-                onEdit={() => onEdit(p)}
-                onDelete={() => onDelete(p)}
-                disabled={isFiltered}
-              />
-            ))}
-          </tbody>
-        </SortableContext>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
+            <tr>
+              <th className="px-2 py-2.5 w-8" />
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Widget</th>
+              <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Req.</th>
+              <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Info</th>
+              <th className="px-4 py-2.5" />
+            </tr>
+          </thead>
+          <SortableContext items={sorted.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <tbody>
+              {sorted.map((p, idx) => (
+                <SortableParamRow
+                  key={p.id}
+                  param={p}
+                  idx={idx}
+                  total={sorted.length}
+                  onEdit={() => onEdit(p)}
+                  onDelete={() => onDelete(p)}
+                  disabled={isFiltered}
+                />
+              ))}
+            </tbody>
+          </SortableContext>
+        </table>
+      </div>
     </DndContext>
   )
 }

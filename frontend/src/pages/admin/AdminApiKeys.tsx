@@ -331,6 +331,7 @@ export default function AdminApiKeys() {
             <p className="text-xs mt-1" style={{ color: 'var(--c-muted-4)' }}>Create a key to enable programmatic access</p>
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--c-border)' }}>
@@ -418,6 +419,7 @@ export default function AdminApiKeys() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

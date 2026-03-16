@@ -268,7 +268,7 @@ async def list_render_history(
         .outerjoin(Template, Template.id == RenderHistory.template_id)
     )
 
-    if template_id is not None:
+    if template_id := template_id or None:
         q = q.where(RenderHistory.template_id == template_id)
     if date_from is not None:
         q = q.where(RenderHistory.rendered_at >= date_from)

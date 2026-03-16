@@ -77,7 +77,7 @@ async def list_templates(
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> list[TemplateOut]:
-    templates = await catalog_service.list_templates(db, project_id=project_id, active_only=active_only)
+    templates = await catalog_service.list_templates(db, project_id=project_id or None, active_only=active_only)
     return [TemplateOut.model_validate(t) for t in templates]
 
 

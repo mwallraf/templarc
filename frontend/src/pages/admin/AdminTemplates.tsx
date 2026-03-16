@@ -726,6 +726,7 @@ export default function AdminTemplates() {
           {!flatFiltered.length ? (
             <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No templates match your search.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
@@ -733,7 +734,7 @@ export default function AdminTemplates() {
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Project</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Parent</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Flags</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 sticky right-0" style={{ backgroundColor: 'var(--c-surface-alt)' }} />
                 </tr>
               </thead>
               <tbody>
@@ -762,7 +763,7 @@ export default function AdminTemplates() {
                     <td className="px-4 py-3">
                       <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right sticky right-0" style={{ backgroundColor: 'inherit' }}>
                       <RowActions
                         id={t.id}
                         confirmId={confirmDeleteId}
@@ -775,6 +776,7 @@ export default function AdminTemplates() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       ) : (
@@ -818,6 +820,7 @@ export default function AdminTemplates() {
 
               {/* Template rows */}
               {rows.length > 0 && (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <colgroup>
                     <col style={{ width: '32%' }} />
@@ -830,7 +833,7 @@ export default function AdminTemplates() {
                       <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Internal name</th>
                       <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Display name</th>
                       <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Flags</th>
-                      <th className="px-4 py-2" />
+                      <th className="px-4 py-2 sticky right-0" style={{ backgroundColor: 'var(--c-surface)' }} />
                     </tr>
                   </thead>
                   <tbody>
@@ -872,7 +875,7 @@ export default function AdminTemplates() {
                         <td className="px-4 py-2.5">
                           <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        <td className="px-4 py-2.5 text-right sticky right-0" style={{ backgroundColor: 'inherit' }}>
                           <RowActions
                             id={t.id}
                             confirmId={confirmDeleteId}
@@ -885,6 +888,7 @@ export default function AdminTemplates() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
 
               {/* Snippets sub-section (collapsible) */}
@@ -918,6 +922,7 @@ export default function AdminTemplates() {
 
                   {/* Snippet rows */}
                   {snippetsExpanded && (
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm" style={{ borderTop: '1px solid var(--c-border)' }}>
                       <tbody>
                         {snippets.map((t, idx) => (
@@ -949,7 +954,7 @@ export default function AdminTemplates() {
                             <td className="px-4 py-2.5" style={{ width: '24%' }}>
                               <TemplateFlagBadges t={t} onToggle={onToggleFlag} />
                             </td>
-                            <td className="px-4 py-2.5 text-right" style={{ width: '16%' }}>
+                            <td className="px-4 py-2.5 text-right sticky right-0" style={{ width: '16%', backgroundColor: 'inherit' }}>
                               <RowActions
                                 id={t.id}
                                 confirmId={confirmDeleteId}
@@ -962,6 +967,7 @@ export default function AdminTemplates() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </div>
               )}

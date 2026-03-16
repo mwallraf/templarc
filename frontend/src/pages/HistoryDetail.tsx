@@ -116,6 +116,7 @@ function ParametersTable({ params }: { params: Record<string, unknown> }) {
 
   return (
     <CollapsibleSection title="Parameters Used" badge={`${entries.length}`}>
+      <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
           <tr>
@@ -154,6 +155,7 @@ function ParametersTable({ params }: { params: Record<string, unknown> }) {
           })}
         </tbody>
       </table>
+      </div>
     </CollapsibleSection>
   )
 }

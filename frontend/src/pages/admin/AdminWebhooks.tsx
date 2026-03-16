@@ -548,6 +548,7 @@ export default function AdminWebhooks() {
               No webhooks configured.
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
                 <tr>
@@ -655,6 +656,7 @@ export default function AdminWebhooks() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}

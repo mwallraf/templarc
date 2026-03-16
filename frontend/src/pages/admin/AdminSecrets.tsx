@@ -164,41 +164,43 @@ export default function AdminSecrets() {
               No secrets configured.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
-                <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Type</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Description</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {secrets?.map((s, idx) => (
-                  <tr
-                    key={s.id}
-                    style={{ borderBottom: idx < (secrets.length - 1) ? '1px solid var(--c-border)' : 'none' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{s.name}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{SECRET_TYPE_LABELS[s.secret_type]}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{s.description ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete secret "${s.name}"?`)) deleteMut.mutate(s.id)
-                        }}
-                        className="text-xs font-medium transition-colors"
-                        style={{ color: '#ef4444' }}
-                      >
-                        Delete
-                      </button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Description</th>
+                    <th className="px-4 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {secrets?.map((s, idx) => (
+                    <tr
+                      key={s.id}
+                      style={{ borderBottom: idx < (secrets.length - 1) ? '1px solid var(--c-border)' : 'none' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--c-row-hover)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <td className="px-4 py-3 font-mono text-xs font-medium" style={{ color: 'var(--c-muted-2)' }}>{s.name}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-3)' }}>{SECRET_TYPE_LABELS[s.secret_type]}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{s.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete secret "${s.name}"?`)) deleteMut.mutate(s.id)
+                          }}
+                          className="text-xs font-medium transition-colors"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
