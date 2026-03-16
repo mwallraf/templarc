@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.models.base import Base
@@ -27,8 +28,8 @@ class SystemSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # One row per org — enforced by the UNIQUE constraint below.
-    org_id: Mapped[int] = mapped_column(
-        Integer,
+    org_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,

@@ -90,7 +90,7 @@ def hash_api_key(raw_key: str) -> str:
 class TokenData:
     """Structured claims extracted from a validated JWT."""
     sub: str
-    org_id: int
+    org_id: str
     is_admin: bool
 
 
@@ -141,7 +141,7 @@ def _decode_jwt(token: str) -> TokenData:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         sub: str | None = payload.get("sub")
-        org_id: int | None = payload.get("org_id")
+        org_id: str | None = payload.get("org_id")
         if sub is None or org_id is None:
             raise exc
         is_admin: bool = bool(payload.get("is_admin", False))
@@ -211,7 +211,7 @@ async def require_admin(
 async def _upsert_user(
     db: AsyncSession,
     user_info: UserInfo,
-    org_id: int,
+    org_id: str,
     is_ldap: bool,
     password_hash: str | None = None,
 ) -> "User":  # type: ignore[name-defined]  # noqa: F821

@@ -611,7 +611,7 @@ export default function History() {
 
   const { data: projectTemplates } = useQuery({
     queryKey: ['templates', projectId],
-    queryFn: () => listTemplates({ project_id: projectId ? Number(projectId) : undefined, active_only: false }),
+    queryFn: () => listTemplates({ project_id: projectId ?? undefined, active_only: false }),
     enabled: true,
   })
 
@@ -621,13 +621,13 @@ export default function History() {
   })
 
   const templateMap = useMemo(() => {
-    const m = new Map<number, TemplateOut>()
+    const m = new Map<string, TemplateOut>()
     for (const t of allTemplates ?? []) m.set(t.id, t)
     return m
   }, [allTemplates])
 
   // Selected template object (for grouping check)
-  const selectedTemplate = templateId ? templateMap.get(Number(templateId)) : undefined
+  const selectedTemplate = templateId ? templateMap.get(templateId) : undefined
   const canGroup = !!(templateId && selectedTemplate?.history_label_param)
 
   const offset = page * PAGE_SIZE
@@ -637,7 +637,7 @@ export default function History() {
     queryKey: ['render-history', { templateId, dateFrom, dateTo, debouncedSearch, myRendersOnly, grouped: isGroupedFetch, offset }],
     queryFn: () =>
       listRenderHistory({
-        template_id: templateId ? Number(templateId) : undefined,
+        template_id: templateId ?? undefined,
         date_from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
         date_to: dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : undefined,
         search: debouncedSearch || undefined,

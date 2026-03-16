@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Integer, String, func
+from sqlalchemy import BigInteger, String, func
 from sqlalchemy import TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,7 +34,7 @@ class AuditLog(Base):
     user_sub: Mapped[str] = mapped_column(String(255), nullable=False)
     action: Mapped[str] = mapped_column(String(50), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=func.now(),

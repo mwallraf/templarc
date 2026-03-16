@@ -53,6 +53,12 @@ from api.models.feature import Feature, TemplateFeature  # noqa: F401
 # Tier 11: FK → Organization (one row per org)
 from api.models.system_settings import SystemSettings  # noqa: F401
 
+# Tier 12: FK → Organization (quickpad scratch notes)
+from api.models.quickpad import Quickpad  # noqa: F401
+
+# Tier 13: FK → Organization + Project (nullable) + Template (nullable)
+from api.models.render_webhook import RenderWebhook  # noqa: F401
+
 __all__ = [
     "Base",
     "Organization",
@@ -75,4 +81,6 @@ __all__ = [
     "Feature",
     "TemplateFeature",
     "SystemSettings",
+    "Quickpad",
+    "RenderWebhook",
 ]

@@ -544,7 +544,7 @@ function CreateForm({ projectId, onCreated, onCancel }: CreateFormProps) {
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminFeatures() {
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedFeature, setSelectedFeature] = useState<FeatureOut | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
@@ -596,7 +596,7 @@ export default function AdminFeatures() {
           <select
             value={selectedProjectId ?? ''}
             onChange={(e) => {
-              const id = e.target.value ? Number(e.target.value) : null
+              const id = e.target.value || null
               setSelectedProjectId(id)
               setSelectedFeature(null)
               setShowCreate(false)

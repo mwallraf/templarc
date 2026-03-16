@@ -72,7 +72,7 @@ router = APIRouter()
     ),
 )
 async def list_templates(
-    project_id: int | None = None,
+    project_id: str | None = None,
     active_only: bool = True,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
@@ -104,7 +104,7 @@ async def list_templates(
 )
 async def upload_template(
     file: UploadFile = File(..., description="A `.j2` Jinja2 template file"),
-    project_id: int = Form(..., description="ID of the project to import into"),
+    project_id: str = Form(..., description="ID of the project to import into"),
     author: str = Form(default="", description="Git commit author (defaults to the authenticated username)"),
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
@@ -214,7 +214,7 @@ async def upload_template(
     description="Fetch a template record by ID.",
 )
 async def get_template(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> TemplateOut:
@@ -267,7 +267,7 @@ async def create_template(
     ),
 )
 async def update_template(
-    template_id: int,
+    template_id: str,
     data: TemplateUpdate,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
@@ -293,7 +293,7 @@ async def update_template(
     ),
 )
 async def delete_template(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
     git_svc: GitService = Depends(get_git_service),
@@ -318,7 +318,7 @@ async def delete_template(
     ),
 )
 async def get_template_content(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     _token: TokenData = Depends(get_current_user),
@@ -346,7 +346,7 @@ async def get_template_content(
     ),
 )
 async def get_template_datasources(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     _token: TokenData = Depends(get_current_user),
@@ -376,7 +376,7 @@ async def get_template_datasources(
     ),
 )
 async def get_template_variables(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     _token: TokenData = Depends(get_current_user),
@@ -400,7 +400,7 @@ async def get_template_variables(
     ),
 )
 async def get_inheritance_chain(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> list[InheritanceChainItem]:
@@ -418,7 +418,7 @@ async def get_inheritance_chain(
     description="Return all named parameter presets saved for a template.",
 )
 async def list_presets(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> list[RenderPresetOut]:
@@ -444,7 +444,7 @@ async def list_presets(
     ),
 )
 async def create_preset(
-    template_id: int,
+    template_id: str,
     data: RenderPresetCreate,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
@@ -473,8 +473,8 @@ async def create_preset(
     description="Permanently delete a named render preset.",
 )
 async def delete_preset(
-    template_id: int,
-    preset_id: int,
+    template_id: str,
+    preset_id: int,  # preset ID remains BigInteger
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
 ) -> None:

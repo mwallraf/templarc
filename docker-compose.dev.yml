@@ -92,7 +92,7 @@ services:
       LDAP_ADMIN_GROUP: cn=users,ou=groups,dc=templarc,dc=dev
 
       # ── Dev conveniences ──────────────────────────────────────────────────
-      SEED_ON_STARTUP:               "true"
+      SEED_ON_STARTUP:               "${SEED_ON_STARTUP:-false}"
       ALLOW_PRIVATE_DATASOURCE_URLS: "true"
       # Allow both the Vite dev server origin and direct API access from host.
       CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:8080"]'

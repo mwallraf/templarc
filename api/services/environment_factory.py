@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # project_id → (jinja2.Environment, updated_at at build time)
-_ENV_CACHE: dict[int, tuple[jinja2.Environment, datetime]] = {}
+_ENV_CACHE: dict[str, tuple[jinja2.Environment, datetime]] = {}
 
 
 def clear_env_cache() -> None:
@@ -88,7 +88,7 @@ class EnvironmentFactory:
     # Public API
     # ------------------------------------------------------------------
 
-    async def get_environment(self, project_id: int) -> jinja2.Environment:
+    async def get_environment(self, project_id: str) -> jinja2.Environment:
         """
         Return the Jinja2 Environment for *project_id*.
 
@@ -101,16 +101,16 @@ class EnvironmentFactory:
         if cached is not None:
             env, cached_at = cached
             if cached_at >= project.updated_at:
-                logger.debug("Environment cache hit for project %d", project_id)
+                logger.debug("Environment cache hit for project %s", project_id)
                 return env
 
-        logger.debug("Building Jinja2 environment for project %d", project_id)
+        logger.debug("Building Jinja2 environment for project %s", project_id)
         env = await self._build_environment(project)
         _ENV_CACHE[project_id] = (env, project.updated_at)
         return env
 
     @staticmethod
-    def invalidate(project_id: int) -> None:
+    def invalidate(project_id: str) -> None:
         """
         Evict the cached environment for *project_id*.
 
@@ -118,7 +118,7 @@ class EnvironmentFactory:
         or deleted so the next ``get_environment`` call rebuilds from scratch.
         """
         _ENV_CACHE.pop(project_id, None)
-        logger.debug("Environment cache invalidated for project %d", project_id)
+        logger.debug("Environment cache invalidated for project %s", project_id)
 
     # ------------------------------------------------------------------
     # Build helpers
@@ -165,7 +165,7 @@ class EnvironmentFactory:
 
         # Directory doesn't exist yet (new project, empty repo) — use a no-op loader.
         logger.warning(
-            "Template directory %r does not exist for project %d; "
+            "Template directory %r does not exist for project %s; "
             "using BaseLoader (no templates loadable by path).",
             str(template_dir),
             project.id,
@@ -187,7 +187,7 @@ class EnvironmentFactory:
             for p in params
         }
 
-    async def _load_proj_params(self, project_id: int) -> dict[str, str]:
+    async def _load_proj_params(self, project_id: str) -> dict[str, str]:
         """Return {stripped_name: default_value} for all active project parameters."""
         result = await self._db.execute(
             select(Parameter).where(
@@ -313,7 +313,7 @@ class EnvironmentFactory:
     # DB helpers
     # ------------------------------------------------------------------
 
-    async def _load_project(self, project_id: int) -> Project:
+    async def _load_project(self, project_id: str) -> Project:
         result = await self._db.execute(
             select(Project).where(Project.id == project_id)
         )

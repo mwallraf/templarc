@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,8 +38,8 @@ class Quickpad(Base):
     owner_username: Mapped[str | None] = mapped_column(
         String(200), nullable=True, index=True
     )
-    organization_id: Mapped[int] = mapped_column(
-        Integer,
+    organization_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

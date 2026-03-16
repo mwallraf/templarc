@@ -255,7 +255,7 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
 
   const { data: templateList } = useQuery({
     queryKey: ['templates', projectId],
-    queryFn: () => listTemplates({ project_id: Number(projectId), active_only: false }),
+    queryFn: () => listTemplates({ project_id: projectId, active_only: false }),
     enabled: scope === 'template' && !!projectId,
   })
 
@@ -293,12 +293,12 @@ export function ParameterModal({ parameter, onClose, onSaved }: ParameterModalPr
         validation_regex: values.validation_regex || undefined,
         is_derived: values.is_derived,
         derived_expression: values.derived_expression || undefined,
-        ...(values.scope === 'global' && { organization_id: Number(values.organization_id) || 1 }),
+        ...(values.scope === 'global' && { organization_id: values.organization_id }),
         ...(values.scope !== 'global' && values.project_id && {
-          project_id: Number(values.project_id),
+          project_id: values.project_id,
         }),
         ...(values.scope === 'template' && values.template_id && {
-          template_id: Number(values.template_id),
+          template_id: values.template_id,
         }),
       }
 

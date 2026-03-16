@@ -32,7 +32,7 @@ class RenderRequest(BaseModel):
             "(e.g. 'router.hostname'). glob.* and proj.* keys are ignored."
         ),
     )
-    feature_ids: list[int] = Field(
+    feature_ids: list[str] = Field(
         default_factory=list,
         description="IDs of features to include in this render (must be attached to the template)",
     )
@@ -49,7 +49,7 @@ class OnChangeRequest(BaseModel):
 
 class ReRenderRequest(BaseModel):
     """Body for POST /render-history/{id}/re-render."""
-    template_id: int | None = Field(
+    template_id: str | None = Field(
         None,
         description=(
             "Override the original template. Useful for testing the same params "
@@ -112,7 +112,7 @@ class AvailableFeatureOut(BaseModel):
     """A feature available for selection in the render form."""
     model_config = ConfigDict(from_attributes=False)
 
-    id: int
+    id: str
     name: str
     label: str
     description: str | None
@@ -125,7 +125,7 @@ class FormDefinitionOut(BaseModel):
     """Response from GET /templates/{id}/resolve-params."""
     model_config = ConfigDict(from_attributes=False)
 
-    template_id: int
+    template_id: str
     parameters: list[EnrichedParameterOut]
     inheritance_chain: list[str]
     features: list[AvailableFeatureOut] = Field(
@@ -150,11 +150,11 @@ class RenderOut(BaseModel):
     })
 
     output: str = Field(description="Full rendered output including the metadata header")
-    render_id: int | None = Field(
+    render_id: str | None = Field(
         None,
         description="ID of the stored RenderHistory record; None when persist=false",
     )
-    template_id: int
+    template_id: str
     git_sha: str
 
 
@@ -166,12 +166,12 @@ class RenderHistoryOut(BaseModel):
     """A render history record."""
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    template_id: int | None
+    id: str
+    template_id: str | None
     template_git_sha: str
     resolved_parameters: dict
     raw_output: str
-    rendered_by: int | None
+    rendered_by: str | None
     rendered_at: datetime
     notes: str | None
     # Phase 10: identity label (e.g. hostname) extracted at render time

@@ -91,7 +91,7 @@ router = APIRouter()
     ),
 )
 async def run_git_sync(
-    project_id: int,
+    project_id: str,
     body: GitSyncRequest = GitSyncRequest(),
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
@@ -126,7 +126,7 @@ async def run_git_sync(
     ),
 )
 async def get_sync_status(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     _token: TokenData = Depends(require_admin),
@@ -226,7 +226,7 @@ async def create_filter(
 )
 async def list_filters(
     scope: str | None = Query(None, description="Filter by scope: 'global' or 'project'"),
-    project_id: int | None = Query(None, description="Filter by project ID"),
+    project_id: str | None = Query(None, description="Filter by project ID"),
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
 ) -> list[CustomFilterOut]:
@@ -352,7 +352,7 @@ async def create_object(
     description="Return all active custom objects. Optionally filter by project.",
 )
 async def list_objects(
-    project_id: int | None = Query(None, description="Filter by project ID"),
+    project_id: str | None = Query(None, description="Filter by project ID"),
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
 ) -> list[CustomObjectOut]:
@@ -460,7 +460,7 @@ async def create_macro(
 )
 async def list_macros(
     scope: str | None = Query(None, description="Filter by scope: 'global' or 'project'"),
-    project_id: int | None = Query(None, description="Filter by project ID"),
+    project_id: str | None = Query(None, description="Filter by project ID"),
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
 ) -> list[CustomMacroOut]:
@@ -546,7 +546,7 @@ async def delete_macro(
     tags=["Admin"],
 )
 async def find_duplicate_parameters(
-    project_id: int | None = Query(None, description="Limit scan to a single project"),
+    project_id: str | None = Query(None, description="Limit scan to a single project"),
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
 ) -> DuplicatesReport:
@@ -838,7 +838,7 @@ async def promote_parameter(
 # Remote Git operations
 # ---------------------------------------------------------------------------
 
-async def _get_project_or_404(project_id: int, db: AsyncSession) -> "Project":
+async def _get_project_or_404(project_id: str, db: AsyncSession) -> "Project":
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if project is None:
@@ -883,7 +883,7 @@ async def _resolve_remote_credential(
     ),
 )
 async def get_remote_status(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     token: TokenData = Depends(require_admin),
@@ -933,7 +933,7 @@ async def get_remote_status(
     ),
 )
 async def clone_remote(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     token: TokenData = Depends(require_admin),
@@ -976,7 +976,7 @@ async def clone_remote(
     ),
 )
 async def pull_remote(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     token: TokenData = Depends(require_admin),
@@ -1023,7 +1023,7 @@ async def pull_remote(
     ),
 )
 async def push_remote(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     token: TokenData = Depends(require_admin),
@@ -1069,7 +1069,7 @@ async def push_remote(
     ),
 )
 async def test_remote_connection(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
     token: TokenData = Depends(require_admin),

@@ -37,7 +37,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-async def _get_webhook(webhook_id: int, org_id: int, db: AsyncSession) -> RenderWebhook:
+async def _get_webhook(webhook_id: int, org_id: str, db: AsyncSession) -> RenderWebhook:
     result = await db.execute(
         select(RenderWebhook).where(
             RenderWebhook.id == webhook_id,
@@ -57,8 +57,8 @@ async def _get_webhook(webhook_id: int, org_id: int, db: AsyncSession) -> Render
 
 @router.get("", response_model=RenderWebhookListOut, summary="List render webhooks")
 async def list_webhooks(
-    project_id: int | None = Query(None, description="Filter by project"),
-    template_id: int | None = Query(None, description="Filter by template"),
+    project_id: str | None = Query(None, description="Filter by project"),
+    template_id: str | None = Query(None, description="Filter by template"),
     is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),

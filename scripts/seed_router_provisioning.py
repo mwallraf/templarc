@@ -998,7 +998,7 @@ def create_parameter(client: Client, scope: str, owner_id: int, param: dict) -> 
 # Main seed function
 # ---------------------------------------------------------------------------
 
-def seed(client: Client, org_id: int, dry_run: bool = False):
+def seed(client: Client, org_id: str, dry_run: bool = False):
     print("\n── Step 1: Create or find 'Router Provisioning' project ──────────────")
     project = find_project(client, "router_provisioning")
     if project:
@@ -1160,7 +1160,7 @@ def main():
     parser = argparse.ArgumentParser(description="Seed Router Provisioning project in Templarc")
     parser.add_argument("--base-url", default="http://localhost:8000", help="API base URL")
     parser.add_argument("--token", help="JWT bearer token (overrides login)")
-    parser.add_argument("--org-id", type=int, default=1, help="Organization ID")
+    parser.add_argument("--org-id", type=str, default=None, help="Organization UUID (auto-detected if not specified)")
     parser.add_argument("--dry-run", action="store_true", help="Print actions without executing")
     args = parser.parse_args()
 
@@ -1176,7 +1176,18 @@ def main():
         print("  ✓ Authenticated")
 
     client = Client(base_url, token)
-    seed(client, args.org_id, dry_run=args.dry_run)
+
+    org_id = args.org_id
+    if org_id is None:
+        # Auto-detect: use the authenticated user's org from /auth/me
+        me = client.get("/auth/me")
+        org_id = me.get("organization_id") or me.get("org_id")
+        if not org_id:
+            print("  ERROR: Could not determine organization ID from /auth/me")
+            sys.exit(1)
+        print(f"  Auto-detected org_id: {org_id}")
+
+    seed(client, org_id, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

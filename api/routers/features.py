@@ -60,7 +60,7 @@ router = APIRouter()
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_feature(feature_id: int, db: AsyncSession) -> Feature:
+async def _get_feature(feature_id: str, db: AsyncSession) -> Feature:
     result = await db.execute(
         select(Feature)
         .where(Feature.id == feature_id)
@@ -125,7 +125,7 @@ def _snippet_path_for(project_git_path: str | None, feature_name: str) -> str:
 
 @router.get("", response_model=FeatureListOut, summary="List features")
 async def list_features(
-    project_id: int | None = Query(None, description="Filter by project ID"),
+    project_id: str | None = Query(None, description="Filter by project ID"),
     include_inactive: bool = Query(False, description="Include inactive features"),
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
@@ -181,7 +181,7 @@ async def create_feature(
 
 @router.get("/{feature_id}", response_model=FeatureOut, summary="Get feature")
 async def get_feature(
-    feature_id: int,
+    feature_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> FeatureOut:
@@ -191,7 +191,7 @@ async def get_feature(
 
 @router.put("/{feature_id}", response_model=FeatureOut, summary="Update feature")
 async def update_feature(
-    feature_id: int,
+    feature_id: str,
     body: FeatureUpdate,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
@@ -218,7 +218,7 @@ async def update_feature(
     summary="Delete feature",
 )
 async def delete_feature(
-    feature_id: int,
+    feature_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
 ) -> None:
@@ -233,7 +233,7 @@ async def delete_feature(
 
 @router.get("/{feature_id}/body", summary="Read feature snippet body from Git")
 async def get_feature_body(
-    feature_id: int,
+    feature_id: str,
     db: AsyncSession = Depends(get_db),
     git_service: GitService = Depends(get_git_service),
     _token: TokenData = Depends(get_current_user),
@@ -250,7 +250,7 @@ async def get_feature_body(
 
 @router.put("/{feature_id}/body", summary="Write feature snippet body to Git")
 async def update_feature_body(
-    feature_id: int,
+    feature_id: str,
     body: FeatureBodyUpdate,
     db: AsyncSession = Depends(get_db),
     git_service: GitService = Depends(get_git_service),
@@ -286,7 +286,7 @@ async def update_feature_body(
     summary="List feature parameters",
 )
 async def list_feature_parameters(
-    feature_id: int,
+    feature_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> list[FeatureParameterOut]:
@@ -329,7 +329,7 @@ async def list_feature_parameters(
     summary="Create feature parameter",
 )
 async def create_feature_parameter(
-    feature_id: int,
+    feature_id: str,
     body: FeatureParameterCreate,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
@@ -385,7 +385,7 @@ async def create_feature_parameter(
     summary="Update feature parameter",
 )
 async def update_feature_parameter(
-    feature_id: int,
+    feature_id: str,
     param_id: int,
     body: FeatureParameterUpdate,
     db: AsyncSession = Depends(get_db),
@@ -438,7 +438,7 @@ async def update_feature_parameter(
     summary="Delete feature parameter",
 )
 async def delete_feature_parameter(
-    feature_id: int,
+    feature_id: str,
     param_id: int,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
@@ -464,7 +464,7 @@ async def delete_feature_parameter(
     tags=["Features"],
 )
 async def list_template_features(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> list[TemplateFeatureOut]:
@@ -498,8 +498,8 @@ async def list_template_features(
     tags=["Features"],
 )
 async def attach_feature(
-    template_id: int,
-    feature_id: int,
+    template_id: str,
+    feature_id: str,
     is_default: bool = Query(False, description="Pre-check this feature in the render form"),
     sort_order: int = Query(0),
     db: AsyncSession = Depends(get_db),
@@ -566,8 +566,8 @@ async def attach_feature(
     tags=["Features"],
 )
 async def update_template_feature(
-    template_id: int,
-    feature_id: int,
+    template_id: str,
+    feature_id: str,
     body: TemplateFeatureUpdate,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
@@ -614,8 +614,8 @@ async def update_template_feature(
     tags=["Features"],
 )
 async def detach_feature(
-    template_id: int,
-    feature_id: int,
+    template_id: str,
+    feature_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(require_admin),
 ) -> None:
@@ -639,6 +639,6 @@ async def detach_feature(
 # Private helper
 # ---------------------------------------------------------------------------
 
-async def _get_feature_out(feature_id: int, db: AsyncSession) -> FeatureOut:
+async def _get_feature_out(feature_id: str, db: AsyncSession) -> FeatureOut:
     feature = await _get_feature(feature_id, db)
     return _feature_to_out(feature)

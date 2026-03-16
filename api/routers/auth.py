@@ -82,12 +82,12 @@ class UserCreate(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: int
+    id: str
     username: str
     email: str
     is_admin: bool
     is_ldap: bool
-    organization_id: int
+    organization_id: str
     last_login: datetime | None = None
     created_at: datetime
 
@@ -107,7 +107,7 @@ class TokenOut(BaseModel):
 
 class MeOut(BaseModel):
     username: str
-    org_id: int
+    org_id: str
     is_admin: bool
     email: str | None = None
     is_ldap: bool = False
@@ -467,7 +467,7 @@ async def delete_user(
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_secret_or_404(db: AsyncSession, secret_id: int, org_id: int) -> Secret:
+async def _get_secret_or_404(db: AsyncSession, secret_id: str, org_id: str) -> Secret:
     result = await db.execute(
         select(Secret).where(
             Secret.id == secret_id,
@@ -568,7 +568,7 @@ async def list_secrets(
     description="Permanently delete a secret by ID. Admin only.",
 )
 async def delete_secret(
-    secret_id: int,
+    secret_id: str,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
 ) -> None:

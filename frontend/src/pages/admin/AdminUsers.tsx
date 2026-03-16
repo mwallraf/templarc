@@ -46,7 +46,7 @@ export default function AdminUsers() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   })
 
-  const { register, handleSubmit, reset, setValue } = useForm<UserCreate>({
+  const { register, handleSubmit, reset } = useForm<UserCreate>({
     defaultValues: { is_admin: false },
   })
 

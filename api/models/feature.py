@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base
@@ -32,9 +34,16 @@ class Feature(Base):
         UniqueConstraint("project_id", "name", name="uq_features_project_name"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    project_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     label: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -85,12 +94,22 @@ class TemplateFeature(Base):
         UniqueConstraint("template_id", "feature_id", name="uq_template_feature"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), nullable=False, index=True
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
     )
-    feature_id: Mapped[int] = mapped_column(
-        ForeignKey("features.id", ondelete="CASCADE"), nullable=False, index=True
+    template_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("templates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    feature_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("features.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     # When True the feature checkbox is pre-checked in the render form
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)

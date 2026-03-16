@@ -5,7 +5,7 @@ import TemplateEditor from '../../components/TemplateEditor'
 
 export default function TemplateEditorPage() {
   const { templateId } = useParams<{ templateId: string }>()
-  const id = Number(templateId)
+  const id = templateId ?? ''
 
   const { data: template, isLoading: templateLoading, error } = useQuery({
     queryKey: ['template', id],

@@ -171,7 +171,7 @@ function PresetToolbar({ presets, onLoadPreset, onSavePreset }: PresetToolbarPro
 
 // ── API example builders ──────────────────────────────────────────────────────
 
-function buildRenderExamples(templateId: number, params: { name: string }[]) {
+function buildRenderExamples(templateId: string, params: { name: string }[]) {
   const base = getApiBase()
   const paramsObj = Object.fromEntries(params.map((p) => [p.name, '']))
   const body = JSON.stringify({ params: paramsObj }, null, 2)
@@ -204,7 +204,7 @@ export default function RenderPage() {
   const queryClient = useQueryClient()
   const { isAdmin } = useAuth()
 
-  const id = Number(templateId)
+  const id = templateId ?? ''
 
   // Key to force DynamicForm re-mount when a preset is loaded (resets form values)
   const [formKey, setFormKey] = useState(0)

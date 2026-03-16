@@ -17,8 +17,8 @@ export type SecretType = 'env' | 'vault' | 'db'
 // ── Catalog ────────────────────────────────────────────────────────────────
 
 export interface ProjectOut {
-  id: number
-  organization_id: number
+  id: string
+  organization_id: string
   name: string
   display_name: string
   description?: string
@@ -32,7 +32,7 @@ export interface ProjectOut {
 }
 
 export interface ProjectCreate {
-  organization_id: number
+  organization_id: string
   name: string
   display_name: string
   description?: string
@@ -87,7 +87,7 @@ export interface GitRemoteTestOut {
 }
 
 export interface TemplateTreeNode {
-  id: number
+  id: string
   name: string
   display_name: string
   git_path?: string
@@ -103,14 +103,14 @@ export interface ProjectDetailOut extends ProjectOut {
 }
 
 export interface CatalogProjectOut {
-  id: number
+  id: string
   name: string
   display_name: string
   description?: string
 }
 
 export interface CatalogTemplateItem {
-  id: number
+  id: string
   name: string
   display_name: string
   description?: string
@@ -128,13 +128,13 @@ export interface CatalogResponse {
 // ── Templates ──────────────────────────────────────────────────────────────
 
 export interface TemplateOut {
-  id: number
-  project_id: number
+  id: string
+  project_id: string
   name: string
   display_name: string
   description?: string
   git_path?: string
-  parent_template_id?: number
+  parent_template_id?: string
   is_active: boolean
   is_snippet: boolean
   is_hidden: boolean
@@ -145,12 +145,12 @@ export interface TemplateOut {
 }
 
 export interface TemplateCreate {
-  project_id: number
+  project_id: string
   name: string
   display_name: string
   description?: string
   git_path?: string
-  parent_template_id?: number
+  parent_template_id?: string
   sort_order?: number
   is_snippet?: boolean
   is_hidden?: boolean
@@ -162,7 +162,7 @@ export interface TemplateUpdate {
   display_name?: string
   description?: string
   sort_order?: number
-  parent_template_id?: number | null
+  parent_template_id?: string | null
   content?: string
   commit_message?: string
   author?: string
@@ -191,7 +191,7 @@ export interface TemplateUploadOut {
 }
 
 export interface InheritanceChainItem {
-  id: number
+  id: string
   name: string
   display_name: string
   git_path?: string
@@ -214,9 +214,9 @@ export interface ParameterOut {
   id: number
   name: string
   scope: ParameterScope
-  organization_id?: number
-  project_id?: number
-  template_id?: number
+  organization_id?: string
+  project_id?: string
+  template_id?: string
   widget_type: WidgetType
   label?: string
   description?: string
@@ -236,9 +236,9 @@ export interface ParameterOut {
 export interface ParameterCreate {
   name: string
   scope: ParameterScope
-  organization_id?: number
-  project_id?: number
-  template_id?: number
+  organization_id?: string
+  project_id?: string
+  template_id?: string
   widget_type?: WidgetType
   label?: string
   description?: string
@@ -310,7 +310,7 @@ export interface EnrichedParameterOut {
 
 export interface RenderPresetOut {
   id: number
-  template_id: number
+  template_id: string
   name: string
   description?: string
   params: Record<string, unknown>
@@ -339,7 +339,7 @@ export interface FeatureParamOut {
 }
 
 export interface AvailableFeatureOut {
-  id: number
+  id: string
   name: string
   label: string
   description?: string
@@ -366,8 +366,8 @@ export interface FeatureParameterOut {
 }
 
 export interface FeatureOut {
-  id: number
-  project_id: number
+  id: string
+  project_id: string
   name: string
   label: string
   description?: string
@@ -385,7 +385,7 @@ export interface FeatureListOut {
 }
 
 export interface FeatureCreate {
-  project_id: number
+  project_id: string
   name: string
   label: string
   description?: string
@@ -417,9 +417,9 @@ export interface FeatureParameterCreate {
 }
 
 export interface TemplateFeatureOut {
-  id: number
-  template_id: number
-  feature_id: number
+  id: string
+  template_id: string
+  feature_id: string
   is_default: boolean
   sort_order: number
   feature: FeatureOut
@@ -431,7 +431,7 @@ export interface TemplateFeatureUpdate {
 }
 
 export interface FormDefinitionOut {
-  template_id: number
+  template_id: string
   parameters: EnrichedParameterOut[]
   inheritance_chain: string[]
   features: AvailableFeatureOut[]
@@ -445,8 +445,8 @@ export interface RenderRequest {
 
 export interface RenderOut {
   output: string
-  render_id?: number
-  template_id: number
+  render_id?: string
+  template_id: string
   git_sha: string
 }
 
@@ -455,8 +455,8 @@ export interface OnChangeRequest {
 }
 
 export interface RenderHistoryOut {
-  id: number
-  template_id?: number
+  id: string
+  template_id?: string
   template_git_sha: string
   resolved_parameters: Record<string, unknown>
   raw_output: string
@@ -473,7 +473,7 @@ export interface RenderHistoryListOut {
 }
 
 export interface ReRenderRequest {
-  template_id?: number
+  template_id?: string
   notes?: string
   persist?: boolean
 }
@@ -482,7 +482,7 @@ export interface ReRenderRequest {
 
 export interface MeOut {
   username: string
-  org_id: number
+  org_id: string
   is_admin: boolean
   email?: string
   is_ldap: boolean
@@ -499,12 +499,12 @@ export interface MeUpdate {
 // ── Auth / Users ───────────────────────────────────────────────────────────
 
 export interface UserOut {
-  id: number
+  id: string
   username: string
   email: string
   is_admin: boolean
   is_ldap: boolean
-  organization_id: number
+  organization_id: string
   last_login?: string
   created_at: string
 }
@@ -532,8 +532,8 @@ export interface SecretCreate {
 }
 
 export interface SecretOut {
-  id: number
-  organization_id: number
+  id: string
+  organization_id: string
   name: string
   secret_type: SecretType
   vault_path?: string
@@ -853,9 +853,9 @@ export interface RenderWebhookUpdate {
 
 export interface RenderWebhookOut {
   id: number
-  organization_id: number
-  project_id: number | null
-  template_id: number | null
+  organization_id: string
+  project_id: string | null
+  template_id: string | null
   name: string
   is_active: boolean
   url: string

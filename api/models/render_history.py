@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base
@@ -17,10 +18,16 @@ if TYPE_CHECKING:
 class RenderHistory(Base):
     __tablename__ = "render_history"
 
-    # BigInteger: high-volume table — Integer (max ~2.1B) could overflow over time
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    template_id: Mapped[int | None] = mapped_column(
-        ForeignKey("templates.id", ondelete="SET NULL"), nullable=True, index=True
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    template_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("templates.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     # 64 chars: forward-compatible with SHA-256 Git object hashes
     template_git_sha: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -28,8 +35,11 @@ class RenderHistory(Base):
     resolved_parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
     # raw_output includes the prepended metadata header
     raw_output: Mapped[str] = mapped_column(Text, nullable=False)
-    rendered_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    rendered_by: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     rendered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True

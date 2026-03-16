@@ -8,7 +8,7 @@ import { ParameterField } from './ParameterField'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface DynamicFormProps {
-  templateId: number
+  templateId: string
   definition: FormDefinitionOut
   prefillValues?: Record<string, unknown>
   user?: string
@@ -25,7 +25,13 @@ function buildDefaultValues(
 ): Record<string, unknown> {
   const defaults: Record<string, unknown> = {}
   for (const p of params) {
-    const val = prefill?.[p.name] ?? p.prefill ?? p.default_value ?? ''
+    // For select widgets with options but no explicit default/prefill,
+    // use the first option value so RHF state matches what the HTML select shows.
+    const firstOption =
+      (p.widget_type === 'select' || p.widget_type === 'multiselect') && p.options?.length
+        ? p.options[0].value
+        : ''
+    const val = prefill?.[p.name] ?? p.prefill ?? p.default_value ?? firstOption ?? ''
     if (p.widget_type === 'multiselect') {
       defaults[p.name] = Array.isArray(val) ? val : val ? [val] : []
     } else if (p.widget_type === 'checkbox') {
@@ -328,8 +334,8 @@ function RenderOutput({ result }: { result: RenderOut }) {
 
 interface FeaturesSectionProps {
   features: AvailableFeatureOut[]
-  enabledIds: Set<number>
-  onToggle: (id: number, enabled: boolean) => void
+  enabledIds: Set<string>
+  onToggle: (id: string, enabled: boolean) => void
   register: ReturnType<typeof useForm<Record<string, unknown>>>['register']
   getValues: ReturnType<typeof useForm<Record<string, unknown>>>['getValues']
 }
@@ -492,11 +498,11 @@ export default function DynamicForm({
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   // Features — initialize default-on features
-  const [enabledFeatureIds, setEnabledFeatureIds] = useState<Set<number>>(
+  const [enabledFeatureIds, setEnabledFeatureIds] = useState<Set<string>>(
     () => new Set((definition.features ?? []).filter((f) => f.is_default).map((f) => f.id))
   )
 
-  function toggleFeature(id: number, enabled: boolean) {
+  function toggleFeature(id: string, enabled: boolean) {
     setEnabledFeatureIds((prev) => {
       const next = new Set(prev)
       if (enabled) next.add(id)
@@ -691,7 +697,13 @@ export default function DynamicForm({
             style={{ backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }}
           >
             Render failed:{' '}
-            {renderMut.error instanceof Error ? renderMut.error.message : 'Unknown error'}
+            {(() => {
+              const err = renderMut.error as { response?: { data?: { detail?: unknown } }; message?: string }
+              const detail = err?.response?.data?.detail
+              if (typeof detail === 'string') return detail
+              if (Array.isArray(detail)) return detail.map((d) => d?.msg ?? JSON.stringify(d)).join('; ')
+              return err?.message ?? 'Unknown error'
+            })()}
           </div>
         )}
 

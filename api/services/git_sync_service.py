@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.parameter import Parameter, ParameterScope
+from api.models.parameter_option import ParameterOption
 from api.models.project import Project
 from api.models.template import Template
 from api.schemas.admin import (
@@ -53,7 +54,7 @@ _VALID_WIDGET_TYPES = frozenset(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-async def _get_project_or_404(db: AsyncSession, project_id: int) -> Project:
+async def _get_project_or_404(db: AsyncSession, project_id: str) -> Project:
     proj = await db.get(Project, project_id)
     if proj is None:
         raise HTTPException(
@@ -105,7 +106,7 @@ def _parse_widget_type(raw: object) -> str:
 
 async def run_git_sync(
     db: AsyncSession,
-    project_id: int,
+    project_id: str,
     git_svc: GitService,
     import_paths: list[str] | None = None,
     delete_paths: list[str] | None = None,
@@ -219,6 +220,24 @@ async def run_git_sync(
                         sort_order=sort_idx,
                     )
                     db.add(param)
+                    await db.flush()  # obtain param.id for options
+
+                    options_data = p_data.get("options") or []
+                    for opt_idx, opt in enumerate(options_data):
+                        if not isinstance(opt, dict):
+                            continue
+                        opt_value = opt.get("value")
+                        opt_label = opt.get("label")
+                        if opt_value is None:
+                            continue
+                        db.add(ParameterOption(
+                            parameter_id=param.id,
+                            value=str(opt_value),
+                            label=str(opt_label) if opt_label is not None else str(opt_value),
+                            condition_param=opt.get("condition_param"),
+                            condition_value=opt.get("condition_value"),
+                            sort_order=opt_idx,
+                        ))
 
                 await db.flush()
 
@@ -282,7 +301,7 @@ async def run_git_sync(
 
 async def get_sync_status(
     db: AsyncSession,
-    project_id: int,
+    project_id: str,
     git_svc: GitService,
 ) -> SyncStatusReport:
     """
@@ -312,7 +331,7 @@ async def get_sync_status(
     )
     result = await db.execute(stmt)
     # db_path_info: git_path → (id, name)
-    db_path_info: dict[str, tuple[int, str]] = {
+    db_path_info: dict[str, tuple[str, str]] = {
         row[0]: (row[1], row[2]) for row in result.all()
     }
     db_path_set: set[str] = set(db_path_info.keys())

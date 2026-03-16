@@ -13,14 +13,14 @@ import type {
 } from './types'
 
 export async function listTemplates(params?: {
-  project_id?: number
+  project_id?: string
   active_only?: boolean
 }): Promise<TemplateOut[]> {
   const res = await apiClient.get<TemplateOut[]>('/templates', { params })
   return res.data
 }
 
-export async function getTemplate(templateId: number): Promise<TemplateOut> {
+export async function getTemplate(templateId: string): Promise<TemplateOut> {
   const res = await apiClient.get<TemplateOut>(`/templates/${templateId}`)
   return res.data
 }
@@ -31,35 +31,35 @@ export async function createTemplate(data: TemplateCreate): Promise<TemplateOut>
 }
 
 export async function updateTemplate(
-  templateId: number,
+  templateId: string,
   data: TemplateUpdate,
 ): Promise<TemplateUpdateOut> {
   const res = await apiClient.put<TemplateUpdateOut>(`/templates/${templateId}`, data)
   return res.data
 }
 
-export async function deleteTemplate(templateId: number): Promise<void> {
+export async function deleteTemplate(templateId: string): Promise<void> {
   await apiClient.delete(`/templates/${templateId}`)
 }
 
-export async function getTemplateVariables(templateId: number): Promise<VariableRefOut[]> {
+export async function getTemplateVariables(templateId: string): Promise<VariableRefOut[]> {
   const res = await apiClient.get<VariableRefOut[]>(`/templates/${templateId}/variables`)
   return res.data
 }
 
-export async function getTemplateContent(templateId: number): Promise<string> {
+export async function getTemplateContent(templateId: string): Promise<string> {
   const res = await apiClient.get<string>(`/templates/${templateId}/content`, {
     responseType: 'text',
   })
   return res.data
 }
 
-export async function getTemplateDatasources(templateId: number): Promise<Record<string, unknown>[]> {
+export async function getTemplateDatasources(templateId: string): Promise<Record<string, unknown>[]> {
   const res = await apiClient.get<Record<string, unknown>[]>(`/templates/${templateId}/datasources`)
   return res.data
 }
 
-export async function getInheritanceChain(templateId: number): Promise<InheritanceChainItem[]> {
+export async function getInheritanceChain(templateId: string): Promise<InheritanceChainItem[]> {
   const res = await apiClient.get<InheritanceChainItem[]>(
     `/templates/${templateId}/inheritance-chain`,
   )
@@ -68,7 +68,7 @@ export async function getInheritanceChain(templateId: number): Promise<Inheritan
 
 export async function uploadTemplate(
   file: File,
-  projectId: number,
+  projectId: string,
   author = '',
 ): Promise<TemplateUploadOut> {
   const form = new FormData()
@@ -79,12 +79,12 @@ export async function uploadTemplate(
   return res.data
 }
 
-export async function gitSyncStatus(projectId: number): Promise<SyncStatusReport> {
+export async function gitSyncStatus(projectId: string): Promise<SyncStatusReport> {
   const res = await apiClient.get<SyncStatusReport>(`/admin/git-sync/${projectId}/status`)
   return res.data
 }
 
-export async function gitSyncApply(projectId: number, request: GitSyncRequest): Promise<SyncReport> {
+export async function gitSyncApply(projectId: string, request: GitSyncRequest): Promise<SyncReport> {
   const res = await apiClient.post<SyncReport>(`/admin/git-sync/${projectId}`, request)
   return res.data
 }

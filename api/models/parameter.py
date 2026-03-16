@@ -15,7 +15,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ENUM as PgEnum, JSONB
+from sqlalchemy.dialects.postgresql import ENUM as PgEnum, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base
@@ -81,17 +81,29 @@ class Parameter(Base):
     scope: Mapped[str] = mapped_column(_scope_enum, nullable=False, index=True)
 
     # Exactly one FK is non-NULL, determined by scope
-    organization_id: Mapped[int | None] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    organization_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    project_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
-    template_id: Mapped[int | None] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), nullable=True, index=True
+    template_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("templates.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
-    feature_id: Mapped[int | None] = mapped_column(
-        ForeignKey("features.id", ondelete="CASCADE"), nullable=True, index=True
+    feature_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("features.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
 
     widget_type: Mapped[str] = mapped_column(_widget_enum, nullable=False, server_default="text")

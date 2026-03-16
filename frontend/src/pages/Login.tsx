@@ -82,6 +82,8 @@ export default function Login() {
                 autoComplete="username"
                 className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 border transition-all duration-150 focus:outline-none placeholder:text-slate-600"
                 style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }}
+                placeholder="your-username"
+                {...register('username', { required: 'Username is required' })}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#6366f1'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'
@@ -90,8 +92,6 @@ export default function Login() {
                   e.currentTarget.style.borderColor = 'var(--c-border-bright)'
                   e.currentTarget.style.boxShadow = 'none'
                 }}
-                placeholder="your-username"
-                {...register('username', { required: 'Username is required' })}
               />
               {errors.username && (
                 <p className="mt-1.5 text-xs text-red-400">{errors.username.message}</p>
@@ -107,6 +107,8 @@ export default function Login() {
                 autoComplete="current-password"
                 className="w-full rounded-lg px-3 py-2.5 text-sm text-slate-100 border transition-all duration-150 focus:outline-none placeholder:text-slate-600"
                 style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)' }}
+                placeholder="••••••••"
+                {...register('password', { required: 'Password is required' })}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#6366f1'
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'
@@ -115,8 +117,6 @@ export default function Login() {
                   e.currentTarget.style.borderColor = 'var(--c-border-bright)'
                   e.currentTarget.style.boxShadow = 'none'
                 }}
-                placeholder="••••••••"
-                {...register('password', { required: 'Password is required' })}
               />
               {errors.password && (
                 <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>

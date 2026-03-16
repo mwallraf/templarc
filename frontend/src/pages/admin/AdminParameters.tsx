@@ -34,12 +34,14 @@ const SCOPE_STYLE: Record<ParameterScope, { bg: string; text: string; border: st
   global: { bg: 'rgba(251,191,36,0.1)', text: '#fbbf24', border: 'rgba(251,191,36,0.2)' },
   project: { bg: 'rgba(96,165,250,0.1)', text: '#60a5fa', border: 'rgba(96,165,250,0.2)' },
   template: { bg: 'rgba(148,163,184,0.08)', text: '#64748b', border: 'rgba(148,163,184,0.15)' },
+  feature: { bg: 'rgba(52,211,153,0.08)', text: '#34d399', border: 'rgba(52,211,153,0.15)' },
 }
 
 const SCOPE_LABEL: Record<ParameterScope, string> = {
   global: 'Global',
   project: 'Project',
   template: 'Template',
+  feature: 'Feature',
 }
 
 // ── YAML/JSON Export ──────────────────────────────────────────────────────────
@@ -248,20 +250,20 @@ function ParamSubSection({
   }
 
   return (
-    <table className="w-full text-sm">
-      <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
-        <tr>
-          <th className="px-2 py-2.5 w-8" />
-          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
-          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
-          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
-          <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Widget</th>
-          <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Req.</th>
-          <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Info</th>
-          <th className="px-4 py-2.5" />
-        </tr>
-      </thead>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <table className="w-full text-sm">
+        <thead style={{ backgroundColor: 'var(--c-surface-alt)', borderBottom: '1px solid var(--c-border)' }}>
+          <tr>
+            <th className="px-2 py-2.5 w-8" />
+            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Name</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Label</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Scope</th>
+            <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Widget</th>
+            <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Req.</th>
+            <th className="text-center px-4 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>Info</th>
+            <th className="px-4 py-2.5" />
+          </tr>
+        </thead>
         <SortableContext items={sorted.map((p) => p.id)} strategy={verticalListSortingStrategy}>
           <tbody>
             {sorted.map((p, idx) => (
@@ -277,8 +279,8 @@ function ParamSubSection({
             ))}
           </tbody>
         </SortableContext>
-      </DndContext>
-    </table>
+      </table>
+    </DndContext>
   )
 }
 
@@ -867,15 +869,15 @@ export default function AdminParameters() {
 
   const [search, setSearch] = useState('')
   const [scopeFilter, setScopeFilter] = useState<ParameterScope | ''>('')
-  const [projectFilter, setProjectFilter] = useState<number | ''>('')
-  const [templateFilter, setTemplateFilter] = useState<number | ''>('')
+  const [projectFilter, setProjectFilter] = useState<string>('')
+  const [templateFilter, setTemplateFilter] = useState<string>('')
   const [showModal, setShowModal] = useState(false)
   const [editingParam, setEditingParam] = useState<ParameterOut | undefined>()
   const [deletingParam, setDeletingParam] = useState<ParameterOut | undefined>()
   const [importError, setImportError] = useState<string | null>(null)
   const [importSuccess, setImportSuccess] = useState<string | null>(null)
   const [showDuplicates, setShowDuplicates] = useState(false)
-  const [dupProjectId, setDupProjectId] = useState<number | undefined>(undefined)
+  const [dupProjectId, setDupProjectId] = useState<string | undefined>(undefined)
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -884,7 +886,7 @@ export default function AdminParameters() {
 
   const { data: templates } = useQuery({
     queryKey: ['templates', { project_id: projectFilter || undefined }],
-    queryFn: () => listTemplates({ project_id: projectFilter ? Number(projectFilter) : undefined, active_only: false }),
+    queryFn: () => listTemplates({ project_id: projectFilter || undefined, active_only: false }),
   })
 
   const { data, isLoading, refetch } = useQuery({
@@ -893,8 +895,8 @@ export default function AdminParameters() {
       listParameters({
         search: search || undefined,
         scope: scopeFilter || undefined,
-        project_id: projectFilter ? Number(projectFilter) : undefined,
-        template_id: templateFilter ? Number(templateFilter) : undefined,
+        project_id: projectFilter || undefined,
+        template_id: templateFilter || undefined,
         page_size: 200,
         include_inactive: false,
       }),
@@ -955,7 +957,7 @@ export default function AdminParameters() {
 
   // Templates available in dropdown (filtered by project if set)
   const filteredTemplatesForDropdown = projectFilter
-    ? (templates ?? []).filter((t: TemplateOut) => t.project_id === Number(projectFilter))
+    ? (templates ?? []).filter((t: TemplateOut) => t.project_id === projectFilter)
     : (templates ?? [])
 
   function handleReorder(reordered: ParameterOut[]) {
@@ -1003,9 +1005,9 @@ export default function AdminParameters() {
               validation_regex: raw.validation_regex ? String(raw.validation_regex) : undefined,
               is_derived: Boolean(raw.is_derived),
               derived_expression: raw.derived_expression ? String(raw.derived_expression) : undefined,
-              organization_id: raw.organization_id ? Number(raw.organization_id) : undefined,
-              project_id: raw.project_id ? Number(raw.project_id) : undefined,
-              template_id: raw.template_id ? Number(raw.template_id) : undefined,
+              organization_id: raw.organization_id ? String(raw.organization_id) : undefined,
+              project_id: raw.project_id ? String(raw.project_id) : undefined,
+              template_id: raw.template_id ? String(raw.template_id) : undefined,
             })
             for (const opt of opts) {
               await createParameterOption(p.id, {
@@ -1104,7 +1106,7 @@ export default function AdminParameters() {
             </h2>
             <select
               value={dupProjectId ?? ''}
-              onChange={(e) => setDupProjectId(e.target.value === '' ? undefined : Number(e.target.value))}
+              onChange={(e) => setDupProjectId(e.target.value === '' ? undefined : e.target.value)}
               className="rounded-lg px-3 py-1.5 text-xs border focus:outline-none"
               style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)', color: dupProjectId ? 'var(--c-text)' : 'var(--c-muted-3)' }}
             >
@@ -1141,7 +1143,7 @@ export default function AdminParameters() {
         </select>
         <select
           value={projectFilter}
-          onChange={(e) => { setProjectFilter(e.target.value === '' ? '' : Number(e.target.value)); setTemplateFilter('') }}
+          onChange={(e) => { setProjectFilter(e.target.value); setTemplateFilter('') }}
           className={inputClass}
           style={inputStyle}
           disabled={scopeFilter === 'global'}
@@ -1154,7 +1156,7 @@ export default function AdminParameters() {
         {projectFilter !== '' && (
           <select
             value={templateFilter}
-            onChange={(e) => setTemplateFilter(e.target.value === '' ? '' : Number(e.target.value))}
+            onChange={(e) => setTemplateFilter(e.target.value)}
             className={inputClass}
             style={inputStyle}
             disabled={scopeFilter === 'global' || scopeFilter === 'project'}

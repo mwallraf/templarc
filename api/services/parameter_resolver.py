@@ -411,7 +411,7 @@ class ResolvedParameter:
     """A single parameter in the resolution result, enriched with all metadata."""
     name: str
     scope: str                    # "global" | "project" | "template"
-    source_template_id: int | None  # which template in the chain defined this (template scope only)
+    source_template_id: str | None  # which template in the chain defined this (template scope only)
     widget_type: str
     label: str | None
     description: str | None
@@ -579,7 +579,7 @@ def build_resolution_result(
 # ---------------------------------------------------------------------------
 
 async def _load_template_with_params(
-    db: AsyncSession, template_id: int
+    db: AsyncSession, template_id: str
 ) -> "Template | None":
     """Load a template with its parameters and each parameter's options."""
     from api.models.template import Template
@@ -596,7 +596,7 @@ async def _load_template_with_params(
 
 
 async def _load_inheritance_chain(
-    db: AsyncSession, template_id: int
+    db: AsyncSession, template_id: str
 ) -> "list[Template]":
     """
     Walk parent_template_id FKs from leaf to root.
@@ -604,8 +604,8 @@ async def _load_inheritance_chain(
     Raises DerivedParamError on circular inheritance (defensive guard).
     """
     chain = []
-    current_id: int | None = template_id
-    visited: set[int] = set()
+    current_id: str | None = template_id
+    visited: set[str] = set()
 
     while current_id is not None:
         if current_id in visited:
@@ -623,7 +623,7 @@ async def _load_inheritance_chain(
 
 
 async def _load_project_params(
-    db: AsyncSession, project_id: int
+    db: AsyncSession, project_id: str
 ) -> "list[Parameter]":
     """Load active project-scoped (proj.*) parameters with options."""
     from api.models.parameter import Parameter
@@ -642,7 +642,7 @@ async def _load_project_params(
 
 
 async def _load_glob_params(
-    db: AsyncSession, organization_id: int
+    db: AsyncSession, organization_id: str
 ) -> "list[Parameter]":
     """Load active global (glob.*) parameters with options."""
     from api.models.parameter import Parameter
@@ -666,7 +666,7 @@ async def _load_glob_params(
 
 async def re_evaluate_derived_params(
     db: AsyncSession,
-    template_id: int,
+    template_id: str,
     current_context: dict,
 ) -> dict[str, str]:
     """
@@ -705,7 +705,7 @@ async def re_evaluate_derived_params(
 
 async def resolve_template_parameters(
     db: AsyncSession,
-    template_id: int,
+    template_id: str,
 ) -> ParameterResolutionResult:
     """
     Resolve all parameters for a template — the primary API for Step 2.3.

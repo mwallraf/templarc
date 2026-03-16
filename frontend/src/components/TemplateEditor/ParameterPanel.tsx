@@ -97,7 +97,7 @@ function SortableParam({ param, onRemove }: SortableParamProps) {
 
 // ── Inheritance chain display ─────────────────────────────────────────────
 
-function InheritancePreview({ templateId }: { templateId: number }) {
+function InheritancePreview({ templateId }: { templateId: string }) {
   const { data: chain, isLoading } = useQuery({
     queryKey: ['inheritance-chain', templateId],
     queryFn: () => getInheritanceChain(templateId),
@@ -130,12 +130,12 @@ function InheritancePreview({ templateId }: { templateId: number }) {
 // ── Main ParameterPanel ───────────────────────────────────────────────────
 
 export interface ParameterPanelProps {
-  templateId: number
-  projectId: number
+  templateId: string
+  projectId: string
   secrets: SecretOut[]
   assignedParams: ParameterOut[]
   dataSources: DataSourceDef[]
-  parentTemplateId?: number
+  parentTemplateId?: string
   // Metadata
   metaDisplayName: string
   metaDescription: string
@@ -147,7 +147,7 @@ export interface ParameterPanelProps {
   onChangeHistoryLabelParam: (v: string) => void
   onAssignParam: (param: ParameterOut) => void
   onUnassignParam: (paramId: number) => void
-  onSetParent: (templateId: number | undefined) => void
+  onSetParent: (templateId: string | undefined) => void
   onAddDataSource: (ds: DataSourceDef) => void
   onRemoveDataSource: (id: string) => void
   onUpdateDataSource: (id: string, ds: DataSourceDef) => void
@@ -619,7 +619,7 @@ export function ParameterPanel({
               <select
                 value={parentTemplateId ?? ''}
                 onChange={(e) =>
-                  onSetParent(e.target.value ? Number(e.target.value) : undefined)
+                  onSetParent(e.target.value || undefined)
                 }
                 className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >

@@ -67,7 +67,7 @@ class FeatureParameterUpdate(BaseModel):
 
 class FeatureCreate(BaseModel):
     """Create a new feature."""
-    project_id: int = Field(..., description="Project this feature belongs to")
+    project_id: str = Field(..., description="Project this feature belongs to")
     name: str = Field(..., max_length=100, description="Slug-style identifier (e.g. snmp_monitoring)")
     label: str = Field(..., max_length=255, description="Human-readable label shown in the render form")
     description: str | None = None
@@ -93,8 +93,8 @@ class FeatureOut(BaseModel):
     """Feature detail with parameters."""
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    project_id: int
+    id: str
+    project_id: str
     name: str
     label: str
     description: str | None
@@ -122,9 +122,9 @@ class TemplateFeatureOut(BaseModel):
     """An attachment record linking a template to a feature."""
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    template_id: int
-    feature_id: int
+    id: str
+    template_id: str
+    feature_id: str
     is_default: bool
     sort_order: int
     feature: FeatureOut

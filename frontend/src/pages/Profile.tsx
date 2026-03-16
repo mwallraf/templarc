@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { getMe, updateMe } from '../api/auth'
-import type { MeUpdate } from '../api/types'
 
 const inputClass = 'w-full rounded-lg px-3 py-2 text-sm border transition-colors focus:outline-none'
 const inputStyle = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border-bright)', color: 'var(--c-text)' }

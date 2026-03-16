@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 async def list_filters(
     db: AsyncSession,
     scope: str | None = None,
-    project_id: int | None = None,
+    project_id: str | None = None,
 ) -> list[CustomFilter]:
     """Return all active custom filters, optionally filtered by scope / project."""
     q = select(CustomFilter).where(CustomFilter.is_active.is_(True))
@@ -133,7 +133,7 @@ async def check_filter_usage(
     db: AsyncSession,
     filter_name: str,
     scope: str,
-    project_id: int | None,
+    project_id: str | None,
     git_svc: GitService,
 ) -> list[str]:
     """
@@ -174,7 +174,7 @@ async def check_filter_usage(
 
 async def list_objects(
     db: AsyncSession,
-    project_id: int | None = None,
+    project_id: str | None = None,
 ) -> list[CustomObject]:
     """Return all active custom objects, optionally filtered by project."""
     q = select(CustomObject).where(CustomObject.is_active.is_(True))
@@ -253,7 +253,7 @@ async def delete_object(db: AsyncSession, object_id: int) -> CustomObject:
 async def list_macros(
     db: AsyncSession,
     scope: str | None = None,
-    project_id: int | None = None,
+    project_id: str | None = None,
 ) -> list[CustomMacro]:
     """Return all active custom macros, optionally filtered by scope / project."""
     q = select(CustomMacro).where(CustomMacro.is_active.is_(True))
@@ -327,7 +327,7 @@ async def delete_macro(db: AsyncSession, macro_id: int) -> CustomMacro:
 async def _invalidate_caches(
     db: AsyncSession,
     scope: str,
-    project_id: int | None,
+    project_id: str | None,
 ) -> None:
     """
     Evict Jinja2 environment cache entries for all affected projects.

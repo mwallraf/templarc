@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base
@@ -24,16 +26,26 @@ class Template(Base):
         UniqueConstraint("project_id", "name", name="uq_templates_project_name"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    project_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     git_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    parent_template_id: Mapped[int | None] = mapped_column(
-        ForeignKey("templates.id", ondelete="SET NULL"), nullable=True, index=True
+    parent_template_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("templates.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     is_snippet: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
@@ -47,8 +59,11 @@ class Template(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
-    created_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    created_by: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Relationships

@@ -13,7 +13,7 @@ import { gitSyncApply, gitSyncStatus } from '../api/templates'
 import type { SyncReport, SyncStatusItem, SyncStatusReport } from '../api/types'
 
 interface Props {
-  projectId: number
+  projectId: string
   projectName: string
   onClose: () => void
   onApplied: () => void   // called after a successful apply so parent can refetch

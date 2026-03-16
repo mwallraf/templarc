@@ -35,9 +35,9 @@ from api.schemas.parameter import (
 def validate_parameter_scoping(
     name: str,
     scope: ParameterScope | str,
-    organization_id: int | None,
-    project_id: int | None,
-    template_id: int | None,
+    organization_id: str | None,
+    project_id: str | None,
+    template_id: str | None,
 ) -> None:
     """
     Enforce the three-tier parameter scoping rules.
@@ -132,9 +132,9 @@ async def list_parameters(
     db: AsyncSession,
     *,
     scope: ParameterScope | None = None,
-    organization_id: int | None = None,
-    project_id: int | None = None,
-    template_id: int | None = None,
+    organization_id: str | None = None,
+    project_id: str | None = None,
+    template_id: str | None = None,
     search: str | None = None,
     include_inactive: bool = False,
     page: int = 1,

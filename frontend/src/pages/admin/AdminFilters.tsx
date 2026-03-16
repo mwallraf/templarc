@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
+import type { UseFormRegister } from 'react-hook-form'
 import Editor from '@monaco-editor/react'
 import {
   listFilters,
@@ -80,13 +81,14 @@ function CodeEditor({
 }
 
 // Project dropdown used in both Filters and Objects forms
-function ProjectSelect({ register }: { register: ReturnType<typeof useForm>['register'] }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ProjectSelect({ register }: { register: UseFormRegister<any> }) {
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => listProjects(),
   })
   return (
-    <select className={inputClass} style={selectStyle} {...register('project_id', { valueAsNumber: true })}>
+    <select className={inputClass} style={selectStyle} {...register('project_id')}>
       <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
       {projects.map((p) => (
         <option key={p.id} value={p.id} style={{ backgroundColor: 'var(--c-card)' }}>

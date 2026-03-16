@@ -97,9 +97,9 @@ class ParameterCreate(BaseModel):
             )
         return v
     # Exactly one of these must be set, determined by scope
-    organization_id: int | None = None
-    project_id: int | None = None
-    template_id: int | None = None
+    organization_id: str | None = None
+    project_id: str | None = None
+    template_id: str | None = None
 
     widget_type: WidgetType = WidgetType.text
     label: str | None = Field(None, max_length=255)
@@ -160,9 +160,9 @@ class ParameterOut(BaseModel):
     id: int
     name: str
     scope: ParameterScope
-    organization_id: int | None
-    project_id: int | None
-    template_id: int | None
+    organization_id: str | None
+    project_id: str | None
+    template_id: str | None
 
     widget_type: WidgetType
     label: str | None

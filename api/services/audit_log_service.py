@@ -23,7 +23,7 @@ async def log_write(
     user_sub: str,
     action: str,
     resource_type: str,
-    resource_id: int | None = None,
+    resource_id: int | str | None = None,
     changes: dict | None = None,
 ) -> None:
     """
@@ -42,6 +42,6 @@ async def log_write(
         user_sub=user_sub,
         action=action,
         resource_type=resource_type,
-        resource_id=resource_id,
+        resource_id=str(resource_id) if resource_id is not None else None,
         changes=changes or {},
     ))

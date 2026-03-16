@@ -41,9 +41,9 @@ class RenderPresetOut(BaseModel):
     })
 
     id: int
-    template_id: int
+    template_id: str
     name: str
     description: str | None
     params: dict
-    created_by: int | None
+    created_by: str | None
     created_at: datetime

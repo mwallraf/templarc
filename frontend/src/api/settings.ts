@@ -31,9 +31,11 @@ export interface AITestResult {
   error: string | null
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const token = getToken()
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  return headers
 }
 
 export async function getAISettings(): Promise<AISettingsOut> {

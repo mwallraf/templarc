@@ -93,14 +93,14 @@ export default function AdminTemplates() {
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [search, setSearch] = useState('')
-  const [filterProjectId, setFilterProjectId] = useState<number | ''>('')
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
-  const [expandedSnippetProjects, setExpandedSnippetProjects] = useState<Set<number>>(new Set())
+  const [filterProjectId, setFilterProjectId] = useState<string>('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [expandedSnippetProjects, setExpandedSnippetProjects] = useState<Set<string>>(new Set())
 
   // Import state
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importFile, setImportFile] = useState<File | null>(null)
-  const [importProjectId, setImportProjectId] = useState<number | ''>('')
+  const [importProjectId, setImportProjectId] = useState<string>('')
   const [uploadResult, setUploadResult] = useState<TemplateUploadOut | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -209,7 +209,7 @@ export default function AdminTemplates() {
   )
 
   const templateMap = useMemo(
-    () => new Map<number, TemplateOut>((templates ?? []).map((t) => [t.id, t])),
+    () => new Map<string, TemplateOut>((templates ?? []).map((t) => [t.id, t])),
     [templates],
   )
 
@@ -298,8 +298,7 @@ export default function AdminTemplates() {
           // Strip the project directory prefix (everything up to and including the
           // first '/') because the Jinja2 env loader is rooted at the project dir.
           if (data.parent_template_id && !data.content) {
-            const parentId = Number(data.parent_template_id)
-            const parent = templateMap.get(parentId)
+            const parent = templateMap.get(data.parent_template_id)
             if (parent?.git_path) {
               const slashIdx = parent.git_path.indexOf('/')
               const extendsPath = slashIdx !== -1
@@ -359,7 +358,7 @@ export default function AdminTemplates() {
               <select
                 className={inputClass}
                 style={{ ...inputStyle, color: 'var(--c-text)' }}
-                {...register('project_id', { required: 'Project is required', setValueAs: (v) => v === '' ? undefined : Number(v) })}
+                {...register('project_id', { required: 'Project is required', setValueAs: (v) => v === '' ? undefined : String(v) })}
               >
                 <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
                 {projects?.map((p) => (
@@ -375,7 +374,7 @@ export default function AdminTemplates() {
               <select
                 className={inputClass}
                 style={{ ...inputStyle, color: 'var(--c-text)' }}
-                {...register('parent_template_id', { setValueAs: (v) => v === '' ? undefined : Number(v) })}
+                {...register('parent_template_id', { setValueAs: (v) => v === '' ? undefined : String(v) })}
               >
                 <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— none (root template) —</option>
                 {templates?.filter((t) => !t.is_snippet).map((t) => (
@@ -383,7 +382,7 @@ export default function AdminTemplates() {
                 ))}
               </select>
               {watchParentId && (() => {
-                const parent = templateMap.get(Number(watchParentId))
+                const parent = templateMap.get(watchParentId)
                 if (!parent?.git_path) return null
                 const slashIdx = parent.git_path.indexOf('/')
                 const extendsPath = slashIdx !== -1 ? parent.git_path.slice(slashIdx + 1) : parent.git_path
@@ -599,7 +598,7 @@ export default function AdminTemplates() {
               className={inputClass}
               style={{ ...inputStyle, color: importProjectId === '' ? 'var(--c-muted-3)' : 'var(--c-text)' }}
               value={importProjectId}
-              onChange={(e) => setImportProjectId(e.target.value === '' ? '' : Number(e.target.value))}
+              onChange={(e) => setImportProjectId(e.target.value)}
             >
               <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select project —</option>
               {projects?.map((p) => (
@@ -677,7 +676,7 @@ export default function AdminTemplates() {
 
         <select
           value={filterProjectId}
-          onChange={(e) => setFilterProjectId(e.target.value === '' ? '' : Number(e.target.value))}
+          onChange={(e) => setFilterProjectId(e.target.value)}
           className="rounded-lg px-3 py-1.5 text-sm border focus:outline-none"
           style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)', color: filterProjectId === '' ? 'var(--c-muted-3)' : 'var(--c-text)' }}
         >

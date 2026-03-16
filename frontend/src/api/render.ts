@@ -11,13 +11,13 @@ import type {
   RenderPresetCreate,
 } from './types'
 
-export async function resolveParams(templateId: number): Promise<FormDefinitionOut> {
+export async function resolveParams(templateId: string): Promise<FormDefinitionOut> {
   const res = await apiClient.get<FormDefinitionOut>(`/templates/${templateId}/resolve-params`)
   return res.data
 }
 
 export async function renderTemplate(
-  templateId: number,
+  templateId: string,
   data: RenderRequest,
   options?: { persist?: boolean; user?: string },
 ): Promise<RenderOut> {
@@ -28,7 +28,7 @@ export async function renderTemplate(
 }
 
 export async function onChangeParam(
-  templateId: number,
+  templateId: string,
   paramName: string,
   data: OnChangeRequest,
 ): Promise<Record<string, unknown>> {
@@ -40,7 +40,7 @@ export async function onChangeParam(
 }
 
 export async function listRenderHistory(params?: {
-  template_id?: number
+  template_id?: string
   date_from?: string
   date_to?: string
   search?: string
@@ -54,13 +54,13 @@ export async function listRenderHistory(params?: {
   return res.data
 }
 
-export async function getRenderHistory(historyId: number): Promise<RenderHistoryOut> {
+export async function getRenderHistory(historyId: string): Promise<RenderHistoryOut> {
   const res = await apiClient.get<RenderHistoryOut>(`/render-history/${historyId}`)
   return res.data
 }
 
 export async function reRender(
-  historyId: number,
+  historyId: string,
   data: ReRenderRequest,
   user?: string,
 ): Promise<RenderOut> {
@@ -72,19 +72,19 @@ export async function reRender(
   return res.data
 }
 
-export async function listPresets(templateId: number): Promise<RenderPresetOut[]> {
+export async function listPresets(templateId: string): Promise<RenderPresetOut[]> {
   const res = await apiClient.get<RenderPresetOut[]>(`/templates/${templateId}/presets`)
   return res.data
 }
 
 export async function createPreset(
-  templateId: number,
+  templateId: string,
   data: RenderPresetCreate,
 ): Promise<RenderPresetOut> {
   const res = await apiClient.post<RenderPresetOut>(`/templates/${templateId}/presets`, data)
   return res.data
 }
 
-export async function deletePreset(templateId: number, presetId: number): Promise<void> {
+export async function deletePreset(templateId: string, presetId: number): Promise<void> {
   await apiClient.delete(`/templates/${templateId}/presets/${presetId}`)
 }

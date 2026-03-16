@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.models.base import Base
@@ -58,16 +59,23 @@ class RenderWebhook(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    organization_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.id"), nullable=False, index=True
+    organization_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("organizations.id"),
+        nullable=False,
+        index=True,
     )
 
     # Scope — exactly one must be set
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
+    project_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True,
     )
-    template_id: Mapped[int | None] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), nullable=True
+    template_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("templates.id", ondelete="CASCADE"),
+        nullable=True,
     )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)

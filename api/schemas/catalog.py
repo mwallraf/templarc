@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProjectCreate(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "examples": [{
-            "organization_id": 1,
+            "organization_id": "00000000-0000-0000-0000-000000000001",
             "name": "router_provisioning",
             "display_name": "Router Provisioning",
             "description": "Cisco IOS router configuration templates",
@@ -34,7 +34,7 @@ class ProjectCreate(BaseModel):
         }]
     })
 
-    organization_id: int
+    organization_id: str
     name: str = Field(..., max_length=100, description="Slug-style identifier, unique per org")
     display_name: str = Field(..., max_length=255)
     description: str | None = None
@@ -85,8 +85,8 @@ class ProjectOut(BaseModel):
         }]
     })
 
-    id: int
-    organization_id: int
+    id: str
+    organization_id: str
     name: str
     display_name: str
     description: str | None
@@ -109,7 +109,7 @@ class ProjectDetailOut(ProjectOut):
 # ---------------------------------------------------------------------------
 
 class TemplateTreeNode(BaseModel):
-    id: int
+    id: str
     name: str
     display_name: str
     git_path: str | None
@@ -143,7 +143,7 @@ class TemplateCreate(BaseModel):
         }]
     })
 
-    project_id: int
+    project_id: str
     name: str = Field(
         ...,
         max_length=100,
@@ -157,7 +157,7 @@ class TemplateCreate(BaseModel):
         description="Path within the templates repo (e.g. 'project/snippets/foo.j2'). "
                     "Defaults to '{project_git_path}/{name}.j2' if omitted.",
     )
-    parent_template_id: int | None = Field(
+    parent_template_id: str | None = Field(
         None, description="Must belong to the same project if provided"
     )
     sort_order: int = 0
@@ -212,13 +212,13 @@ class TemplateOut(BaseModel):
         }]
     })
 
-    id: int
-    project_id: int
+    id: str
+    project_id: str
     name: str
     display_name: str
     description: str | None
     git_path: str | None
-    parent_template_id: int | None
+    parent_template_id: str | None
     is_active: bool
     is_snippet: bool
     is_hidden: bool
@@ -287,7 +287,7 @@ class TemplateUploadOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 class InheritanceChainItem(BaseModel):
-    id: int
+    id: str
     name: str
     display_name: str
     git_path: str | None
@@ -302,7 +302,7 @@ class CatalogProjectOut(BaseModel):
     """Minimal project summary embedded in the catalog response."""
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: str
     name: str
     display_name: str
     description: str | None
@@ -319,7 +319,7 @@ class CatalogTemplateItem(BaseModel):
       - has_remote_datasources: True if the .j2 frontmatter declares data_sources
       - is_leaf: True when the template has no active children
     """
-    id: int
+    id: str
     name: str
     display_name: str
     description: str | None

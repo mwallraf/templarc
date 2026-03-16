@@ -11,9 +11,9 @@ import type {
 
 export async function listParameters(params?: {
   scope?: ParameterScope
-  organization_id?: number
-  project_id?: number
-  template_id?: number
+  organization_id?: string
+  project_id?: string
+  template_id?: string
   search?: string
   include_inactive?: boolean
   page?: number

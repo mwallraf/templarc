@@ -14,7 +14,7 @@ class ApiKeyOut(BaseModel):
     name: str
     key_prefix: str
     is_admin: bool
-    created_by: int | None
+    created_by: str | None
     last_used_at: datetime | None
     expires_at: datetime | None
     created_at: datetime

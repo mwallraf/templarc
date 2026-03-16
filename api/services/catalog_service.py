@@ -51,7 +51,7 @@ from api.services.jinja_parser import extract_variables
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-async def _get_project_or_404(db: AsyncSession, project_id: int) -> Project:
+async def _get_project_or_404(db: AsyncSession, project_id: str) -> Project:
     proj = await db.get(Project, project_id)
     if proj is None:
         raise HTTPException(
@@ -61,7 +61,7 @@ async def _get_project_or_404(db: AsyncSession, project_id: int) -> Project:
     return proj
 
 
-async def _get_template_or_404(db: AsyncSession, template_id: int) -> Template:
+async def _get_template_or_404(db: AsyncSession, template_id: str) -> Template:
     tmpl = await db.get(Template, template_id)
     if tmpl is None:
         raise HTTPException(
@@ -78,7 +78,7 @@ def _build_initial_content(name: str) -> str:
 
 def _build_tree(templates: list[Template]) -> list[TemplateTreeNode]:
     """Build a nested TemplateTreeNode structure from a flat list of templates."""
-    children_map: dict[int | None, list[Template]] = {}
+    children_map: dict[str | None, list[Template]] = {}
     for t in templates:
         children_map.setdefault(t.parent_template_id, []).append(t)
 
@@ -104,7 +104,7 @@ def _build_tree(templates: list[Template]) -> list[TemplateTreeNode]:
 
 async def list_projects(
     db: AsyncSession,
-    organization_id: int | None = None,
+    organization_id: str | None = None,
     search: str | None = None,
 ) -> list[Project]:
     """Return all projects, optionally filtered by org and/or name search."""
@@ -117,12 +117,12 @@ async def list_projects(
     return list(result.scalars().all())
 
 
-async def get_project(db: AsyncSession, project_id: int) -> Project:
+async def get_project(db: AsyncSession, project_id: str) -> Project:
     return await _get_project_or_404(db, project_id)
 
 
 async def get_project_with_tree(
-    db: AsyncSession, project_id: int
+    db: AsyncSession, project_id: str
 ) -> tuple[Project, list[TemplateTreeNode]]:
     """Return (project, template_tree) for the project detail endpoint."""
     proj = await _get_project_or_404(db, project_id)
@@ -165,7 +165,7 @@ async def create_project(
     return proj
 
 
-async def delete_project(db: AsyncSession, project_id: int) -> None:
+async def delete_project(db: AsyncSession, project_id: str) -> None:
     """Hard-delete a project and all its templates/parameters (cascade)."""
     proj = await _get_project_or_404(db, project_id)
     await db.delete(proj)
@@ -174,7 +174,7 @@ async def delete_project(db: AsyncSession, project_id: int) -> None:
 
 async def update_project(
     db: AsyncSession,
-    project_id: int,
+    project_id: str,
     data: ProjectUpdate,
 ) -> Project:
     """Partial update of project metadata (never changes name or org)."""
@@ -194,7 +194,7 @@ async def update_project(
 # ---------------------------------------------------------------------------
 
 async def get_template_tree(
-    db: AsyncSession, project_id: int
+    db: AsyncSession, project_id: str
 ) -> list[TemplateTreeNode]:
     """Return the full template hierarchy for a project as a nested tree."""
     stmt = (
@@ -213,7 +213,7 @@ async def get_template_tree(
 
 async def list_templates(
     db: AsyncSession,
-    project_id: int | None = None,
+    project_id: str | None = None,
     active_only: bool = True,
 ) -> list[Template]:
     """Return templates, optionally filtered by project and/or active status."""
@@ -226,7 +226,7 @@ async def list_templates(
     return list(result.scalars().all())
 
 
-async def get_template(db: AsyncSession, template_id: int) -> Template:
+async def get_template(db: AsyncSession, template_id: str) -> Template:
     return await _get_template_or_404(db, template_id)
 
 
@@ -290,7 +290,7 @@ async def create_template(
 
 async def update_template(
     db: AsyncSession,
-    template_id: int,
+    template_id: str,
     data: TemplateUpdate,
     git_svc: GitService,
 ) -> TemplateUpdateOut:
@@ -358,7 +358,7 @@ async def update_template(
 
 async def delete_template(
     db: AsyncSession,
-    template_id: int,
+    template_id: str,
     git_svc: GitService,
     author: str = "templarc",
 ) -> None:
@@ -382,7 +382,7 @@ async def delete_template(
 
 async def get_template_variables(
     db: AsyncSession,
-    template_id: int,
+    template_id: str,
     git_svc: GitService,
 ) -> list[VariableRefOut]:
     """
@@ -466,7 +466,7 @@ async def get_template_variables(
 
 async def get_inheritance_chain(
     db: AsyncSession,
-    template_id: int,
+    template_id: str,
 ) -> list[InheritanceChainItem]:
     """
     Walk up the parent chain and return an ordered list from root to leaf.
@@ -529,7 +529,7 @@ def _has_remote_datasources(git_svc: GitService, git_path: str | None) -> bool:
 
 
 def _build_breadcrumb(
-    template_id: int,
+    template_id: str,
     by_id: dict[int, Template],
 ) -> list[str]:
     """

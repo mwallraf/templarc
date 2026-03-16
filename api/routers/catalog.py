@@ -55,7 +55,7 @@ router = APIRouter()
     ),
 )
 async def list_projects(
-    organization_id: int | None = Query(None, description="Filter by organization"),
+    organization_id: str | None = Query(None, description="Filter by organization"),
     search: str | None = Query(None, description="Partial match on project name"),
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
@@ -102,7 +102,7 @@ async def create_project(
     description="Fetch a project by ID, including its full template hierarchy tree.",
 )
 async def get_project(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> ProjectDetailOut:
@@ -125,7 +125,7 @@ async def get_project(
     ),
 )
 async def update_project(
-    project_id: int,
+    project_id: str,
     data: ProjectUpdate,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
@@ -152,7 +152,7 @@ async def update_project(
     ),
 )
 async def delete_project(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     token: TokenData = Depends(require_admin),
 ) -> None:
@@ -176,7 +176,7 @@ async def delete_project(
     ),
 )
 async def get_project_templates(
-    project_id: int,
+    project_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> list[TemplateTreeNode]:

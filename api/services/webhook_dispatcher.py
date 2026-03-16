@@ -50,8 +50,8 @@ class WebhookError(Exception):
 
 @dataclass
 class WebhookContext:
-    render_id: int | None
-    template_id: int
+    render_id: str | None
+    template_id: str
     template_name: str
     project_name: str
     git_sha: str
@@ -256,9 +256,9 @@ async def dispatch_test(
 async def dispatch_webhooks(
     *,
     db: AsyncSession,
-    template_id: int,
-    project_id: int,
-    organization_id: int,
+    template_id: str,
+    project_id: str,
+    organization_id: str,
     ctx: WebhookContext,
     persist: bool,
 ) -> None:

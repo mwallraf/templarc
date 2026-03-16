@@ -54,9 +54,9 @@ router = APIRouter()
 )
 async def list_parameters(
     scope: ParameterScope | None = Query(None, description="Filter by scope"),
-    organization_id: int | None = Query(None),
-    project_id: int | None = Query(None),
-    template_id: int | None = Query(None),
+    organization_id: str | None = Query(None),
+    project_id: str | None = Query(None),
+    template_id: str | None = Query(None),
     search: str | None = Query(None, description="Search in name or label"),
     include_inactive: bool = Query(False, description="Include soft-deleted parameters"),
     page: int = Query(1, ge=1),

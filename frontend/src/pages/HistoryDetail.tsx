@@ -243,7 +243,7 @@ print(r.json()["raw_output"])`
 export default function HistoryDetail() {
   const { renderId } = useParams<{ renderId: string }>()
   const navigate = useNavigate()
-  const id = Number(renderId)
+  const id = renderId ?? ''
 
   const [reRenderResult, setReRenderResult] = useState<RenderOut | null>(null)
   const [altTemplateId, setAltTemplateId] = useState<string>('')
@@ -279,7 +279,7 @@ export default function HistoryDetail() {
   })
 
   const altReRenderMut = useMutation({
-    mutationFn: () => reRender(id, { template_id: Number(altTemplateId), persist: true }),
+    mutationFn: () => reRender(id, { template_id: altTemplateId, persist: true }),
     onSuccess: setAltReRenderResult,
   })
 

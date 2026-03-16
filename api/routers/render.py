@@ -59,7 +59,7 @@ def _make_renderer(db: AsyncSession, git_service: GitService) -> TemplateRendere
     return TemplateRenderer(db=db, git_service=git_service, env_factory=EnvironmentFactory(db))
 
 
-async def _require_not_snippet(db: AsyncSession, template_id: int) -> None:
+async def _require_not_snippet(db: AsyncSession, template_id: str) -> None:
     """Raise 422 if the template is a snippet (include-only fragment)."""
     tmpl = await db.get(Template, template_id)
     if tmpl is not None and tmpl.is_snippet:
@@ -86,7 +86,7 @@ async def _require_not_snippet(db: AsyncSession, template_id: int) -> None:
     tags=["Render"],
 )
 async def resolve_params(
-    template_id: int,
+    template_id: str,
     db: AsyncSession = Depends(get_db),
     git_service: GitService = Depends(get_git_service),
     _token: TokenData = Depends(get_current_user),
@@ -168,7 +168,7 @@ async def resolve_params(
 @limiter.limit("10/minute")
 async def render_template(
     request: Request,
-    template_id: int,
+    template_id: str,
     body: RenderRequest,
     persist: bool = Query(True, description="Set false to skip render_history storage"),
     db: AsyncSession = Depends(get_db),
@@ -214,7 +214,7 @@ async def render_template(
     tags=["Render"],
 )
 async def on_change(
-    template_id: int,
+    template_id: str,
     param_name: str,
     body: OnChangeRequest,
     db: AsyncSession = Depends(get_db),
@@ -249,7 +249,7 @@ async def on_change(
     tags=["Render History"],
 )
 async def list_render_history(
-    template_id: int | None = Query(None),
+    template_id: str | None = Query(None),
     date_from: datetime | None = Query(None),
     date_to: datetime | None = Query(None),
     search: str | None = Query(None, description="Search across display_label, notes, and template name"),
@@ -333,7 +333,7 @@ async def list_render_history(
     tags=["Render History"],
 )
 async def get_render_history(
-    history_id: int,
+    history_id: str,
     db: AsyncSession = Depends(get_db),
     _token: TokenData = Depends(get_current_user),
 ) -> RenderHistoryOut:
@@ -374,7 +374,7 @@ async def get_render_history(
 @limiter.limit("10/minute")
 async def re_render(
     request: Request,
-    history_id: int,
+    history_id: str,
     body: ReRenderRequest,
     db: AsyncSession = Depends(get_db),
     git_service: GitService = Depends(get_git_service),

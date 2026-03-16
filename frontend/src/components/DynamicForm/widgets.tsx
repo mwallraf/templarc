@@ -50,14 +50,14 @@ export function TextWidget({ param, register }: TextWidgetProps) {
       style={inputStyle}
       placeholder={param.default_value ?? ''}
       defaultValue={prefillKey || (param.default_value ?? '')}
-      onFocus={applyFocus}
-      onBlur={removeFocus}
       {...register(param.name, {
         required: param.required ? `${param.label ?? param.name} is required` : false,
         pattern: param.validation_regex
           ? { value: new RegExp(param.validation_regex), message: 'Invalid format' }
           : undefined,
       })}
+      onFocus={applyFocus}
+      onBlur={removeFocus}
     />
   )
 }
@@ -71,12 +71,12 @@ export function NumberWidget({ param, register }: TextWidgetProps) {
       className={inputClass}
       style={inputStyle}
       placeholder={param.default_value ?? ''}
-      onFocus={applyFocus}
-      onBlur={removeFocus}
       {...register(param.name, {
         required: param.required ? `${param.label ?? param.name} is required` : false,
         valueAsNumber: true,
       })}
+      onFocus={applyFocus}
+      onBlur={removeFocus}
     />
   )
 }
@@ -90,11 +90,11 @@ export function PasswordWidget({ param, register }: TextWidgetProps) {
       className={inputClass}
       style={inputStyle}
       autoComplete="off"
-      onFocus={applyFocus}
-      onBlur={removeFocus}
       {...register(param.name, {
         required: param.required ? `${param.label ?? param.name} is required` : false,
       })}
+      onFocus={applyFocus}
+      onBlur={removeFocus}
     />
   )
 }
@@ -108,11 +108,11 @@ export function TextareaWidget({ param, register }: TextWidgetProps) {
       className={inputClass}
       style={inputStyle}
       placeholder={param.default_value ?? ''}
-      onFocus={applyFocus}
-      onBlur={removeFocus}
       {...register(param.name, {
         required: param.required ? `${param.label ?? param.name} is required` : false,
       })}
+      onFocus={applyFocus}
+      onBlur={removeFocus}
     />
   )
 }
@@ -131,11 +131,11 @@ export function SelectWidget({ param, register, currentValues }: SelectWidgetPro
     <select
       className={inputClass}
       style={{ ...inputStyle, color: 'var(--c-text)' }}
-      onFocus={applyFocus}
-      onBlur={removeFocus}
       {...register(param.name, {
         required: param.required ? `${param.label ?? param.name} is required` : false,
       })}
+      onFocus={applyFocus}
+      onBlur={removeFocus}
     >
       <option value="" style={{ backgroundColor: 'var(--c-card)' }}>— select —</option>
       {opts.map((o) => (

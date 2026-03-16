@@ -38,7 +38,7 @@ export const createApiKey = (data: ApiKeyCreate) =>
 export const deleteApiKey = (id: number) =>
   apiClient.delete(`/auth/api-keys/${id}`)
 
-export const listFilters = (params?: { scope?: string; project_id?: number }) =>
+export const listFilters = (params?: { scope?: string; project_id?: string }) =>
   apiClient.get<CustomFilterOut[]>('/admin/filters', { params }).then((r) => r.data)
 
 export const createFilter = (data: CustomFilterCreate) =>
@@ -57,7 +57,7 @@ export const deleteFilter = (id: number) =>
     .delete<{ id: number; used_in_templates: string[] }>(`/admin/filters/${id}`)
     .then((r) => r.data)
 
-export const listObjects = (params?: { project_id?: number }) =>
+export const listObjects = (params?: { project_id?: string }) =>
   apiClient.get<CustomObjectOut[]>('/admin/objects', { params }).then((r) => r.data)
 
 export const createObject = (data: CustomObjectCreate) =>
@@ -69,7 +69,7 @@ export const updateObject = (id: number, data: CustomObjectUpdate) =>
 export const deleteObject = (id: number) =>
   apiClient.delete<{ id: number }>(`/admin/objects/${id}`).then((r) => r.data)
 
-export const listMacros = (params?: { scope?: string; project_id?: number }) =>
+export const listMacros = (params?: { scope?: string; project_id?: string }) =>
   apiClient.get<CustomMacroOut[]>('/admin/macros', { params }).then((r) => r.data)
 
 export const createMacro = (data: CustomMacroCreate) =>
@@ -86,7 +86,7 @@ export const deleteMacro = (id: number) =>
 export const getAISettings = () =>
   apiClient.get<AISettingsOut>('/settings/ai').then((r) => r.data)
 
-export const findDuplicateParameters = (project_id?: number) =>
+export const findDuplicateParameters = (project_id?: string) =>
   apiClient
     .get<DuplicatesReport>('/admin/parameters/duplicates', { params: project_id ? { project_id } : undefined })
     .then((r) => r.data)
@@ -96,24 +96,24 @@ export const promoteParameter = (data: PromoteRequest) =>
 
 // ── Remote Git ───────────────────────────────────────────────────────────────
 
-export const getRemoteStatus = (projectId: number) =>
+export const getRemoteStatus = (projectId: string) =>
   apiClient.get<GitRemoteStatusOut>(`/admin/git-remote/${projectId}/status`).then((r) => r.data)
 
-export const cloneRemote = (projectId: number) =>
+export const cloneRemote = (projectId: string) =>
   apiClient.post<GitRemoteActionOut>(`/admin/git-remote/${projectId}/clone`).then((r) => r.data)
 
-export const pullRemote = (projectId: number) =>
+export const pullRemote = (projectId: string) =>
   apiClient.post<GitRemoteActionOut>(`/admin/git-remote/${projectId}/pull`).then((r) => r.data)
 
-export const pushRemote = (projectId: number) =>
+export const pushRemote = (projectId: string) =>
   apiClient.post<GitRemoteActionOut>(`/admin/git-remote/${projectId}/push`).then((r) => r.data)
 
-export const testRemoteConnection = (projectId: number) =>
+export const testRemoteConnection = (projectId: string) =>
   apiClient.post<GitRemoteTestOut>(`/admin/git-remote/${projectId}/test`).then((r) => r.data)
 
 // ── Render Webhooks ───────────────────────────────────────────────────────────
 
-export const listWebhooks = (params?: { project_id?: number; template_id?: number; is_active?: boolean }) =>
+export const listWebhooks = (params?: { project_id?: string; template_id?: string; is_active?: boolean }) =>
   apiClient.get<RenderWebhookListOut>('/webhooks', { params }).then((r) => r.data)
 
 export const createWebhook = (data: RenderWebhookCreate) =>

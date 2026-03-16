@@ -59,8 +59,8 @@ class SecretOut(BaseModel):
         }]
     })
 
-    id: int
-    organization_id: int
+    id: str
+    organization_id: str
     name: str
     secret_type: SecretType
     vault_path: str | None

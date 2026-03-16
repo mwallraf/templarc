@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -102,7 +103,7 @@ class AvailableFeatureParam:
 @dataclass
 class AvailableFeature:
     """A feature available for selection in the render form."""
-    id: int
+    id: str
     name: str
     label: str
     description: str | None
@@ -114,7 +115,7 @@ class AvailableFeature:
 @dataclass
 class FormDefinition:
     """Result of resolve_params_for_form — ready to drive a dynamic UI form."""
-    template_id: int
+    template_id: str
     parameters: list[EnrichedParameter]
     inheritance_chain: list[str]
     features: list[AvailableFeature] = field(default_factory=list)
@@ -124,8 +125,8 @@ class FormDefinition:
 class RenderResult:
     """Result of a render operation."""
     output: str
-    render_id: int | None   # None when persist=False
-    template_id: int
+    render_id: str | None   # None when persist=False
+    template_id: str
     git_sha: str
 
 
@@ -146,6 +147,7 @@ def build_metadata_header(
     notes: str | None,
     full_context: dict[str, Any],
     comment_style: str,
+    render_id: str | None = None,
 ) -> str:
     """
     Return a structured comment block describing this render.
@@ -180,6 +182,8 @@ def build_metadata_header(
             f"Git SHA:      {sha_short}",
             f"Project:      {project_display_name} ({project_name})",
         ]
+        if render_id:
+            body_lines.append(f"Render ID:    {render_id}")
         if notes:
             body_lines.append(f"Notes:        {notes}")
         body_lines.append("Parameters:")
@@ -196,6 +200,8 @@ def build_metadata_header(
             f"{c} Git SHA:      {sha_short}",
             f"{c} Project:      {project_display_name} ({project_name})",
         ]
+        if render_id:
+            body_lines.append(f"{c} Render ID:    {render_id}")
         if notes:
             body_lines.append(f"{c} Notes:        {notes}")
         body_lines.append(f"{c} Parameters:")
@@ -353,7 +359,7 @@ class TemplateRenderer:
     # Public API
     # ------------------------------------------------------------------
 
-    async def resolve_params_for_form(self, template_id: int) -> FormDefinition:
+    async def resolve_params_for_form(self, template_id: str) -> FormDefinition:
         """
         Return an enriched parameter list suitable for rendering a UI form.
 
@@ -390,7 +396,7 @@ class TemplateRenderer:
                 used_var_paths = {ref.full_path for ref in extract_variables(template_body)}
             except Exception as exc:
                 logger.warning(
-                    "extract_variables failed for template %d: %s — showing all params",
+                    "extract_variables failed for template %s: %s — showing all params",
                     template_id, exc,
                 )
 
@@ -417,7 +423,7 @@ class TemplateRenderer:
                 )
             except Exception as exc:
                 logger.warning(
-                    "on_load datasource resolution failed for template %d: %s",
+                    "on_load datasource resolution failed for template %s: %s",
                     template_id, exc,
                 )
 
@@ -436,7 +442,7 @@ class TemplateRenderer:
 
     async def resolve_on_change(
         self,
-        template_id: int,
+        template_id: str,
         changed_param: str,
         current_params: dict[str, Any],
     ) -> dict:
@@ -452,7 +458,7 @@ class TemplateRenderer:
                 fm, _ = parse_frontmatter(raw)
                 data_sources = _parse_data_sources(fm.get("data_sources") or [])
                 logger.info(
-                    "[on_change] template %d — %d datasource(s) in frontmatter: %s",
+                    "[on_change] template %s — %d datasource(s) in frontmatter: %s",
                     template_id, len(data_sources),
                     [(ds.id, ds.trigger) for ds in data_sources],
                 )
@@ -464,7 +470,7 @@ class TemplateRenderer:
                     )
                     result.update(ds_enrichments)
             except TemplateNotFoundError:
-                logger.warning("[on_change] template %d — git file not found at %s", template_id, template.git_path)
+                logger.warning("[on_change] template %s — git file not found at %s", template_id, template.git_path)
 
         # 2. Re-evaluate derived parameters against the updated context
         derived_values = await re_evaluate_derived_params(
@@ -479,12 +485,12 @@ class TemplateRenderer:
 
     async def render(
         self,
-        template_id: int,
+        template_id: str,
         provided_params: dict[str, Any],
         user: str,
         notes: str | None = None,
         persist: bool = True,
-        feature_ids: list[int] | None = None,
+        feature_ids: list[str] | None = None,
     ) -> RenderResult:
         """
         Render a template and optionally persist the result to render_history.
@@ -556,7 +562,10 @@ class TemplateRenderer:
             if feature_blocks:
                 rendered_body = rendered_body + "\n" + "\n".join(feature_blocks)
 
-        # 8. Metadata header — only include params actually used in the template body
+        # 8. Pre-generate render UUID (so it can appear in the metadata header)
+        render_id: str | None = str(uuid.uuid4()) if persist else None
+
+        # 8b. Metadata header — only include params actually used in the template body
         rendered_at = datetime.now(timezone.utc).isoformat()
         try:
             used_vars = {ref.full_path for ref in extract_variables(template_body)}
@@ -576,12 +585,13 @@ class TemplateRenderer:
             notes=notes,
             full_context=header_context,
             comment_style=project.output_comment_style,
+            render_id=render_id,
         )
         raw_output = header + rendered_body
 
         # 9. Persist
         # Resolve user ID from username (best-effort; None if not found)
-        rendered_by_id: int | None = None
+        rendered_by_id: str | None = None
         if persist or True:  # always resolve for display_label extraction below
             user_result = await self._db.execute(
                 select(User.id).where(User.username == user)
@@ -595,9 +605,9 @@ class TemplateRenderer:
             if raw_label is not None:
                 display_label = str(raw_label)[:500] or None
 
-        render_id: int | None = None
-        if persist:
+        if persist and render_id is not None:
             history = RenderHistory(
+                id=render_id,
                 template_id=template_id,
                 template_git_sha=git_sha,
                 resolved_parameters=full_context,
@@ -610,7 +620,6 @@ class TemplateRenderer:
             await self._db.flush()
             await self._db.commit()
             await self._db.refresh(history)
-            render_id = history.id
 
         # 10. Dispatch webhooks
         webhook_ctx = WebhookContext(
@@ -648,8 +657,8 @@ class TemplateRenderer:
 
     async def re_render(
         self,
-        history_id: int,
-        override_template_id: int | None = None,
+        history_id: str,
+        override_template_id: str | None = None,
         notes: str | None = None,
         persist: bool = True,
         user: str = "system",
@@ -709,7 +718,7 @@ class TemplateRenderer:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _load_available_features(self, template_id: int) -> list[AvailableFeature]:
+    async def _load_available_features(self, template_id: str) -> list[AvailableFeature]:
         """
         Load features attached to this template (via template_features) and build
         AvailableFeature dataclasses for the FormDefinition.
@@ -762,8 +771,8 @@ class TemplateRenderer:
 
     async def _render_features(
         self,
-        template_id: int,
-        feature_ids: list[int],
+        template_id: str,
+        feature_ids: list[str],
         env: jinja2.Environment,
         local_ctx: dict[str, Any],
     ) -> list[str]:
@@ -805,7 +814,7 @@ class TemplateRenderer:
         return blocks
 
     async def _load_template_and_project(
-        self, template_id: int
+        self, template_id: str
     ) -> tuple[Template, Project]:
         result = await self._db.execute(
             select(Template).where(Template.id == template_id)

@@ -5,7 +5,7 @@ import { getTemplateVariables } from '../../api/templates'
 import DynamicForm from '../DynamicForm'
 
 interface PreviewModalProps {
-  templateId: number
+  templateId: string
   onClose: () => void
 }
 

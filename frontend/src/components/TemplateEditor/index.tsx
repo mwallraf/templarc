@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import { DndContext, type DragEndEvent, type DragOverEvent, DragOverlay } from '@dnd-kit/core'
 import { useDroppable } from '@dnd-kit/core'
@@ -816,7 +816,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   // Parameters currently assigned to this template
   const [assignedParams, setAssignedParams] = useState<ParameterOut[]>([])
   const [dataSources, setDataSources] = useState<DataSourceDef[]>([])
-  const [parentTemplateId, setParentTemplateId] = useState<number | undefined>(
+  const [parentTemplateId, setParentTemplateId] = useState<string | undefined>(
     template.parent_template_id ?? undefined,
   )
 
@@ -1266,7 +1266,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
                   // Register Jinja2 filter completion provider (triggers on |)
                   const filterCompletion = monaco.languages.registerCompletionItemProvider('python', {
                     triggerCharacters: ['|'],
-                    provideCompletionItems: (model, position) => {
+                    provideCompletionItems: (model: MonacoEditor.ITextModel, position: IPosition) => {
                       // Only activate when the text before the cursor ends with | (optionally with spaces)
                       const textBefore = model.getLineContent(position.lineNumber).substring(0, position.column - 1)
                       if (!/\|\s*\w*$/.test(textBefore)) return { suggestions: [] }
@@ -1310,7 +1310,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
                   // Register {% include "..." %} snippet path completion (triggers on ")
                   const includeCompletion = monaco.languages.registerCompletionItemProvider('python', {
                     triggerCharacters: ['"'],
-                    provideCompletionItems: (model, position) => {
+                    provideCompletionItems: (model: MonacoEditor.ITextModel, position: IPosition) => {
                       const lineContent = model.getLineContent(position.lineNumber)
                       const textBefore = lineContent.substring(0, position.column - 1)
                       // Only activate inside {% include "... pattern

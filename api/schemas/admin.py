@@ -36,14 +36,14 @@ class SyncErrorItem(BaseModel):
 
 class SyncImportedTemplate(BaseModel):
     """Summary of a template that was successfully imported from Git."""
-    id: int
+    id: str
     name: str
     git_path: str
 
 
 class SyncDeletedTemplate(BaseModel):
     """Summary of a template removed from the DB during a sync run."""
-    id: int
+    id: str
     name: str
     git_path: str
 
@@ -121,7 +121,7 @@ class SyncStatusItem(BaseModel):
         None,
         description="DB template name — populated only for in_db_only entries.",
     )
-    template_id: int | None = Field(
+    template_id: str | None = Field(
         None,
         description="DB template id — populated only for in_db_only entries.",
     )
@@ -171,7 +171,7 @@ class AuditLogOut(BaseModel):
     user_sub: str = Field(..., description="Username (JWT sub) of the caller.")
     action: str = Field(..., description="'create', 'update', or 'delete'.")
     resource_type: str = Field(..., description="Resource domain, e.g. 'template', 'parameter'.")
-    resource_id: int | None = Field(None, description="Primary key of the affected row.")
+    resource_id: str | None = Field(None, description="Primary key of the affected row.")
     timestamp: datetime = Field(..., description="UTC timestamp of the operation.")
     changes: dict = Field(default_factory=dict, description="Request payload or diff.")
 
@@ -216,7 +216,7 @@ class CustomFilterCreate(BaseModel):
         "global",
         description="'global' = available in all projects; 'project' = one project only.",
     )
-    project_id: int | None = Field(
+    project_id: str | None = Field(
         None,
         description="Required when scope='project'; must be None for scope='global'.",
     )
@@ -240,7 +240,7 @@ class CustomFilterOut(BaseModel):
     code: str
     description: str | None
     scope: str
-    project_id: int | None
+    project_id: str | None
     is_active: bool
     created_at: datetime
     created_by: str | None
@@ -327,7 +327,7 @@ class CustomObjectCreate(BaseModel):
         "global",
         description="'global' = available in all projects; 'project' = one project only.",
     )
-    project_id: int | None = Field(
+    project_id: str | None = Field(
         None,
         description="Required when scope='project'; must be None for scope='global'.",
     )
@@ -350,7 +350,7 @@ class CustomObjectOut(BaseModel):
     name: str
     code: str
     description: str | None
-    project_id: int | None
+    project_id: str | None
     is_active: bool
     created_at: datetime
     created_by: str | None
@@ -382,7 +382,7 @@ class DuplicateTemplateRef(BaseModel):
     """One occurrence of a duplicated parameter inside a specific template."""
 
     param_id: int
-    template_id: int
+    template_id: str
     template_name: str
     template_display_name: str
     widget_type: str
@@ -394,7 +394,7 @@ class DuplicateParameterGroup(BaseModel):
     """A parameter name that appears in more than one template within the same project."""
 
     name: str
-    project_id: int
+    project_id: str
     project_display_name: str
     count: int
     has_conflicts: bool  # True when widget_type or required differs across occurrences
@@ -424,7 +424,7 @@ class PromoteRequest(BaseModel):
         max_length=200,
         description="New promoted name — must start with 'proj.' or 'glob.' (e.g. 'proj.service_id').",
     )
-    project_id: int = Field(
+    project_id: str = Field(
         ...,
         description="Project ID that owns the duplicate template parameters.",
     )
@@ -433,7 +433,7 @@ class PromoteRequest(BaseModel):
 class PromoteTemplateRewrite(BaseModel):
     """Result of attempting to rewrite one .j2 file during a promote operation."""
 
-    template_id: int
+    template_id: str
     template_name: str
     git_path: str | None
     rewritten: bool
@@ -488,7 +488,7 @@ class CustomMacroCreate(BaseModel):
         "global",
         description="'global' = available in all projects; 'project' = one project only.",
     )
-    project_id: int | None = Field(
+    project_id: str | None = Field(
         None,
         description="Required when scope='project'; must be None for scope='global'.",
     )
@@ -512,7 +512,7 @@ class CustomMacroOut(BaseModel):
     body: str
     description: str | None
     scope: str
-    project_id: int | None
+    project_id: str | None
     is_active: bool
     created_at: datetime
     created_by: str | None

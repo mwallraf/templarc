@@ -20,8 +20,8 @@ class RenderWebhookCreate(BaseModel):
     is_active: bool = Field(True, description="Whether the webhook is active")
 
     # Scope — exactly one of project_id / template_id
-    project_id: int | None = Field(None, description="Scope to all templates in this project")
-    template_id: int | None = Field(None, description="Scope to a specific template")
+    project_id: str | None = Field(None, description="Scope to all templates in this project")
+    template_id: str | None = Field(None, description="Scope to a specific template")
 
     # Target
     url: str = Field(..., description="HTTP endpoint to POST/PUT/PATCH to")
@@ -81,9 +81,9 @@ class RenderWebhookOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    organization_id: int
-    project_id: int | None
-    template_id: int | None
+    organization_id: str
+    project_id: str | None
+    template_id: str | None
     name: str
     is_active: bool
     url: str
