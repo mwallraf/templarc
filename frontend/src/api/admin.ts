@@ -25,6 +25,9 @@ import type {
   RenderWebhookOut,
   RenderWebhookListOut,
   WebhookTestResult,
+  ProjectMembershipCreate,
+  ProjectMembershipOut,
+  ProjectMembershipsListOut,
 } from './types'
 
 // ── API Keys ────────────────────────────────────────────────────────────────
@@ -130,3 +133,14 @@ export const deleteWebhook = (id: number) =>
 
 export const testWebhook = (id: number) =>
   apiClient.post<WebhookTestResult>(`/webhooks/${id}/test`).then((r) => r.data)
+
+// ── Project Memberships ───────────────────────────────────────────────────────
+
+export const listProjectMembers = (projectId: string) =>
+  apiClient.get<ProjectMembershipsListOut>(`/catalog/projects/${projectId}/members`).then((r) => r.data)
+
+export const upsertProjectMember = (projectId: string, data: ProjectMembershipCreate) =>
+  apiClient.post<ProjectMembershipOut>(`/catalog/projects/${projectId}/members`, data).then((r) => r.data)
+
+export const removeProjectMember = (projectId: string, userId: string) =>
+  apiClient.delete(`/catalog/projects/${projectId}/members/${userId}`)

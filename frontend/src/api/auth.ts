@@ -35,12 +35,12 @@ export async function createUser(data: UserCreate): Promise<UserOut> {
   return res.data
 }
 
-export async function updateUser(userId: number, data: UserUpdate): Promise<UserOut> {
+export async function updateUser(userId: string, data: UserUpdate): Promise<UserOut> {
   const res = await apiClient.patch<UserOut>(`/auth/users/${userId}`, data)
   return res.data
 }
 
-export async function deleteUser(userId: number): Promise<void> {
+export async function deleteUser(userId: string): Promise<void> {
   await apiClient.delete(`/auth/users/${userId}`)
 }
 

@@ -202,7 +202,7 @@ export default function RenderPage() {
   const { templateId } = useParams<{ templateId: string }>()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const { isAdmin } = useAuth()
+  const { isOrgAdmin: isAdmin } = useAuth()
 
   const id = templateId ?? ''
 

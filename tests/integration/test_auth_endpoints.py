@@ -93,7 +93,7 @@ async def local_user(api_db: AsyncSession, test_org: Organization) -> User:
         organization_id=test_org.id,
         username="localuser",
         email="local@example.com",
-        is_admin=False,
+        role="member",
         is_ldap=False,
         password_hash=_bcrypt.hashpw(b"correct_password", _bcrypt.gensalt()).decode(),
     )
@@ -109,7 +109,7 @@ async def admin_user(api_db: AsyncSession, test_org: Organization) -> User:
         organization_id=test_org.id,
         username="adminuser",
         email="admin@example.com",
-        is_admin=True,
+        role="org_admin",
         is_ldap=False,
         password_hash=_bcrypt.hashpw(b"adminpass", _bcrypt.gensalt()).decode(),
     )
@@ -124,7 +124,8 @@ def _admin_token(org_id: int) -> str:
     payload = {
         "sub": "adminuser",
         "org_id": org_id,
-        "is_admin": True,
+        "org_role": "org_admin",
+        "is_platform_admin": False,
         "iat": now,
         "exp": now + timedelta(hours=8),
     }
@@ -198,9 +199,9 @@ class TestLoginJson:
         payload = jwt.decode(token_str, settings.SECRET_KEY, algorithms=["HS256"])
         assert payload["sub"] == "localuser"
         assert payload["org_id"] == local_user.organization_id
-        assert payload["is_admin"] is False
+        assert payload["org_role"] == "member"
 
-    async def test_admin_token_has_is_admin_true(
+    async def test_admin_token_has_org_role_org_admin(
         self, client: httpx.AsyncClient, admin_user: User
     ) -> None:
         resp = await client.post(
@@ -211,7 +212,7 @@ class TestLoginJson:
         token_str = resp.json()["access_token"]
         settings = get_settings()
         payload = jwt.decode(token_str, settings.SECRET_KEY, algorithms=["HS256"])
-        assert payload["is_admin"] is True
+        assert payload["org_role"] == "org_admin"
 
 
 # ===========================================================================
@@ -286,7 +287,7 @@ class TestGetMe:
         data = resp.json()
         assert data["username"] == "adminuser"
         assert data["org_id"] == test_org.id
-        assert data["is_admin"] is True
+        assert data["org_role"] == "org_admin"
 
     async def test_no_token_returns_403(
         self, client: httpx.AsyncClient
@@ -311,7 +312,7 @@ class TestCreateUser:
                 "username": "newuser",
                 "email": "new@example.com",
                 "password": "newpass123",
-                "is_admin": False,
+                "role": "member",
             },
             headers={"Authorization": f"Bearer {token_str}"},
         )
@@ -320,7 +321,7 @@ class TestCreateUser:
         assert data["username"] == "newuser"
         assert data["email"] == "new@example.com"
         assert data["is_ldap"] is False
-        assert data["is_admin"] is False
+        assert data["role"] == "member"
         assert data["organization_id"] == test_org.id
         # password_hash must NOT be in response
         assert "password_hash" not in data

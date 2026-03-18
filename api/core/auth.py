@@ -10,22 +10,32 @@ The active backend is selected by config:
   - LDAP_SERVER empty → LocalAuthService
 
 FastAPI dependencies (for route-level enforcement):
-  - get_current_user  — decodes and validates a Bearer JWT, returns TokenData
-  - require_admin     — same as above, additionally asserts is_admin=True
+  - get_current_user        — decodes a Bearer JWT or X-API-Key, returns TokenData
+  - require_org_admin       — same + asserts org_role in (org_owner, org_admin)
+  - require_project_role(r) — factory; checks project-level membership role ≥ r
+  - require_admin           — alias for require_org_admin (backward compat)
 
 Token payload structure (claims):
-  sub          — string username
-  org_id       — int organization ID
-  is_admin     — bool, True for admin users
-  exp          — standard JWT expiry (handled by python-jose)
+  sub              — string username
+  org_id           — int organization ID
+  org_role         — 'org_owner' | 'org_admin' | 'member'
+  is_platform_admin — bool
+  exp              — standard JWT expiry (handled by python-jose)
 
 Usage in a router:
-    from api.core.auth import require_admin, TokenData
+    from api.core.auth import require_org_admin, require_project_role, TokenData
 
     @router.post("/secrets")
     async def create_secret(
         payload: SecretCreate,
-        token: TokenData = Depends(require_admin),
+        token: TokenData = Depends(require_org_admin),
+    ): ...
+
+    @router.get("/templates/{template_id}")
+    async def get_template(
+        template_id: str,
+        project_id: str,
+        token: TokenData = Depends(require_project_role("guest")),
     ): ...
 """
 
@@ -39,7 +49,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import bcrypt as _bcrypt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select, update
@@ -52,6 +62,20 @@ logger = logging.getLogger(__name__)
 
 # Bearer is optional so we can fall through to X-API-Key when no Authorization header
 _bearer = HTTPBearer(auto_error=False)
+
+# ---------------------------------------------------------------------------
+# Role constants & hierarchy
+# ---------------------------------------------------------------------------
+
+# Project role hierarchy — higher index = more privileged
+_PROJECT_ROLE_RANK: dict[str, int] = {
+    "guest": 0,
+    "project_member": 1,
+    "project_editor": 2,
+    "project_admin": 3,
+}
+
+_ORG_ADMIN_ROLES = frozenset({"org_owner", "org_admin"})
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +115,8 @@ class TokenData:
     """Structured claims extracted from a validated JWT."""
     sub: str
     org_id: str
-    is_admin: bool
+    org_role: str          # 'org_owner' | 'org_admin' | 'member'
+    is_platform_admin: bool = False
 
 
 @dataclass
@@ -100,7 +125,17 @@ class UserInfo:
     username: str
     email: str
     groups: list[str] = field(default_factory=list)
+    # True when LDAP reports the user is in the admin group → maps to org_admin on upsert
     is_admin: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Role helpers
+# ---------------------------------------------------------------------------
+
+def is_org_admin(token: TokenData) -> bool:
+    """Return True if the token holder has org-level admin privileges."""
+    return token.is_platform_admin or token.org_role in _ORG_ADMIN_ROLES
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +179,22 @@ def _decode_jwt(token: str) -> TokenData:
         org_id: str | None = payload.get("org_id")
         if sub is None or org_id is None:
             raise exc
-        is_admin: bool = bool(payload.get("is_admin", False))
-        return TokenData(sub=sub, org_id=org_id, is_admin=is_admin)
+
+        # New-style token: has org_role field
+        if "org_role" in payload:
+            org_role: str = payload["org_role"]
+            is_platform_admin: bool = bool(payload.get("is_platform_admin", False))
+        else:
+            # Backward-compat: old tokens had is_admin boolean
+            is_platform_admin = False
+            org_role = "org_admin" if payload.get("is_admin", False) else "member"
+
+        return TokenData(
+            sub=sub,
+            org_id=org_id,
+            org_role=org_role,
+            is_platform_admin=is_platform_admin,
+        )
     except JWTError:
         raise exc
 
@@ -188,20 +237,166 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> TokenData:
     return TokenData(
         sub=f"apikey:{api_key.name}",
         org_id=api_key.organization_id,
-        is_admin=api_key.is_admin,
+        org_role=api_key.role,
+        is_platform_admin=False,
     )
 
 
-async def require_admin(
+async def require_org_admin(
     token: TokenData = Depends(get_current_user),
 ) -> TokenData:
-    """Extends get_current_user — raises 403 if the caller is not an admin."""
-    if not token.is_admin:
+    """Extends get_current_user — raises 403 if the caller is not an org admin."""
+    if not is_org_admin(token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required",
+            detail="Org-admin privileges required",
         )
     return token
+
+
+# Backward-compatible alias — routers migrated in this phase use require_org_admin directly.
+require_admin = require_org_admin
+
+
+async def _check_project_membership(
+    token: TokenData,
+    project_id: str,
+    min_role: str,
+    db: AsyncSession,
+) -> None:
+    """
+    Shared helper: verify that the caller has at least min_role on project_id.
+    Raises 403 on failure. Org admins always pass.
+    """
+    from api.models.project_membership import ProjectMembership
+    from api.models.user import User
+
+    user_result = await db.execute(select(User).where(User.username == token.sub))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Project access denied")
+
+    mem_result = await db.execute(
+        select(ProjectMembership).where(
+            ProjectMembership.user_id == user.id,
+            ProjectMembership.project_id == project_id,
+        )
+    )
+    membership = mem_result.scalar_one_or_none()
+    if membership is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this project",
+        )
+
+    actual_rank = _PROJECT_ROLE_RANK.get(membership.role, -1)
+    required_rank = _PROJECT_ROLE_RANK.get(min_role, 0)
+    if actual_rank < required_rank:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"This action requires at least '{min_role}' role in this project",
+        )
+
+
+def require_project_role(min_role: str):
+    """
+    Dependency factory for project-level access control.
+
+    Reads project_id from the 'project_id' path parameter.
+    Org-admins bypass the check automatically.
+    """
+    async def _dependency(
+        request: Request,
+        token: TokenData = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> TokenData:
+        if is_org_admin(token):
+            return token
+
+        project_id: str | None = request.path_params.get("project_id")
+        if not project_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Project access denied",
+            )
+
+        await _check_project_membership(token, project_id, min_role, db)
+        return token
+
+    return _dependency
+
+
+def require_project_role_for_template(min_role: str):
+    """
+    Dependency factory for template endpoints.
+
+    Reads template_id from path params, looks up the template's project_id,
+    then applies the same membership check as require_project_role.
+    Org-admins bypass the check automatically.
+    """
+    async def _dependency(
+        request: Request,
+        token: TokenData = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> TokenData:
+        if is_org_admin(token):
+            return token
+
+        template_id: str | None = request.path_params.get("template_id")
+        if not template_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Project access denied",
+            )
+
+        from api.models.template import Template
+        tmpl_result = await db.execute(select(Template).where(Template.id == template_id))
+        tmpl = tmpl_result.scalar_one_or_none()
+        if tmpl is None:
+            # Return 404 rather than 403 so callers know the resource doesn't exist
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+
+        await _check_project_membership(token, tmpl.project_id, min_role, db)
+        return token
+
+    return _dependency
+
+
+# ---------------------------------------------------------------------------
+# Project ID helper for list endpoints
+# ---------------------------------------------------------------------------
+
+async def get_user_project_ids(token: TokenData, db: AsyncSession) -> list[str]:
+    """
+    Return the list of project IDs accessible to the caller.
+
+    - org_admin / platform_admin: all projects in their org.
+    - member: only projects where they have a membership row.
+    """
+    from api.models.project import Project
+    from api.models.project_membership import ProjectMembership
+    from api.models.user import User
+
+    if is_org_admin(token):
+        result = await db.execute(
+            select(Project.id).where(Project.organization_id == token.org_id)
+        )
+        return [row[0] for row in result.all()]
+
+    # Resolve user_id
+    user_result = await db.execute(
+        select(User.id).where(User.username == token.sub)
+    )
+    user_row = user_result.one_or_none()
+    if user_row is None:
+        return []
+
+    mem_result = await db.execute(
+        select(ProjectMembership.project_id).where(
+            ProjectMembership.user_id == user_row[0]
+        )
+    )
+    return [row[0] for row in mem_result.all()]
 
 
 # ---------------------------------------------------------------------------
@@ -219,9 +414,11 @@ async def _upsert_user(
     Create or update a User row in the local database.
 
     - On first login: creates the row with the provided org_id.
-    - On subsequent logins: updates email, is_admin, and last_login.
+    - On subsequent logins: updates email, role, and last_login.
     - Calls db.flush() so the row is visible within the transaction; the
       caller is responsible for committing.
+
+    LDAP admin group membership (user_info.is_admin=True) maps to 'org_admin'.
     """
     from api.models.user import User  # local import to avoid circular deps
 
@@ -231,13 +428,16 @@ async def _upsert_user(
     user: User | None = result.scalar_one_or_none()
 
     now = datetime.now(timezone.utc)
+    # Map LDAP is_admin flag to org role (never demotes an existing org_owner)
+    ldap_role = "org_admin" if user_info.is_admin else "member"
 
     if user is None:
         user = User(
             organization_id=org_id,
             username=user_info.username,
             email=user_info.email,
-            is_admin=user_info.is_admin,
+            role=ldap_role if is_ldap else "member",
+            is_platform_admin=False,
             is_ldap=is_ldap,
             password_hash=password_hash,
             last_login=now,
@@ -245,8 +445,11 @@ async def _upsert_user(
         db.add(user)
     else:
         user.email = user_info.email
-        user.is_admin = user_info.is_admin
         user.last_login = now
+        if is_ldap:
+            # For LDAP, update role (but never demote an existing org_owner)
+            if user.role != "org_owner":
+                user.role = ldap_role
         # Only update password_hash for local users if explicitly provided
         if not is_ldap and password_hash is not None:
             user.password_hash = password_hash
@@ -293,7 +496,7 @@ class LocalAuthService:
             username=user.username,
             email=user.email,
             groups=[],
-            is_admin=user.is_admin,
+            is_admin=user.role in _ORG_ADMIN_ROLES,
         )
 
 
@@ -331,8 +534,6 @@ class LDAPAuthService:
         )
 
         # Step 1: anonymous search to resolve uid → actual DN
-        # (bitnami/openldap uses cn= as RDN, not uid=, so we cannot build
-        # the bind DN directly from the username)
         try:
             anon_conn = ldap3.Connection(server, auto_bind=tls_mode)
             anon_conn.search(
@@ -368,9 +569,7 @@ class LDAPAuthService:
             conn.close()
             return None
 
-        # Step 3: fetch email and memberOf (if overlay is enabled).
-        # Use ALL_ATTRIBUTES to avoid LDAPAttributeError when the memberOf
-        # overlay is not loaded in the server's schema.
+        # Step 3: fetch email and memberOf
         conn.search(
             self._base_dn,
             f"(uid={username})",
@@ -388,14 +587,12 @@ class LDAPAuthService:
                 raw = entry.memberOf
                 groups = [str(g) for g in (raw if isinstance(raw, list) else [raw])]
 
-        # Step 4: if memberOf overlay is absent, fall back to searching the
-        # admin group directly for a 'member' attribute containing user_dn.
+        # Step 4: check admin group membership
         is_admin = False
         if self._admin_group:
             if any(self._admin_group.lower() in g.lower() for g in groups):
                 is_admin = True
             elif not groups:
-                # memberOf overlay not available — query the group entry directly
                 try:
                     conn.search(
                         self._admin_group,
@@ -415,7 +612,7 @@ class LDAPAuthService:
                         is_admin = any(user_dn.lower() == m.lower() for m in members)
                         groups = [self._admin_group] if is_admin else []
                 except Exception:
-                    pass  # group lookup failure is non-fatal
+                    pass
 
         conn.unbind()
 

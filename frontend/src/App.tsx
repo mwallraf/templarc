@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, Link } from 'react-router-dom'
 import Layout from './components/Layout'
 import RequireAuth from './components/RequireAuth'
 import Landing from './pages/Landing'
@@ -17,6 +17,8 @@ import AdminApiKeys from './pages/admin/AdminApiKeys'
 import AdminFeatures from './pages/admin/AdminFeatures'
 import AdminWebhooks from './pages/admin/AdminWebhooks'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminMembers from './pages/admin/AdminMembers'
+import RequireOrgAdmin from './components/RequireOrgAdmin'
 import TemplateEditorPage from './pages/admin/TemplateEditorPage'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
@@ -40,20 +42,48 @@ export default function App() {
           <Route path="/history/:renderId" element={<HistoryDetail />} />
           <Route path="/quickpads" element={<QuickpadsPage />} />
           <Route path="/sandbox" element={<Sandbox />} />
-          <Route path="/admin/projects" element={<AdminProjects />} />
+          {/* Studio routes — all authenticated users */}
           <Route path="/admin/templates" element={<AdminTemplates />} />
           <Route path="/admin/templates/:templateId/edit" element={<TemplateEditorPage />} />
           <Route path="/admin/parameters" element={<AdminParameters />} />
-          <Route path="/admin/secrets" element={<AdminSecrets />} />
           <Route path="/admin/filters" element={<AdminFilters />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/api-keys" element={<AdminApiKeys />} />
           <Route path="/admin/features" element={<AdminFeatures />} />
           <Route path="/admin/webhooks" element={<AdminWebhooks />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin/members" element={<AdminMembers />} />
+
+          {/* System routes — org admin only */}
+          <Route element={<RequireOrgAdmin />}>
+            <Route path="/admin/projects" element={<AdminProjects />} />
+            <Route path="/admin/secrets" element={<AdminSecrets />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/api-keys" element={<AdminApiKeys />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
+          </Route>
           <Route path="/profile" element={<Profile />} />
+          <Route path="*" element={
+            <div className="flex flex-col items-center justify-center py-32 text-center">
+              <p className="text-6xl font-bold font-display mb-4" style={{ color: 'var(--c-border-bright)' }}>404</p>
+              <p className="text-lg font-medium mb-2" style={{ color: 'var(--c-text)' }}>Page not found</p>
+              <p className="text-sm mb-8" style={{ color: 'var(--c-muted-3)' }}>The URL you entered doesn't exist.</p>
+              <Link to="/catalog" className="px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)' }}>
+                Go to Catalog
+              </Link>
+            </div>
+          } />
         </Route>
       </Route>
+
+      {/* Public catch-all */}
+      <Route path="*" element={
+        <div className="min-h-screen flex flex-col items-center justify-center text-center" style={{ backgroundColor: 'var(--c-base)' }}>
+          <p className="text-6xl font-bold mb-4" style={{ color: 'var(--c-border-bright)' }}>404</p>
+          <p className="text-lg font-medium mb-2 text-white">Page not found</p>
+          <p className="text-sm mb-8" style={{ color: 'var(--c-muted-3)' }}>The URL you entered doesn't exist.</p>
+          <Link to="/" className="px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)' }}>
+            Go home
+          </Link>
+        </div>
+      } />
     </Routes>
   )
 }

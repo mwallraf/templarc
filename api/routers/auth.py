@@ -8,13 +8,16 @@ Mounted at /auth in main.py.  Routes:
   POST   /auth/login/local     — local-only login (disabled when LDAP_SERVER is set)
   GET    /auth/me              — return full profile for the authenticated caller
   PATCH  /auth/me              — update own email / password (local accounts only)
-  GET    /auth/users           — list all users in the caller's org (admin only)
-  POST   /auth/users           — create a local user with bcrypt password (admin only)
-  PATCH  /auth/users/{id}      — update is_admin and/or password (admin only)
-  DELETE /auth/users/{id}      — delete a user (admin only, cannot self-delete)
-  POST   /auth/secrets         — create a secret (admin only)
-  GET    /auth/secrets         — list secrets for the caller's org (admin only)
-  DELETE /auth/secrets/{id}    — delete a secret by ID (admin only)
+  GET    /auth/users           — list all users in the caller's org (org_admin only)
+  POST   /auth/users           — create a local user with bcrypt password (org_admin only)
+  PATCH  /auth/users/{id}      — update role and/or password (org_admin only)
+  DELETE /auth/users/{id}      — delete a user (org_admin only, cannot self-delete)
+  POST   /auth/secrets         — create a secret (org_admin only)
+  GET    /auth/secrets         — list secrets for the caller's org (org_admin only)
+  DELETE /auth/secrets/{id}    — delete a secret by ID (org_admin only)
+  POST   /auth/api-keys        — create an API key (org_admin only)
+  GET    /auth/api-keys        — list API keys (org_admin only)
+  DELETE /auth/api-keys/{id}   — revoke an API key (org_admin only)
 
 Login strategy:
   - When LDAP_SERVER is configured: /auth/login and /auth/token dispatch to
@@ -50,7 +53,8 @@ from api.core.auth import (
     _upsert_user,
     generate_api_key,
     get_current_user,
-    require_admin,
+    is_org_admin,
+    require_org_admin,
 )
 from api.models.api_key import ApiKey
 from api.schemas.api_key import ApiKeyCreate, ApiKeyCreatedOut, ApiKeyOut
@@ -63,6 +67,9 @@ from api.schemas.secret import SecretCreate, SecretOut
 router = APIRouter()
 
 _TOKEN_EXPIRE_HOURS = 8
+
+# Valid org-level roles
+_ORG_ROLES = frozenset({"org_owner", "org_admin", "member"})
 
 
 # ---------------------------------------------------------------------------
@@ -78,14 +85,15 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    is_admin: bool = False
+    role: str = "member"
 
 
 class UserOut(BaseModel):
     id: str
     username: str
     email: str
-    is_admin: bool
+    role: str
+    is_platform_admin: bool
     is_ldap: bool
     organization_id: str
     last_login: datetime | None = None
@@ -95,7 +103,7 @@ class UserOut(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    is_admin: bool | None = None
+    role: str | None = None
     password: str | None = None
 
 
@@ -108,7 +116,8 @@ class TokenOut(BaseModel):
 class MeOut(BaseModel):
     username: str
     org_id: str
-    is_admin: bool
+    org_role: str
+    is_platform_admin: bool
     email: str | None = None
     is_ldap: bool = False
     last_login: datetime | None = None
@@ -132,7 +141,8 @@ def _build_token(user: User) -> str:
     payload = {
         "sub": user.username,
         "org_id": user.organization_id,
-        "is_admin": user.is_admin,
+        "org_role": user.role,
+        "is_platform_admin": user.is_platform_admin,
         "iat": now,
         "exp": now + timedelta(hours=_TOKEN_EXPIRE_HOURS),
     }
@@ -157,6 +167,12 @@ async def _dispatch_login(username: str, password: str, db: AsyncSession) -> Tok
             admin_group=settings.LDAP_ADMIN_GROUP,
         )
         user_info = await svc.authenticate(username, password, db)
+        if user_info is None:
+            # LDAP auth failed (server unreachable, wrong password, user not in LDAP, etc.)
+            # Fall back to local auth so local accounts remain accessible when LDAP is down.
+            # LocalAuthService only matches users with is_ldap=False + a password_hash,
+            # so pure LDAP accounts cannot bypass LDAP via this path.
+            user_info = await LocalAuthService.authenticate(username, password, db)
     else:
         user_info = await LocalAuthService.authenticate(username, password, db)
 
@@ -171,7 +187,6 @@ async def _dispatch_login(username: str, password: str, db: AsyncSession) -> Tok
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if user is None:
-        # Should not happen, but guard anyway
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Update last_login
@@ -280,11 +295,17 @@ async def get_me(
     result = await db.execute(select(User).where(User.username == token.sub))
     user = result.scalar_one_or_none()
     if user is None:
-        return MeOut(username=token.sub, org_id=token.org_id, is_admin=token.is_admin)
+        return MeOut(
+            username=token.sub,
+            org_id=token.org_id,
+            org_role=token.org_role,
+            is_platform_admin=token.is_platform_admin,
+        )
     return MeOut(
         username=user.username,
         org_id=user.organization_id,
-        is_admin=user.is_admin,
+        org_role=user.role,
+        is_platform_admin=user.is_platform_admin,
         email=user.email,
         is_ldap=user.is_ldap,
         last_login=user.last_login,
@@ -341,7 +362,8 @@ async def update_me(
     return MeOut(
         username=user.username,
         org_id=user.organization_id,
-        is_admin=user.is_admin,
+        org_role=user.role,
+        is_platform_admin=user.is_platform_admin,
         email=user.email,
         is_ldap=user.is_ldap,
         last_login=user.last_login,
@@ -360,20 +382,33 @@ async def update_me(
     summary="Create a local user",
     description=(
         "Create a new local user with a bcrypt-hashed password. "
-        "The user is assigned to the caller's organization. Admin only."
+        "The user is assigned to the caller's organization. Org-admin only. "
+        "Only platform_admin can assign the org_owner role."
     ),
 )
 async def create_user(
     body: UserCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> UserOut:
+    if body.role not in _ORG_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid role. Must be one of: {sorted(_ORG_ROLES)}",
+        )
+    # Guard: only platform_admin can set org_owner role
+    if body.role == "org_owner" and not token.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a platform admin can assign the org_owner role",
+        )
     hashed = _bcrypt.hashpw(body.password.encode(), _bcrypt.gensalt()).decode()
     user = User(
         organization_id=token.org_id,
         username=body.username,
         email=body.email,
-        is_admin=body.is_admin,
+        role=body.role,
+        is_platform_admin=False,
         is_ldap=False,
         password_hash=hashed,
     )
@@ -395,11 +430,11 @@ async def create_user(
     "/users",
     response_model=list[UserOut],
     summary="List users",
-    description="Return all users in the caller's organization. Admin only.",
+    description="Return all users in the caller's organization. Any authenticated user (needed for project-member management).",
 )
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(get_current_user),
 ) -> list[UserOut]:
     result = await db.execute(
         select(User)
@@ -413,13 +448,13 @@ async def list_users(
     "/users/{user_id}",
     response_model=UserOut,
     summary="Update a user",
-    description="Update is_admin and/or password for a user. Admin only.",
+    description="Update role and/or password for a user. Org-admin only.",
 )
 async def update_user(
-    user_id: int,
+    user_id: str,
     body: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> UserOut:
     result = await db.execute(
         select(User).where(User.id == user_id, User.organization_id == token.org_id)
@@ -427,8 +462,19 @@ async def update_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if body.is_admin is not None:
-        user.is_admin = body.is_admin
+    if body.role is not None:
+        if body.role not in _ORG_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid role. Must be one of: {sorted(_ORG_ROLES)}",
+            )
+        # Guard: only platform_admin can set org_owner role
+        if body.role == "org_owner" and not token.is_platform_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only a platform admin can assign the org_owner role",
+            )
+        user.role = body.role
     if body.password is not None:
         user.password_hash = _bcrypt.hashpw(body.password.encode(), _bcrypt.gensalt()).decode()
     await db.commit()
@@ -441,12 +487,12 @@ async def update_user(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Delete a user",
-    description="Hard-delete a user. Cannot delete yourself. Admin only.",
+    description="Hard-delete a user. Cannot delete yourself. Org-admin only.",
 )
 async def delete_user(
-    user_id: int,
+    user_id: str,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> None:
     result = await db.execute(
         select(User).where(User.id == user_id, User.organization_id == token.org_id)
@@ -493,13 +539,13 @@ async def _get_secret_or_404(db: AsyncSession, secret_id: str, org_id: str) -> S
         "Create a new named secret for the caller's organization. "
         "For `db` type secrets the plaintext `value` is encrypted (Fernet/AES) "
         "before storage. The value is **never** returned by any API endpoint. "
-        "Admin only."
+        "Org-admin only."
     ),
 )
 async def create_secret(
     payload: SecretCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> SecretOut:
     if payload.secret_type == SecretType.vault and not payload.vault_path:
         raise HTTPException(
@@ -544,12 +590,12 @@ async def create_secret(
     summary="List secrets",
     description=(
         "Return metadata for all secrets in the caller's organization. "
-        "Secret values are never included in the response. Admin only."
+        "Secret values are never included in the response. Org-admin only."
     ),
 )
 async def list_secrets(
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> list[SecretOut]:
     result = await db.execute(
         select(Secret)
@@ -565,12 +611,12 @@ async def list_secrets(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Delete a secret",
-    description="Permanently delete a secret by ID. Admin only.",
+    description="Permanently delete a secret by ID. Org-admin only.",
 )
 async def delete_secret(
     secret_id: str,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> None:
     secret = await _get_secret_or_404(db, secret_id, token.org_id)
     await db.delete(secret)
@@ -589,22 +635,37 @@ async def delete_secret(
     description=(
         "Generate a new API key for the caller's organization. "
         "The raw key is returned **once** — it cannot be retrieved again. "
-        "Store it securely. Admin only."
+        "Store it securely. Org-admin only. "
+        "Cannot create a key with a higher role than your own."
     ),
 )
 async def create_api_key(
     body: ApiKeyCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> ApiKeyCreatedOut:
+    key_role = getattr(body, "role", "member")
+    if key_role not in _ORG_ROLES:
+        key_role = "member"
+
+    # Cannot escalate privileges beyond caller's own role
+    _role_rank = {"member": 0, "org_admin": 1, "org_owner": 2}
+    caller_rank = _role_rank.get(token.org_role, 0)
+    key_rank = _role_rank.get(key_role, 0)
+    if key_rank > caller_rank and not token.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot create an API key with a higher role than your own",
+        )
+
     raw_key, key_prefix, key_hash = generate_api_key()
     api_key = ApiKey(
         organization_id=token.org_id,
-        created_by=None,  # resolved below
+        created_by=None,
         name=body.name,
         key_prefix=key_prefix,
         key_hash=key_hash,
-        is_admin=body.is_admin,
+        role=key_role,
         expires_at=body.expires_at,
     )
     # Resolve the user ID for created_by
@@ -624,7 +685,7 @@ async def create_api_key(
         id=api_key.id,
         name=api_key.name,
         key_prefix=api_key.key_prefix,
-        is_admin=api_key.is_admin,
+        role=api_key.role,
         created_by=api_key.created_by,
         last_used_at=api_key.last_used_at,
         expires_at=api_key.expires_at,
@@ -637,11 +698,11 @@ async def create_api_key(
     "/api-keys",
     response_model=list[ApiKeyOut],
     summary="List API keys",
-    description="Return all API keys for the caller's organization. Admin only.",
+    description="Return all API keys for the caller's organization. Org-admin only.",
 )
 async def list_api_keys(
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> list[ApiKeyOut]:
     from sqlalchemy import select as _select
     result = await db.execute(
@@ -657,12 +718,12 @@ async def list_api_keys(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Revoke an API key",
-    description="Permanently delete (revoke) an API key by ID. Admin only.",
+    description="Permanently delete (revoke) an API key by ID. Org-admin only.",
 )
 async def delete_api_key(
     key_id: int,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> None:
     from sqlalchemy import select as _select
     result = await db.execute(

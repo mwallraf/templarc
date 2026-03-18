@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.core.auth import TokenData, require_admin
+from api.core.auth import TokenData, require_org_admin
 from api.core.secrets import SecretResolver
 from api.database import get_db
 from api.models.render_webhook import RenderWebhook
@@ -62,7 +62,7 @@ async def list_webhooks(
     is_active: bool | None = Query(None, description="Filter by active status"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> RenderWebhookListOut:
     filters = [RenderWebhook.organization_id == current_user.org_id]
@@ -97,7 +97,7 @@ async def list_webhooks(
 @router.post("", response_model=RenderWebhookOut, status_code=status.HTTP_201_CREATED, summary="Create render webhook")
 async def create_webhook(
     body: RenderWebhookCreate,
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> RenderWebhookOut:
     webhook = RenderWebhook(
@@ -129,7 +129,7 @@ async def create_webhook(
 @router.get("/{webhook_id}", response_model=RenderWebhookOut, summary="Get render webhook")
 async def get_webhook(
     webhook_id: int,
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> RenderWebhookOut:
     webhook = await _get_webhook(webhook_id, current_user.org_id, db)
@@ -145,7 +145,7 @@ async def get_webhook(
 async def update_webhook(
     webhook_id: int,
     body: RenderWebhookUpdate,
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> RenderWebhookOut:
     webhook = await _get_webhook(webhook_id, current_user.org_id, db)
@@ -167,7 +167,7 @@ async def update_webhook(
 @router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None, summary="Delete render webhook")
 async def delete_webhook(
     webhook_id: int,
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     webhook = await _get_webhook(webhook_id, current_user.org_id, db)
@@ -183,7 +183,7 @@ async def delete_webhook(
 @router.post("/{webhook_id}/test", response_model=WebhookTestResult, summary="Test a webhook with a synthetic payload")
 async def test_webhook(
     webhook_id: int,
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> WebhookTestResult:
     """

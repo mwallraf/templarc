@@ -33,7 +33,9 @@ class User(Base):
     )
     username: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(254), nullable=False)
-    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Org-level role: 'org_owner' | 'org_admin' | 'member'
+    role: Mapped[str] = mapped_column(String(50), default="member", server_default="member", nullable=False)
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     is_ldap: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -65,4 +67,4 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} username={self.username!r}>"
+        return f"<User id={self.id} username={self.username!r} role={self.role!r}>"

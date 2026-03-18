@@ -97,7 +97,7 @@ async def client(api_db: AsyncSession, git_repo: GitService, test_org: Organizat
         yield api_db
 
     def override_current_user() -> TokenData:
-        return TokenData(sub="testuser", org_id=test_org.id, is_admin=False)
+        return TokenData(sub="testuser", org_id=test_org.id, org_role="member")
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_git_service] = lambda: git_repo
@@ -278,7 +278,7 @@ class TestQuickpadCRUD:
 
         # Override get_current_user to return otheruser (non-admin)
         def override_other_user() -> TokenData:
-            return TokenData(sub="otheruser", org_id=test_org.id, is_admin=False)
+            return TokenData(sub="otheruser", org_id=test_org.id, org_role="member")
 
         app.dependency_overrides[get_current_user] = override_other_user
 
@@ -290,7 +290,7 @@ class TestQuickpadCRUD:
         finally:
             # Restore the original testuser override from the client fixture
             def restore_testuser() -> TokenData:
-                return TokenData(sub="testuser", org_id=test_org.id, is_admin=False)
+                return TokenData(sub="testuser", org_id=test_org.id, org_role="member")
 
             app.dependency_overrides[get_current_user] = restore_testuser
 

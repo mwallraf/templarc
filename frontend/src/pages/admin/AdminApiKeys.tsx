@@ -138,7 +138,7 @@ function KeyRevealModal({ apiKey, onClose }: { apiKey: ApiKeyCreatedOut; onClose
 
 function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (k: ApiKeyCreatedOut) => void }) {
   const { register, handleSubmit, formState: { errors } } = useForm<ApiKeyCreate>({
-    defaultValues: { name: '', is_admin: false, expires_at: null },
+    defaultValues: { name: '', role: 'member', expires_at: null },
   })
   const mutation = useMutation({ mutationFn: createApiKey })
 
@@ -203,17 +203,17 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="is_admin"
-              {...register('is_admin')}
-              className="w-4 h-4 rounded"
-              style={{ accentColor: '#6366f1' }}
-            />
-            <label htmlFor="is_admin" className="text-sm" style={{ color: 'var(--c-muted-2)' }}>
-              Admin privileges
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>
+              Role
             </label>
+            <select
+              {...register('role')}
+              style={inputStyle}
+            >
+              <option value="member">Member</option>
+              <option value="org_admin">Org Admin</option>
+            </select>
           </div>
 
           {mutation.isError && (
@@ -366,19 +366,19 @@ export default function AdminApiKeys() {
                       </code>
                     </td>
                     <td className="px-4 py-3">
-                      {key.is_admin ? (
+                      {key.role === 'org_admin' || key.role === 'org_owner' ? (
                         <span
                           className="badge"
                           style={{ backgroundColor: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}
                         >
-                          Admin
+                          {key.role === 'org_owner' ? 'Owner' : 'Admin'}
                         </span>
                       ) : (
                         <span
                           className="badge"
                           style={{ backgroundColor: 'rgba(99,102,241,0.12)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.25)' }}
                         >
-                          Read / Render
+                          Member
                         </span>
                       )}
                     </td>

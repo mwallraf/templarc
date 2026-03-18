@@ -219,7 +219,7 @@ export default function ProjectCatalog() {
   const { data: syncStatus } = useQuery({
     queryKey: ['gitSyncStatus', projectId],
     queryFn: () => gitSyncStatus(projectId!),
-    enabled: !!projectId && me?.is_admin === true,
+    enabled: !!projectId && (me?.org_role === 'org_owner' || me?.org_role === 'org_admin' || me?.is_platform_admin === true),
     staleTime: 60_000,
     retry: false,
   })
@@ -288,7 +288,7 @@ export default function ProjectCatalog() {
         </div>
 
         {/* Admin action buttons */}
-        {me?.is_admin && projectId && (
+        {(me?.org_role === 'org_owner' || me?.org_role === 'org_admin' || me?.is_platform_admin) && projectId && (
           <div className="flex items-center gap-2 shrink-0">
             {/* New Template */}
             <button

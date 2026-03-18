@@ -106,6 +106,18 @@ const STUDIO_LINKS = [
       </svg>
     ),
   },
+  {
+    to: '/admin/members',
+    label: 'Members',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+      </svg>
+    ),
+  },
 ]
 
 const SYSTEM_LINKS = [
@@ -227,7 +239,7 @@ function NavItem({ to, label, icon }: { to: string; label: string; icon: React.R
 }
 
 export default function Layout() {
-  const { user, logout } = useAuth()
+  const { user, logout, isOrgAdmin } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -276,27 +288,29 @@ export default function Layout() {
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
 
-          {/* Studio section */}
+          {/* Studio section — all authenticated users (project editors/admins need this) */}
           <div className="pt-5 pb-2 px-2">
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--c-dim)' }}>
               Studio
             </p>
           </div>
-
           {STUDIO_LINKS.map(({ to, label, icon }) => (
             <NavItem key={to} to={to} label={label} icon={icon} />
           ))}
 
-          {/* System section */}
-          <div className="pt-5 pb-2 px-2">
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--c-dim)' }}>
-              System
-            </p>
-          </div>
-
-          {SYSTEM_LINKS.map(({ to, label, icon }) => (
-            <NavItem key={to} to={to} label={label} icon={icon} />
-          ))}
+          {/* System section — org admins only */}
+          {isOrgAdmin && (
+            <>
+              <div className="pt-5 pb-2 px-2">
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--c-dim)' }}>
+                  System
+                </p>
+              </div>
+              {SYSTEM_LINKS.map(({ to, label, icon }) => (
+                <NavItem key={to} to={to} label={label} icon={icon} />
+              ))}
+            </>
+          )}
         </nav>
 
         {/* User section */}

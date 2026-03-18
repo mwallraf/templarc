@@ -59,6 +59,9 @@ from api.models.quickpad import Quickpad  # noqa: F401
 # Tier 13: FK → Organization + Project (nullable) + Template (nullable)
 from api.models.render_webhook import RenderWebhook  # noqa: F401
 
+# Tier 14: FK → User + Project (RBAC memberships)
+from api.models.project_membership import ProjectMembership  # noqa: F401
+
 __all__ = [
     "Base",
     "Organization",
@@ -83,4 +86,5 @@ __all__ = [
     "SystemSettings",
     "Quickpad",
     "RenderWebhook",
+    "ProjectMembership",
 ]

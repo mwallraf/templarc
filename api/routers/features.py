@@ -31,7 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from api.core.auth import TokenData, get_current_user, require_admin
+from api.core.auth import TokenData, get_current_user, require_org_admin
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.feature import Feature, TemplateFeature
@@ -154,7 +154,7 @@ async def list_features(
 async def create_feature(
     body: FeatureCreate,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> FeatureOut:
     # Verify project exists
     proj_result = await db.execute(select(Project).where(Project.id == body.project_id))
@@ -194,7 +194,7 @@ async def update_feature(
     feature_id: str,
     body: FeatureUpdate,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> FeatureOut:
     feature = await _get_feature(feature_id, db)
     if body.label is not None:
@@ -220,7 +220,7 @@ async def update_feature(
 async def delete_feature(
     feature_id: str,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> None:
     feature = await _get_feature(feature_id, db)
     await db.delete(feature)
@@ -254,7 +254,7 @@ async def update_feature_body(
     body: FeatureBodyUpdate,
     db: AsyncSession = Depends(get_db),
     git_service: GitService = Depends(get_git_service),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> dict:
     feature = await _get_feature(feature_id, db)
     if not feature.snippet_path:
@@ -332,7 +332,7 @@ async def create_feature_parameter(
     feature_id: str,
     body: FeatureParameterCreate,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> FeatureParameterOut:
     await _get_feature(feature_id, db)  # 404 guard
 
@@ -389,7 +389,7 @@ async def update_feature_parameter(
     param_id: int,
     body: FeatureParameterUpdate,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> FeatureParameterOut:
     result = await db.execute(
         select(Parameter)
@@ -441,7 +441,7 @@ async def delete_feature_parameter(
     feature_id: str,
     param_id: int,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> None:
     result = await db.execute(
         select(Parameter).where(Parameter.id == param_id, Parameter.feature_id == feature_id)
@@ -503,7 +503,7 @@ async def attach_feature(
     is_default: bool = Query(False, description="Pre-check this feature in the render form"),
     sort_order: int = Query(0),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> TemplateFeatureOut:
     # Verify template exists
     tmpl = await db.get(Template, template_id)
@@ -570,7 +570,7 @@ async def update_template_feature(
     feature_id: str,
     body: TemplateFeatureUpdate,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> TemplateFeatureOut:
     result = await db.execute(
         select(TemplateFeature)
@@ -617,7 +617,7 @@ async def detach_feature(
     template_id: str,
     feature_id: str,
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> None:
     result = await db.execute(
         select(TemplateFeature).where(

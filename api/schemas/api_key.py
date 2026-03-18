@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class ApiKeyCreate(BaseModel):
     name: str = Field(..., max_length=200, description="Human-readable label for this key")
-    is_admin: bool = Field(False, description="Grant admin privileges to this key")
+    role: str = Field("member", description="Org-level role: 'org_owner' | 'org_admin' | 'member'")
     expires_at: datetime | None = Field(None, description="Optional expiry (null = never)")
 
 
@@ -13,7 +13,7 @@ class ApiKeyOut(BaseModel):
     id: int
     name: str
     key_prefix: str
-    is_admin: bool
+    role: str
     created_by: str | None
     last_used_at: datetime | None
     expires_at: datetime | None

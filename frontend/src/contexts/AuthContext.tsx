@@ -13,13 +13,16 @@ import { getToken, setToken } from '../api/client'
 
 interface AuthUser {
   username: string
-  isAdmin: boolean
+  orgRole: string
+  isPlatformAdmin: boolean
 }
 
 interface AuthContextValue {
   user: AuthUser | null
   isAuthenticated: boolean
-  isAdmin: boolean
+  isOrgAdmin: boolean
+  isPlatformAdmin: boolean
+  orgRole: string
   isLoading: boolean
   login: (data: LoginRequest) => Promise<void>
   logout: () => void
@@ -36,6 +39,21 @@ function parseJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+function extractRoleFromPayload(payload: Record<string, unknown>): { orgRole: string; isPlatformAdmin: boolean } {
+  // Handle both new tokens (org_role) and old tokens (is_admin boolean)
+  if (payload.org_role) {
+    return {
+      orgRole: payload.org_role as string,
+      isPlatformAdmin: Boolean(payload.is_platform_admin),
+    }
+  }
+  // backward-compat: old JWT had is_admin boolean
+  return {
+    orgRole: payload.is_admin ? 'org_admin' : 'member',
+    isPlatformAdmin: false,
+  }
+}
+
 function restoreUserFromToken(): AuthUser | null {
   const token = getToken()
   if (!token) return null
@@ -45,7 +63,8 @@ function restoreUserFromToken(): AuthUser | null {
     setToken(null) // clear expired token
     return null
   }
-  return { username: (payload?.sub as string) ?? '', isAdmin: Boolean(payload?.is_admin) }
+  const { orgRole, isPlatformAdmin } = extractRoleFromPayload(payload ?? {})
+  return { username: (payload?.sub as string) ?? '', orgRole, isPlatformAdmin }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -68,8 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(response.access_token)
       const payload = parseJwtPayload(response.access_token)
       const username = (payload?.sub as string) ?? data.username
-      const isAdmin = Boolean(payload?.is_admin)
-      setUser({ username, isAdmin })
+      const { orgRole, isPlatformAdmin } = extractRoleFromPayload(payload ?? {})
+      setUser({ username, orgRole, isPlatformAdmin })
     } finally {
       setIsLoading(false)
     }
@@ -81,7 +100,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isAdmin: user?.isAdmin ?? false, isLoading, login, logout }),
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      isOrgAdmin: user?.isPlatformAdmin || user?.orgRole === 'org_owner' || user?.orgRole === 'org_admin' || false,
+      isPlatformAdmin: user?.isPlatformAdmin ?? false,
+      orgRole: user?.orgRole ?? 'member',
+      isLoading,
+      login,
+      logout,
+    }),
     [user, isLoading, login, logout],
   )
 

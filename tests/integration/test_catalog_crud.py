@@ -43,7 +43,7 @@ from api.models.organization import Organization
 from api.services.git_service import GitService
 
 # Shared mock token for all catalog/crud tests (admin, org_id is irrelevant for these endpoints)
-_MOCK_ADMIN_TOKEN = TokenData(sub="testadmin", org_id=1, is_admin=True)
+_MOCK_ADMIN_TOKEN = TokenData(sub="testadmin", org_id=1, org_role="org_admin")
 
 
 # ---------------------------------------------------------------------------

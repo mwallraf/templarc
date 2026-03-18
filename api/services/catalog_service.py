@@ -106,13 +106,16 @@ async def list_projects(
     db: AsyncSession,
     organization_id: str | None = None,
     search: str | None = None,
+    project_ids: list[str] | None = None,
 ) -> list[Project]:
-    """Return all projects, optionally filtered by org and/or name search."""
+    """Return projects, optionally filtered by org, name search, or allowed project IDs."""
     stmt = select(Project).order_by(Project.display_name)
     if organization_id is not None:
         stmt = stmt.where(Project.organization_id == organization_id)
     if search:
         stmt = stmt.where(Project.name.ilike(f"%{search}%"))
+    if project_ids is not None:
+        stmt = stmt.where(Project.id.in_(project_ids))
     result = await db.execute(stmt)
     return list(result.scalars().all())
 

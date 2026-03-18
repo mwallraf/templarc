@@ -92,7 +92,7 @@ async def admin_user(api_db: AsyncSession, test_org: Organization) -> User:
         organization_id=test_org.id,
         username="apikeyAdmin",
         email="apikey_admin@example.com",
-        is_admin=True,
+        role="org_admin",
         is_ldap=False,
         password_hash=_bcrypt.hashpw(b"adminpass", _bcrypt.gensalt()).decode(),
     )
@@ -108,7 +108,7 @@ async def non_admin_user(api_db: AsyncSession, test_org: Organization) -> User:
         organization_id=test_org.id,
         username="apikeyRegular",
         email="apikey_regular@example.com",
-        is_admin=False,
+        role="member",
         is_ldap=False,
         password_hash=_bcrypt.hashpw(b"userpass", _bcrypt.gensalt()).decode(),
     )
@@ -124,7 +124,8 @@ def _make_token(username: str, org_id: str, is_admin: bool) -> str:
     payload = {
         "sub": username,
         "org_id": org_id,
-        "is_admin": is_admin,
+        "org_role": "org_admin" if is_admin else "member",
+        "is_platform_admin": False,
         "iat": now,
         "exp": now + timedelta(hours=8),
     }
@@ -166,7 +167,7 @@ async def admin_client(api_db: AsyncSession, git_repo: GitService, test_org: Org
     async def override_get_db():
         yield api_db
 
-    admin_token_data = TokenData(sub="apikeyAdmin", org_id=test_org.id, is_admin=True)
+    admin_token_data = TokenData(sub="apikeyAdmin", org_id=test_org.id, org_role="org_admin")
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_git_service] = lambda: git_repo
@@ -201,13 +202,13 @@ class TestApiKeys:
         """Admin can create an API key; raw_key and prefix are returned."""
         resp = await admin_client.post(
             "/auth/api-keys",
-            json={"name": "my-ci-key", "is_admin": False},
+            json={"name": "my-ci-key", "role": "member"},
         )
         assert resp.status_code == 201
 
         data = resp.json()
         assert data["name"] == "my-ci-key"
-        assert data["is_admin"] is False
+        assert data["role"] == "member"
 
         # raw_key must be present and have the correct format
         raw_key: str = data["raw_key"]
@@ -231,12 +232,12 @@ class TestApiKeys:
         expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
         resp = await admin_client.post(
             "/auth/api-keys",
-            json={"name": "expiring-key", "is_admin": True, "expires_at": expires},
+            json={"name": "expiring-key", "role": "org_admin", "expires_at": expires},
         )
         assert resp.status_code == 201
         data = resp.json()
         assert data["expires_at"] is not None
-        assert data["is_admin"] is True
+        assert data["role"] == "org_admin"
 
     # -----------------------------------------------------------------------
     # GET /auth/api-keys
@@ -268,7 +269,7 @@ class TestApiKeys:
 
         # But the expected metadata fields should be present
         for key in keys:
-            for field in ("id", "name", "key_prefix", "is_admin", "created_at"):
+            for field in ("id", "name", "key_prefix", "role", "created_at"):
                 assert field in key, f"Expected field {field!r} missing from list item"
 
     async def test_list_shows_created_key(
@@ -345,7 +346,7 @@ class TestApiKeys:
             name="test-auth-key",
             key_prefix=key_prefix,
             key_hash=key_hash,
-            is_admin=False,
+            role="member",
         )
         api_db.add(api_key)
         await api_db.flush()
@@ -366,7 +367,7 @@ class TestApiKeys:
         api_db: AsyncSession,
         test_org: Organization,
     ) -> None:
-        """TokenData built from an API key carries the correct org_id and is_admin flag."""
+        """TokenData built from an API key carries the correct org_id and role."""
         raw_key, key_prefix, key_hash = generate_api_key()
 
         api_key = ApiKey(
@@ -375,7 +376,7 @@ class TestApiKeys:
             name="admin-api-key",
             key_prefix=key_prefix,
             key_hash=key_hash,
-            is_admin=True,
+            role="org_admin",
         )
         api_db.add(api_key)
         await api_db.flush()
@@ -387,7 +388,7 @@ class TestApiKeys:
         assert resp.status_code == 200
         data = resp.json()
         assert data["org_id"] == test_org.id
-        assert data["is_admin"] is True
+        assert data["org_role"] == "org_admin"
 
     async def test_invalid_api_key_returns_401(
         self,
@@ -417,7 +418,7 @@ class TestApiKeys:
             name="expired-key",
             key_prefix=key_prefix,
             key_hash=key_hash,
-            is_admin=False,
+            role="member",
             expires_at=expired_at,
         )
         api_db.add(api_key)

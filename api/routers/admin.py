@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.core.auth import TokenData, require_admin
+from api.core.auth import TokenData, require_org_admin
 from api.core.sandbox import SandboxError, sandbox_test, validate_and_compile
 from api.database import get_db
 from api.dependencies import get_git_service
@@ -95,7 +95,7 @@ async def run_git_sync(
     body: GitSyncRequest = GitSyncRequest(),
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> SyncReport:
     report = await git_sync_service.run_git_sync(
         db,
@@ -129,7 +129,7 @@ async def get_sync_status(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> SyncStatusReport:
     return await git_sync_service.get_sync_status(db, project_id, git_svc)
 
@@ -156,7 +156,7 @@ async def list_audit_log(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> AuditLogListOut:
     q = select(AuditLog)
     if user_sub:
@@ -200,7 +200,7 @@ async def list_audit_log(
 async def create_filter(
     data: CustomFilterCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomFilterOut:
     # Validate and test in sandbox before storing
     try:
@@ -228,7 +228,7 @@ async def list_filters(
     scope: str | None = Query(None, description="Filter by scope: 'global' or 'project'"),
     project_id: str | None = Query(None, description="Filter by project ID"),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> list[CustomFilterOut]:
     filters = await custom_filter_service.list_filters(db, scope=scope, project_id=project_id)
     return [CustomFilterOut.model_validate(f) for f in filters]
@@ -245,7 +245,7 @@ async def list_filters(
 )
 async def test_filter(
     data: FilterTestRequest,
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> FilterTestResult:
     try:
         func = validate_and_compile(data.code)
@@ -265,7 +265,7 @@ async def update_filter(
     filter_id: int,
     data: CustomFilterUpdate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomFilterOut:
     try:
         func = validate_and_compile(data.code)
@@ -296,7 +296,7 @@ async def delete_filter(
     filter_id: int,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomFilterDeleteOut:
     cf = await custom_filter_service.delete_filter(db, filter_id)
     used_in = await custom_filter_service.check_filter_usage(
@@ -325,7 +325,7 @@ async def delete_filter(
 async def create_object(
     data: CustomObjectCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomObjectOut:
     try:
         func = validate_and_compile(data.code)
@@ -354,7 +354,7 @@ async def create_object(
 async def list_objects(
     project_id: str | None = Query(None, description="Filter by project ID"),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> list[CustomObjectOut]:
     objects = await custom_filter_service.list_objects(db, project_id=project_id)
     return [CustomObjectOut.model_validate(o) for o in objects]
@@ -370,7 +370,7 @@ async def update_object(
     object_id: int,
     data: CustomObjectUpdate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomObjectOut:
     try:
         func = validate_and_compile(data.code)
@@ -396,7 +396,7 @@ async def update_object(
 async def delete_object(
     object_id: int,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomObjectDeleteOut:
     await custom_filter_service.delete_object(db, object_id)
     await log_write(db, token.sub, "delete", "custom_object", object_id)
@@ -424,7 +424,7 @@ async def delete_object(
 async def create_macro(
     data: CustomMacroCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomMacroOut:
     import jinja2 as _jinja2
 
@@ -462,7 +462,7 @@ async def list_macros(
     scope: str | None = Query(None, description="Filter by scope: 'global' or 'project'"),
     project_id: str | None = Query(None, description="Filter by project ID"),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> list[CustomMacroOut]:
     macros = await custom_filter_service.list_macros(db, scope=scope, project_id=project_id)
     return [CustomMacroOut.model_validate(m) for m in macros]
@@ -478,7 +478,7 @@ async def update_macro(
     macro_id: int,
     data: CustomMacroUpdate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomMacroOut:
     import jinja2 as _jinja2
 
@@ -521,7 +521,7 @@ async def update_macro(
 async def delete_macro(
     macro_id: int,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> CustomMacroDeleteOut:
     await custom_filter_service.delete_macro(db, macro_id)
     await log_write(db, token.sub, "delete", "custom_macro", macro_id)
@@ -548,7 +548,7 @@ async def delete_macro(
 async def find_duplicate_parameters(
     project_id: str | None = Query(None, description="Limit scan to a single project"),
     db: AsyncSession = Depends(get_db),
-    _token: TokenData = Depends(require_admin),
+    _token: TokenData = Depends(require_org_admin),
 ) -> DuplicatesReport:
     # Load all active template-scope parameters joined to template + project
     stmt = (
@@ -643,7 +643,7 @@ async def promote_parameter(
     data: PromoteRequest,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> PromoteReport:
     # 1. Find all matching template-scope parameters in the project
     stmt = (
@@ -886,7 +886,7 @@ async def get_remote_status(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> GitRemoteStatusOut:
     project = await _get_project_or_404(project_id, db)
 
@@ -936,7 +936,7 @@ async def clone_remote(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> GitRemoteActionOut:
     project = await _get_project_or_404(project_id, db)
 
@@ -979,7 +979,7 @@ async def pull_remote(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> GitRemoteActionOut:
     project = await _get_project_or_404(project_id, db)
 
@@ -1026,7 +1026,7 @@ async def push_remote(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> GitRemoteActionOut:
     project = await _get_project_or_404(project_id, db)
 
@@ -1072,7 +1072,7 @@ async def test_remote_connection(
     project_id: str,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> GitRemoteTestOut:
     project = await _get_project_or_404(project_id, db)
 

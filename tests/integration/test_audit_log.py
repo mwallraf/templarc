@@ -31,8 +31,8 @@ from api.main import app
 from api.models.organization import Organization
 from api.services.git_service import GitService
 
-_MOCK_ADMIN_TOKEN = TokenData(sub="auditadmin", org_id=1, is_admin=True)
-_MOCK_USER_TOKEN = TokenData(sub="regularuser", org_id=1, is_admin=False)
+_MOCK_ADMIN_TOKEN = TokenData(sub="auditadmin", org_id=1, org_role="org_admin")
+_MOCK_USER_TOKEN = TokenData(sub="regularuser", org_id=1, org_role="member")
 
 
 # ---------------------------------------------------------------------------

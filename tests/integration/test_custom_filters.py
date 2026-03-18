@@ -31,7 +31,7 @@ from api.dependencies import get_git_service
 from api.main import app
 from api.services.git_service import GitService
 
-_MOCK_ADMIN_TOKEN = TokenData(sub="filteradmin", org_id=1, is_admin=True)
+_MOCK_ADMIN_TOKEN = TokenData(sub="filteradmin", org_id=1, org_role="org_admin")
 
 _VALID_FILTER_CODE = "def shorten(v):\n    return str(v)[:8]"
 _BLOCKED_FILTER_CODE = "import os\ndef shorten(v):\n    return v"
@@ -271,7 +271,7 @@ class TestCustomFilterAuth:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_git_service] = lambda: git_repo
         app.dependency_overrides[get_current_user] = lambda: TokenData(
-            sub="user", org_id=1, is_admin=False
+            sub="user", org_id=1, org_role="member"
         )
         app.dependency_overrides[require_admin] = raise_403
 

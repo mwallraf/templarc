@@ -160,10 +160,10 @@ async def client(
         yield api_db
 
     def override_get_current_user() -> TokenData:
-        return TokenData(sub="testuser", org_id=test_org.id, is_admin=False)
+        return TokenData(sub="testuser", org_id=test_org.id, org_role="member")
 
     def override_require_admin() -> TokenData:
-        return TokenData(sub="testadmin", org_id=test_org.id, is_admin=True)
+        return TokenData(sub="testadmin", org_id=test_org.id, org_role="org_admin")
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_git_service] = lambda: git_repo

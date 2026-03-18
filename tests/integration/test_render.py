@@ -42,7 +42,7 @@ from api.models.template import Template
 from api.services.git_service import GitService
 from api.services.template_renderer import build_metadata_header
 
-_MOCK_ADMIN_TOKEN = TokenData(sub="testadmin", org_id=1, is_admin=True)
+_MOCK_ADMIN_TOKEN = TokenData(sub="testadmin", org_id=1, org_role="org_admin")
 
 
 # ===========================================================================

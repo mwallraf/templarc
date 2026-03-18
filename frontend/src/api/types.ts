@@ -483,7 +483,8 @@ export interface ReRenderRequest {
 export interface MeOut {
   username: string
   org_id: string
-  is_admin: boolean
+  org_role: string
+  is_platform_admin: boolean
   email?: string
   is_ldap: boolean
   last_login?: string
@@ -502,7 +503,8 @@ export interface UserOut {
   id: string
   username: string
   email: string
-  is_admin: boolean
+  role: string
+  is_platform_admin: boolean
   is_ldap: boolean
   organization_id: string
   last_login?: string
@@ -513,11 +515,11 @@ export interface UserCreate {
   username: string
   email: string
   password: string
-  is_admin?: boolean
+  role?: string
 }
 
 export interface UserUpdate {
-  is_admin?: boolean
+  role?: string
   password?: string
 }
 
@@ -545,7 +547,7 @@ export interface SecretOut {
 
 export interface ApiKeyCreate {
   name: string
-  is_admin: boolean
+  role: string
   expires_at?: string | null
 }
 
@@ -553,11 +555,33 @@ export interface ApiKeyOut {
   id: number
   name: string
   key_prefix: string
-  is_admin: boolean
+  role: string
   created_by: number | null
   last_used_at: string | null
   expires_at: string | null
   created_at: string
+}
+
+// ── Project Memberships ─────────────────────────────────────────────────────
+
+export interface ProjectMembershipCreate {
+  user_id: string
+  role: string
+}
+
+export interface ProjectMembershipOut {
+  id: string
+  user_id: string
+  project_id: string
+  username: string
+  email: string
+  role: string
+  created_at: string
+}
+
+export interface ProjectMembershipsListOut {
+  items: ProjectMembershipOut[]
+  total: number
 }
 
 export interface ApiKeyCreatedOut extends ApiKeyOut {

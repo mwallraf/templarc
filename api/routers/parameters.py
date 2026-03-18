@@ -16,13 +16,13 @@ Auth:
   - POST/PUT/DELETE: admin only
 """
 
-from __future__ import annotations
+# NOTE: do NOT add 'from __future__ import annotations' here.
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.core.auth import TokenData, get_current_user, require_admin
+from api.core.auth import TokenData, get_current_user, require_org_admin
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.parameter import Parameter, ParameterScope
@@ -106,7 +106,7 @@ async def list_parameters(
 async def create_parameter(
     data: ParameterCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
     git_svc: GitService = Depends(get_git_service),
 ) -> ParameterOut:
     param = await parameter_service.create_parameter(db, data)
@@ -153,7 +153,7 @@ async def update_parameter(
     parameter_id: int,
     data: ParameterUpdate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
     git_svc: GitService = Depends(get_git_service),
 ) -> ParameterOut:
     param = await parameter_service.update_parameter(db, parameter_id, data)
@@ -178,7 +178,7 @@ async def update_parameter(
 async def delete_parameter(
     parameter_id: int,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
     git_svc: GitService = Depends(get_git_service),
 ) -> None:
     # Capture scope info before soft-delete for write-back decision
@@ -232,7 +232,7 @@ async def create_option(
     parameter_id: int,
     data: ParameterOptionCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> ParameterOptionOut:
     option = await parameter_service.create_option(db, parameter_id, data)
     await log_write(db, token.sub, "create", "parameter_option", option.id, {"parameter_id": parameter_id, **data.model_dump()})
@@ -255,7 +255,7 @@ async def delete_option(
     parameter_id: int,
     option_id: int,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> None:
     await parameter_service.delete_option(db, parameter_id, option_id)
     await log_write(db, token.sub, "delete", "parameter_option", option_id)

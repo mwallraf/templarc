@@ -100,11 +100,12 @@ export default function Profile() {
             {/* Role badge */}
             <span
               className="text-xs px-2 py-0.5 rounded-full border"
-              style={me?.is_admin
+              style={me?.org_role === 'org_owner' || me?.org_role === 'org_admin'
                 ? { color: '#f59e0b', borderColor: '#78350f', backgroundColor: 'rgba(245,158,11,0.08)' }
                 : { color: 'var(--c-muted-3)', borderColor: 'var(--c-border)', backgroundColor: 'transparent' }}
             >
-              {me?.is_admin ? 'Admin' : 'User'}
+              {me?.org_role === 'org_owner' ? 'Owner' : me?.org_role === 'org_admin' ? 'Admin' : 'Member'}
+              {me?.is_platform_admin && ' ✦'}
             </span>
           </div>
         </div>

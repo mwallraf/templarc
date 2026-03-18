@@ -14,7 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.core.auth import TokenData, require_admin
+from api.core.auth import TokenData, require_org_admin
 from api.database import get_db
 from api.schemas.system_settings import AISettingsOut, AISettingsUpdate, AITestResult
 from api.services import settings_service
@@ -34,7 +34,7 @@ router = APIRouter()
     ),
 )
 async def get_ai_settings(
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AISettingsOut:
     return await settings_service.get_ai_settings(db, current_user.org_id)
@@ -52,7 +52,7 @@ async def get_ai_settings(
 )
 async def update_ai_settings(
     body: AISettingsUpdate,
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AISettingsOut:
     await settings_service.save_ai_settings(
@@ -76,7 +76,7 @@ async def update_ai_settings(
     description="Validates the current AI settings by resolving them and checking the provider is instantiable.",
 )
 async def test_ai_settings(
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AITestResult:
     cfg = await settings_service.get_resolved_ai_config(db, current_user.org_id)

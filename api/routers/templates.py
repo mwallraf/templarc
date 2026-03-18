@@ -20,7 +20,8 @@ Auth:
 GitService is shared with the catalog router via the same module-level singleton.
 """
 
-from __future__ import annotations
+# NOTE: do NOT add 'from __future__ import annotations' here — it breaks
+# FastAPI's dependency introspection when using Request in require_project_role.
 
 import re
 from pathlib import Path
@@ -31,7 +32,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.core.auth import TokenData, get_current_user, require_admin
+from api.core.auth import (
+    TokenData,
+    get_current_user,
+    require_org_admin,
+    require_project_role_for_template,
+)
 from api.database import get_db
 from api.dependencies import get_git_service
 from api.models.parameter import Parameter, ParameterScope
@@ -109,7 +115,7 @@ async def upload_template(
     author: str = Form(default="", description="Git commit author (defaults to the authenticated username)"),
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> TemplateUploadOut:
     raw_bytes = await file.read()
     try:
@@ -285,7 +291,7 @@ async def create_template(
     data: TemplateCreate,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> TemplateOut:
     tmpl = await catalog_service.create_template(db, data, git_svc)
     await log_write(db, token.sub, "create", "template", tmpl.id, data.model_dump(exclude={"content"}))
@@ -314,7 +320,7 @@ async def update_template(
     data: TemplateUpdate,
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_project_role_for_template("project_editor")),
 ) -> TemplateUpdateOut:
     result = await catalog_service.update_template(db, template_id, data, git_svc)
     await log_write(db, token.sub, "update", "template", template_id, data.model_dump(exclude_none=True, exclude={"content"}))
@@ -338,7 +344,7 @@ async def update_template(
 async def delete_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_project_role_for_template("project_editor")),
     git_svc: GitService = Depends(get_git_service),
 ) -> None:
     await catalog_service.delete_template(db, template_id, git_svc, author=token.sub)
@@ -490,7 +496,7 @@ async def create_preset(
     template_id: str,
     data: RenderPresetCreate,
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_project_role_for_template("project_editor")),
 ) -> RenderPresetOut:
     await catalog_service.get_template(db, template_id)
     preset = RenderPreset(
@@ -519,7 +525,7 @@ async def delete_preset(
     template_id: str,
     preset_id: int,  # preset ID remains BigInteger
     db: AsyncSession = Depends(get_db),
-    token: TokenData = Depends(require_admin),
+    token: TokenData = Depends(require_project_role_for_template("project_editor")),
 ) -> None:
     result = await db.execute(
         select(RenderPreset).where(

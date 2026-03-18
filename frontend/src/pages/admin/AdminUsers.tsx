@@ -35,9 +35,9 @@ export default function AdminUsers() {
     },
   })
 
-  const toggleAdminMut = useMutation({
-    mutationFn: ({ id, is_admin }: { id: number; is_admin: boolean }) =>
-      updateUser(id, { is_admin }),
+  const changeRoleMut = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      updateUser(id, { role }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   })
 
@@ -47,11 +47,11 @@ export default function AdminUsers() {
   })
 
   const { register, handleSubmit, reset } = useForm<UserCreate>({
-    defaultValues: { is_admin: false },
+    defaultValues: { role: 'member' },
   })
 
-  function handleDuplicate(email: string, is_admin: boolean) {
-    reset({ username: '', email, password: '', is_admin })
+  function handleDuplicate(email: string, role: string) {
+    reset({ username: '', email, password: '', role })
     setShowForm(true)
     // Scroll to form
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -120,15 +120,17 @@ export default function AdminUsers() {
                 {...register('password', { required: true })}
               />
             </div>
-            <div className="flex items-end pb-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  className="rounded"
-                  {...register('is_admin')}
-                />
-                <span className="text-sm" style={{ color: 'var(--c-muted-2)' }}>Administrator</span>
-              </label>
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Role</label>
+              <select
+                className={inputClass}
+                style={inputStyle}
+                {...register('role')}
+              >
+                <option value="member">Member</option>
+                <option value="org_admin">Org Admin</option>
+                <option value="org_owner">Org Owner</option>
+              </select>
             </div>
           </div>
 
@@ -209,12 +211,16 @@ export default function AdminUsers() {
                       <td className="px-4 py-3">
                         <span
                           className="text-xs px-2 py-0.5 rounded-full border"
-                          style={u.is_admin
-                            ? { color: '#f59e0b', borderColor: '#78350f', backgroundColor: 'rgba(245,158,11,0.08)' }
-                            : { color: 'var(--c-muted-3)', borderColor: 'var(--c-border)', backgroundColor: 'transparent' }
+                          style={
+                            u.role === 'org_owner'
+                              ? { color: '#f59e0b', borderColor: '#78350f', backgroundColor: 'rgba(245,158,11,0.08)' }
+                              : u.role === 'org_admin'
+                              ? { color: '#818cf8', borderColor: '#312e81', backgroundColor: 'rgba(99,102,241,0.08)' }
+                              : { color: 'var(--c-muted-3)', borderColor: 'var(--c-border)', backgroundColor: 'transparent' }
                           }
                         >
-                          {u.is_admin ? 'Admin' : 'User'}
+                          {u.role === 'org_owner' ? 'Owner' : u.role === 'org_admin' ? 'Admin' : 'Member'}
+                          {u.is_platform_admin && ' ✦'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>{formatDate(u.last_login)}</td>
@@ -222,18 +228,18 @@ export default function AdminUsers() {
                         <div className="flex items-center justify-end gap-3">
                           {/* Toggle admin — not for self */}
                           <button
-                            onClick={() => toggleAdminMut.mutate({ id: u.id, is_admin: !u.is_admin })}
-                            disabled={isSelf || toggleAdminMut.isPending}
-                            title={isSelf ? 'Cannot change your own role' : u.is_admin ? 'Revoke admin' : 'Grant admin'}
+                            onClick={() => changeRoleMut.mutate({ id: u.id, role: u.role === 'member' ? 'org_admin' : 'member' })}
+                            disabled={isSelf || changeRoleMut.isPending || u.role === 'org_owner'}
+                            title={isSelf ? 'Cannot change your own role' : u.role === 'org_owner' ? 'Cannot change owner role' : u.role === 'org_admin' ? 'Demote to Member' : 'Promote to Admin'}
                             className="text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                            style={{ color: u.is_admin ? '#f59e0b' : '#6366f1' }}
+                            style={{ color: u.role === 'org_admin' ? '#f59e0b' : '#6366f1' }}
                           >
-                            {u.is_admin ? 'Revoke Admin' : 'Make Admin'}
+                            {u.role === 'org_admin' ? 'Demote' : 'Make Admin'}
                           </button>
 
                           {/* Duplicate — pre-fills form */}
                           <button
-                            onClick={() => handleDuplicate(u.email, u.is_admin)}
+                            onClick={() => handleDuplicate(u.email, u.role)}
                             className="text-xs font-medium transition-colors"
                             style={{ color: 'var(--c-muted-2)' }}
                           >

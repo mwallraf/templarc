@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -29,7 +29,8 @@ class ApiKey(Base):
     key_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
     # SHA-256 hex digest of the raw key — used for fast lookup
     key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Org-level role granted to this key: 'org_owner' | 'org_admin' | 'member'
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="member", server_default="member")
     last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -22,7 +22,9 @@ from api.core.auth import (
     UserInfo,
     _upsert_user,
     get_current_user,
+    is_org_admin,
     require_admin,
+    require_org_admin,
 )
 
 
@@ -40,15 +42,21 @@ def _make_credentials(token: str) -> MagicMock:
 def _build_jwt(
     sub: str = "alice",
     org_id: int = 1,
-    is_admin: bool = False,
+    org_role: str = "member",
+    is_platform_admin: bool = False,
     secret: str = "testsecret",
     expires_in: int = 3600,
+    # backward-compat helper: if passed, overrides org_role
+    is_admin: bool | None = None,
 ) -> str:
     now = datetime.now(timezone.utc)
+    if is_admin is not None:
+        org_role = "org_admin" if is_admin else "member"
     payload = {
         "sub": sub,
         "org_id": org_id,
-        "is_admin": is_admin,
+        "org_role": org_role,
+        "is_platform_admin": is_platform_admin,
         "iat": now,
         "exp": now + timedelta(seconds=expires_in),
     }
@@ -64,13 +72,14 @@ class TestGetCurrentUser:
     @patch("api.core.auth.get_settings")
     async def test_valid_token_returns_token_data(self, mock_settings):
         mock_settings.return_value.SECRET_KEY = "testsecret"
-        token_str = _build_jwt(sub="alice", org_id=5, is_admin=True)
+        token_str = _build_jwt(sub="alice", org_id=5, org_role="org_admin")
 
-        result = await get_current_user(_make_credentials(token_str))
+        result = await get_current_user(_make_credentials(token_str), x_api_key=None, db=None)
 
         assert result.sub == "alice"
         assert result.org_id == 5
-        assert result.is_admin is True
+        assert result.org_role == "org_admin"
+        assert is_org_admin(result) is True
 
     @patch("api.core.auth.get_settings")
     async def test_expired_token_raises_401(self, mock_settings):
@@ -78,7 +87,7 @@ class TestGetCurrentUser:
         token_str = _build_jwt(expires_in=-1)  # already expired
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(_make_credentials(token_str))
+            await get_current_user(_make_credentials(token_str), x_api_key=None, db=None)
         assert exc_info.value.status_code == 401
 
     @patch("api.core.auth.get_settings")
@@ -87,7 +96,7 @@ class TestGetCurrentUser:
         token_str = _build_jwt(secret="wrong_secret")
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(_make_credentials(token_str))
+            await get_current_user(_make_credentials(token_str), x_api_key=None, db=None)
         assert exc_info.value.status_code == 401
 
     @patch("api.core.auth.get_settings")
@@ -98,16 +107,33 @@ class TestGetCurrentUser:
         token_str = jwt.encode(payload, "testsecret", algorithm="HS256")
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(_make_credentials(token_str))
+            await get_current_user(_make_credentials(token_str), x_api_key=None, db=None)
         assert exc_info.value.status_code == 401
 
     @patch("api.core.auth.get_settings")
-    async def test_is_admin_defaults_to_false(self, mock_settings):
+    async def test_member_role_not_org_admin(self, mock_settings):
         mock_settings.return_value.SECRET_KEY = "testsecret"
-        token_str = _build_jwt(is_admin=False)
+        token_str = _build_jwt(org_role="member")
 
-        result = await get_current_user(_make_credentials(token_str))
-        assert result.is_admin is False
+        result = await get_current_user(_make_credentials(token_str), x_api_key=None, db=None)
+        assert result.org_role == "member"
+        assert is_org_admin(result) is False
+
+    @patch("api.core.auth.get_settings")
+    async def test_backward_compat_old_jwt_is_admin(self, mock_settings):
+        """Old JWTs with is_admin bool (no org_role) are still accepted."""
+        mock_settings.return_value.SECRET_KEY = "testsecret"
+        now = datetime.now(timezone.utc)
+        payload = {
+            "sub": "alice",
+            "org_id": 1,
+            "is_admin": True,
+            "exp": now + timedelta(hours=1),
+        }
+        old_token = jwt.encode(payload, "testsecret", algorithm="HS256")
+        result = await get_current_user(_make_credentials(old_token), x_api_key=None, db=None)
+        assert result.org_role == "org_admin"
+        assert is_org_admin(result) is True
 
 
 # ===========================================================================
@@ -116,16 +142,30 @@ class TestGetCurrentUser:
 
 class TestRequireAdmin:
 
-    async def test_admin_token_passes(self):
-        token = TokenData(sub="admin", org_id=1, is_admin=True)
+    async def test_org_owner_passes(self):
+        token = TokenData(sub="owner", org_id=1, org_role="org_owner")
         result = await require_admin(token)
         assert result is token
 
-    async def test_non_admin_raises_403(self):
-        token = TokenData(sub="user", org_id=1, is_admin=False)
+    async def test_org_admin_passes(self):
+        token = TokenData(sub="admin", org_id=1, org_role="org_admin")
+        result = await require_admin(token)
+        assert result is token
+
+    async def test_platform_admin_passes_even_as_member(self):
+        token = TokenData(sub="superadmin", org_id=1, org_role="member", is_platform_admin=True)
+        result = await require_admin(token)
+        assert result is token
+
+    async def test_member_raises_403(self):
+        token = TokenData(sub="user", org_id=1, org_role="member")
         with pytest.raises(HTTPException) as exc_info:
             await require_admin(token)
         assert exc_info.value.status_code == 403
+
+    async def test_require_org_admin_is_same_as_require_admin(self):
+        """require_admin must be an alias for require_org_admin."""
+        assert require_admin is require_org_admin
 
 
 # ===========================================================================
@@ -144,7 +184,7 @@ class TestLocalAuthService:
         user = MagicMock()
         user.username = username
         user.email = f"{username}@example.com"
-        user.is_admin = False
+        user.role = "member"
         user.is_ldap = is_ldap
         user.password_hash = _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode() if not is_ldap else None
         return user
@@ -166,7 +206,7 @@ class TestLocalAuthService:
         assert result is not None
         assert result.username == "alice"
         assert result.email == "alice@example.com"
-        assert result.is_admin is False
+        assert result.is_admin is False  # UserInfo.is_admin used for LDAP-group-to-role mapping
 
     async def test_wrong_password_returns_none(self):
         user = self._make_user(password="secret")
