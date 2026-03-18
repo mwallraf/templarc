@@ -1,5 +1,5 @@
 import { useForm } from 'react-hook-form'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import type { LoginRequest } from '../api/types'
 
@@ -8,6 +8,7 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string })?.from ?? '/catalog'
+  const notice = (location.state as { notice?: string })?.notice ?? null
 
   const {
     register,
@@ -71,6 +72,15 @@ export default function Login() {
           }}
         >
           <h2 className="text-lg font-semibold text-white mb-5 font-display">Sign in</h2>
+
+          {notice && (
+            <div
+              className="mb-4 rounded-lg px-3 py-2.5 text-sm border"
+              style={{ backgroundColor: 'rgba(52,211,153,0.08)', borderColor: 'rgba(52,211,153,0.25)', color: '#34d399' }}
+            >
+              {notice}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
@@ -157,6 +167,18 @@ export default function Login() {
               )}
             </button>
           </form>
+
+          <div className="mt-4 text-center">
+            <Link
+              to="/forgot-password"
+              className="text-xs transition-colors"
+              style={{ color: 'var(--c-muted-4)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#818cf8')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-4)')}
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
 
         <p className="text-center text-xs mt-5" style={{ color: 'var(--c-dim)' }}>

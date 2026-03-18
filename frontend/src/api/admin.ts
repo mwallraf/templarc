@@ -28,6 +28,10 @@ import type {
   ProjectMembershipCreate,
   ProjectMembershipOut,
   ProjectMembershipsListOut,
+  OrgSettingsOut,
+  OrgSettingsPatch,
+  OrgStatsOut,
+  WebhookDeliveryListOut,
 } from './types'
 
 // ── API Keys ────────────────────────────────────────────────────────────────
@@ -144,3 +148,19 @@ export const upsertProjectMember = (projectId: string, data: ProjectMembershipCr
 
 export const removeProjectMember = (projectId: string, userId: string) =>
   apiClient.delete(`/catalog/projects/${projectId}/members/${userId}`)
+
+// ── Org Settings & Stats ─────────────────────────────────────────────────────
+
+export const getOrgSettings = () =>
+  apiClient.get<OrgSettingsOut>('/admin/org').then((r) => r.data)
+
+export const patchOrgSettings = (data: OrgSettingsPatch) =>
+  apiClient.patch<OrgSettingsOut>('/admin/org', data).then((r) => r.data)
+
+export const getOrgStats = () =>
+  apiClient.get<OrgStatsOut>('/admin/stats').then((r) => r.data)
+
+// ── Webhook Deliveries ───────────────────────────────────────────────────────
+
+export const getWebhookDeliveries = (webhookId: number, params?: { skip?: number; limit?: number }) =>
+  apiClient.get<WebhookDeliveryListOut>(`/admin/webhooks/${webhookId}/deliveries`, { params }).then((r) => r.data)

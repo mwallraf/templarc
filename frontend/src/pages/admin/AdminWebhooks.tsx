@@ -8,6 +8,7 @@ import {
   updateWebhook,
   deleteWebhook,
   testWebhook,
+  getWebhookDeliveries,
 } from '../../api/admin'
 import { listProjects } from '../../api/catalog'
 import { listTemplates } from '../../api/templates'
@@ -16,6 +17,7 @@ import type {
   RenderWebhookOut,
   RenderWebhookUpdate,
   WebhookTestResult,
+  WebhookDeliveryOut,
 } from '../../api/types'
 
 // ── Shared style constants (same as AdminFilters) ────────────────────────────
@@ -383,6 +385,82 @@ function WebhookForm({
   )
 }
 
+// ── Delivery log panel ────────────────────────────────────────────────────────
+
+function StatusDot({ code }: { code: number | null }) {
+  if (code == null) {
+    return <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--c-muted-4)' }} />
+  }
+  if (code >= 200 && code < 300) {
+    return <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#34d399' }} />
+  }
+  return <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: '#f87171' }} />
+}
+
+function DeliveryRow({ d }: { d: WebhookDeliveryOut }) {
+  const ts = new Date(d.created_at).toLocaleString()
+  return (
+    <tr style={{ borderBottom: '1px solid var(--c-border)' }}>
+      <td className="px-3 py-2 text-xs font-mono" style={{ color: 'var(--c-muted-3)' }}>{ts}</td>
+      <td className="px-3 py-2 text-xs" style={{ color: 'var(--c-muted-3)' }}>{d.event}</td>
+      <td className="px-3 py-2 text-xs">
+        <div className="flex items-center gap-1.5">
+          <StatusDot code={d.status_code} />
+          <span style={{ color: d.status_code == null ? 'var(--c-muted-4)' : d.status_code < 300 ? '#34d399' : '#f87171' }}>
+            {d.status_code ?? '–'}
+          </span>
+        </div>
+      </td>
+      <td className="px-3 py-2 text-xs" style={{ color: 'var(--c-muted-4)' }}>
+        {d.duration_ms != null ? `${d.duration_ms} ms` : '–'}
+      </td>
+      <td className="px-3 py-2 text-xs max-w-xs truncate" style={{ color: '#f87171' }}>
+        {d.error ?? ''}
+      </td>
+    </tr>
+  )
+}
+
+function DeliveryLog({ webhookId }: { webhookId: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['webhook-deliveries', webhookId],
+    queryFn: () => getWebhookDeliveries(webhookId, { limit: 20 }),
+  })
+
+  return (
+    <div
+      className="rounded-lg border overflow-hidden"
+      style={{ backgroundColor: 'var(--c-card)', borderColor: 'var(--c-border)' }}
+    >
+      <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid var(--c-border)' }}>
+        <span className="text-xs font-semibold" style={{ color: 'var(--c-muted-2)' }}>Delivery log</span>
+        <span className="text-xs" style={{ color: 'var(--c-muted-4)' }}>last 20</span>
+      </div>
+
+      {isLoading ? (
+        <p className="px-3 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>Loading…</p>
+      ) : !data?.items.length ? (
+        <p className="px-3 py-3 text-xs" style={{ color: 'var(--c-muted-4)' }}>No deliveries recorded yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr style={{ backgroundColor: 'var(--c-surface-alt)' }}>
+                {['Time', 'Event', 'Status', 'Duration', 'Error'].map((h) => (
+                  <th key={h} className="px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--c-muted-4)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((d) => <DeliveryRow key={d.id} d={d} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Test result panel ─────────────────────────────────────────────────────────
 
 function TestResult({ result, onDismiss }: { result: WebhookTestResult; onDismiss: () => void }) {
@@ -436,6 +514,7 @@ export default function AdminWebhooks() {
   const [editId, setEditId] = useState<number | null>(null)
   const [testingId, setTestingId] = useState<number | null>(null)
   const [testResults, setTestResults] = useState<Record<number, WebhookTestResult>>({})
+  const [deliveryOpenId, setDeliveryOpenId] = useState<number | null>(null)
 
   const { data: webhookData, isLoading } = useQuery({
     queryKey: ['webhooks'],
@@ -603,6 +682,13 @@ export default function AdminWebhooks() {
                             {testingId === wh.id ? 'Testing…' : 'Test'}
                           </button>
                           <button
+                            onClick={() => setDeliveryOpenId(deliveryOpenId === wh.id ? null : wh.id)}
+                            className="text-xs font-medium transition-colors"
+                            style={{ color: deliveryOpenId === wh.id ? '#fbbf24' : 'var(--c-muted-3)' }}
+                          >
+                            Deliveries
+                          </button>
+                          <button
                             onClick={() => setEditId(editId === wh.id ? null : wh.id)}
                             className="text-xs font-medium transition-colors"
                             style={{ color: 'var(--c-muted-2)' }}
@@ -629,6 +715,15 @@ export default function AdminWebhooks() {
                             result={testResults[wh.id]}
                             onDismiss={() => setTestResults((prev) => { const n = { ...prev }; delete n[wh.id]; return n })}
                           />
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* Inline delivery log */}
+                    {deliveryOpenId === wh.id && (
+                      <tr key={`deliveries-${wh.id}`} style={{ borderBottom: editId === wh.id ? '1px solid var(--c-border-bright)' : idx < webhooks.length - 1 ? '1px solid var(--c-border)' : 'none' }}>
+                        <td colSpan={6} className="px-4 py-3" style={{ backgroundColor: 'var(--c-surface-alt)' }}>
+                          <DeliveryLog webhookId={wh.id} />
                         </td>
                       </tr>
                     )}

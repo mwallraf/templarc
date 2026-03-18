@@ -16,7 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings
 from api.models.system_settings import SystemSettings
-from api.schemas.system_settings import AISettingsOut, AISettingsSource
+from api.schemas.system_settings import (
+    AISettingsOut, AISettingsSource,
+    EmailSettingsOut, EmailSettingsSource,
+)
 
 
 async def _get_or_none(db: AsyncSession, org_id: int) -> SystemSettings | None:
@@ -123,6 +126,102 @@ async def save_ai_settings(
         row.ai_model = model
     if base_url is not None:
         row.ai_base_url = base_url
+
+    row.updated_by = updated_by
+    await db.flush()
+    await db.refresh(row)
+
+
+# ---------------------------------------------------------------------------
+# Email / SMTP settings
+# ---------------------------------------------------------------------------
+
+
+async def get_email_settings(db: AsyncSession, org_id: str) -> EmailSettingsOut:
+    row = await _get_or_none(db, org_id)
+    env = get_settings()
+
+    def _r(db_val: str | None, env_val: str) -> tuple[str, str]:
+        if db_val is not None and db_val != "":
+            return db_val, "db"
+        return env_val, "env"
+
+    def _ri(db_val: int | None, env_val: int) -> tuple[int, str]:
+        if db_val is not None:
+            return db_val, "db"
+        return env_val, "env"
+
+    host, host_src = _r(row.smtp_host if row else None, env.SMTP_HOST)
+    port, port_src = _ri(row.smtp_port if row else None, env.SMTP_PORT)
+    user, user_src = _r(row.smtp_user if row else None, env.SMTP_USER)
+    from_, from_src = _r(row.smtp_from if row else None, env.SMTP_FROM)
+
+    db_pw = row.smtp_password if row else None
+    password_configured = bool(db_pw) or bool(env.SMTP_PASSWORD)
+
+    return EmailSettingsOut(
+        host=host,
+        port=port,
+        user=user,
+        from_=from_,
+        password_configured=password_configured,
+        source=EmailSettingsSource(
+            host=host_src,
+            port=port_src,
+            user=user_src,
+            from_=from_src,
+        ),
+    )
+
+
+async def get_resolved_email_config(db: AsyncSession, org_id: str) -> dict:
+    """Return resolved SMTP config dict for constructing EmailService."""
+    row = await _get_or_none(db, org_id)
+    env = get_settings()
+
+    def _p(db_val, env_val):
+        return db_val if (db_val is not None and db_val != "") else env_val
+
+    def _pi(db_val, env_val):
+        return db_val if db_val is not None else env_val
+
+    db_pw = row.smtp_password if row else None
+    password = db_pw if db_pw else env.SMTP_PASSWORD
+
+    return {
+        "smtp_host": _p(row.smtp_host if row else None, env.SMTP_HOST),
+        "smtp_port": _pi(row.smtp_port if row else None, env.SMTP_PORT),
+        "smtp_user": _p(row.smtp_user if row else None, env.SMTP_USER),
+        "smtp_password": password,
+        "smtp_from": _p(row.smtp_from if row else None, env.SMTP_FROM),
+    }
+
+
+async def save_email_settings(
+    db: AsyncSession,
+    org_id: str,
+    updated_by: str,
+    host: str | None,
+    port: int | None,
+    user: str | None,
+    password: str | None,
+    from_: str | None,
+) -> None:
+    row = await _get_or_none(db, org_id)
+    if row is None:
+        row = SystemSettings(org_id=org_id)
+        db.add(row)
+
+    if host is not None:
+        row.smtp_host = host
+    if port is not None:
+        row.smtp_port = port
+    if user is not None:
+        row.smtp_user = user
+    if password is not None:
+        row.smtp_password = password  # "" clears the override
+    if from_ is not None:
+        row.smtp_from = from_
 
     row.updated_by = updated_by
     await db.flush()

@@ -60,13 +60,23 @@ from api.schemas.admin import (
     GitRemoteStatusOut,
     GitRemoteTestOut,
     GitSyncRequest,
+    OrgSettingsOut,
+    OrgSettingsPatch,
+    OrgStatsOut,
     PromoteReport,
     PromoteRequest,
     PromoteTemplateRewrite,
     SyncReport,
     SyncStatusReport,
+    WebhookDeliveryListOut,
+    WebhookDeliveryOut,
 )
 from api.core.secrets import SecretNotFoundError, SecretResolver
+from api.models.api_key import ApiKey
+from api.models.organization import Organization
+from api.models.render_history import RenderHistory
+from api.models.user import User
+from api.models.webhook_delivery import WebhookDelivery
 from api.services import custom_filter_service, git_sync_service
 from api.services.audit_log_service import log_write
 from api.services.git_service import GitService, GitServiceError, parse_frontmatter
@@ -1090,3 +1100,184 @@ async def test_remote_connection(
     )
 
     return GitRemoteTestOut(**result)
+
+
+# ===========================================================================
+# Phase 13A — Org settings
+# ===========================================================================
+
+@router.get(
+    "/org",
+    response_model=OrgSettingsOut,
+    summary="Get organisation settings",
+    description="Return current organisation settings. Org-admin only.",
+)
+async def get_org_settings(
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_org_admin),
+) -> OrgSettingsOut:
+    result = await db.execute(select(Organization).where(Organization.id == token.org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    return OrgSettingsOut.model_validate(org)
+
+
+@router.patch(
+    "/org",
+    response_model=OrgSettingsOut,
+    summary="Update organisation settings",
+    description="Update display_name, logo_url, timezone, retention_days. Org-admin only.",
+)
+async def patch_org_settings(
+    body: OrgSettingsPatch,
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_org_admin),
+) -> OrgSettingsOut:
+    result = await db.execute(select(Organization).where(Organization.id == token.org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found")
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(org, field, value)
+
+    await db.flush()
+    await db.refresh(org)
+    await log_write(db, token.sub, "update", "organization", org.id, body.model_dump(exclude_unset=True))
+    return OrgSettingsOut.model_validate(org)
+
+
+# ===========================================================================
+# Phase 13A — Usage stats
+# ===========================================================================
+
+@router.get(
+    "/stats",
+    response_model=OrgStatsOut,
+    summary="Organisation usage statistics",
+    description="Aggregate counts for the caller's organisation. Org-admin only.",
+)
+async def get_org_stats(
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_org_admin),
+) -> OrgStatsOut:
+    from datetime import datetime as _dt, timedelta, timezone as _tz
+
+    _now = _dt.now(_tz.utc)
+
+    users_total = (await db.execute(
+        select(func.count()).select_from(User).where(User.organization_id == token.org_id)
+    )).scalar_one()
+
+    projects_total = (await db.execute(
+        select(func.count()).select_from(Project).where(Project.organization_id == token.org_id)
+    )).scalar_one()
+
+    templates_total = (await db.execute(
+        select(func.count()).select_from(Template)
+        .join(Project, Template.project_id == Project.id)
+        .where(Project.organization_id == token.org_id)
+    )).scalar_one()
+
+    # Renders — join render_history → templates → projects → org
+    _renders_base = (
+        select(func.count()).select_from(RenderHistory)
+        .join(Template, RenderHistory.template_id == Template.id)
+        .join(Project, Template.project_id == Project.id)
+        .where(Project.organization_id == token.org_id)
+    )
+    renders_total = (await db.execute(_renders_base)).scalar_one()
+
+    renders_last_30d = (await db.execute(
+        _renders_base.where(RenderHistory.rendered_at >= (_now - timedelta(days=30)))
+    )).scalar_one()
+
+    renders_last_7d = (await db.execute(
+        _renders_base.where(RenderHistory.rendered_at >= (_now - timedelta(days=7)))
+    )).scalar_one()
+
+    from datetime import datetime as _dt2, timezone as _tz2
+    api_keys_active = (await db.execute(
+        select(func.count()).select_from(ApiKey).where(
+            ApiKey.organization_id == token.org_id,
+            (ApiKey.expires_at.is_(None)) | (ApiKey.expires_at > _dt2.now(_tz2.utc)),
+        )
+    )).scalar_one()
+
+    storage_templates_count = (await db.execute(
+        select(func.count()).select_from(Template)
+        .join(Project, Template.project_id == Project.id)
+        .where(Project.organization_id == token.org_id, Template.git_path.isnot(None))
+    )).scalar_one()
+
+    return OrgStatsOut(
+        users_total=users_total,
+        projects_total=projects_total,
+        templates_total=templates_total,
+        renders_total=renders_total,
+        renders_last_30d=renders_last_30d,
+        renders_last_7d=renders_last_7d,
+        api_keys_active=api_keys_active,
+        storage_templates_count=storage_templates_count,
+    )
+
+
+# ===========================================================================
+# Phase 13A — Webhook delivery log
+# ===========================================================================
+
+@router.get(
+    "/webhooks/{webhook_id}/deliveries",
+    response_model=WebhookDeliveryListOut,
+    summary="List webhook delivery attempts",
+    description="Paginated delivery log for a webhook, newest first. Org-admin only.",
+)
+async def list_webhook_deliveries(
+    webhook_id: int,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_org_admin),
+) -> WebhookDeliveryListOut:
+    from api.models.render_webhook import RenderWebhook
+
+    # Verify webhook belongs to caller's org
+    wh = await db.execute(
+        select(RenderWebhook).where(
+            RenderWebhook.id == webhook_id,
+            RenderWebhook.organization_id == token.org_id,
+        )
+    )
+    if not wh.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    total_result = await db.execute(
+        select(func.count()).select_from(WebhookDelivery).where(WebhookDelivery.webhook_id == webhook_id)
+    )
+    total = total_result.scalar_one()
+
+    rows = await db.execute(
+        select(WebhookDelivery)
+        .where(WebhookDelivery.webhook_id == webhook_id)
+        .order_by(WebhookDelivery.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    deliveries = rows.scalars().all()
+
+    return WebhookDeliveryListOut(
+        items=[
+            WebhookDeliveryOut(
+                id=d.id,
+                webhook_id=d.webhook_id,
+                event=d.event,
+                status_code=d.status_code,
+                error=d.error,
+                duration_ms=d.duration_ms,
+                created_at=d.created_at.isoformat(),
+            )
+            for d in deliveries
+        ],
+        total=total,
+    )

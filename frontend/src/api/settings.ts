@@ -65,3 +65,62 @@ export async function testAISettings(): Promise<AITestResult> {
   if (!res.ok) throw new Error('Test request failed')
   return res.json()
 }
+
+// ── Email / SMTP ─────────────────────────────────────────────────────────────
+
+export interface EmailSettingsSource {
+  host: string   // "db" | "env"
+  port: string   // "db" | "env"
+  user: string   // "db" | "env"
+  from_: string  // "db" | "env"
+}
+
+export interface EmailSettingsOut {
+  host: string
+  port: number
+  user: string
+  from_: string
+  password_configured: boolean
+  source: EmailSettingsSource
+}
+
+export interface EmailSettingsUpdate {
+  host?: string | null
+  port?: number | null
+  user?: string | null
+  password?: string | null
+  from_?: string | null
+}
+
+export interface EmailTestResult {
+  success: boolean
+  error: string | null
+}
+
+export async function getEmailSettings(): Promise<EmailSettingsOut> {
+  const res = await fetch(`${API_BASE}/settings/email`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Failed to fetch email settings')
+  return res.json()
+}
+
+export async function updateEmailSettings(data: EmailSettingsUpdate): Promise<EmailSettingsOut> {
+  const res = await fetch(`${API_BASE}/settings/email`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Save failed' }))
+    throw new Error(err.detail ?? 'Save failed')
+  }
+  return res.json()
+}
+
+export async function testEmailSettings(): Promise<EmailTestResult> {
+  const res = await fetch(`${API_BASE}/settings/email/test`, {
+    method: 'POST',
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw new Error('Test request failed')
+  return res.json()
+}

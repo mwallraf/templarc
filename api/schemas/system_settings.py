@@ -40,3 +40,36 @@ class AITestResult(BaseModel):
     provider: str | None
     model: str | None
     error: str | None
+
+
+# ── Email / SMTP ──────────────────────────────────────────────────────────────
+
+class EmailSettingsSource(BaseModel):
+    host: str   # "db" | "env"
+    port: str   # "db" | "env"
+    user: str   # "db" | "env"
+    from_: str  # "db" | "env"
+
+
+class EmailSettingsOut(BaseModel):
+    """Effective SMTP settings. Password is never returned."""
+    host: str
+    port: int
+    user: str
+    from_: str
+    password_configured: bool
+    source: EmailSettingsSource
+
+
+class EmailSettingsUpdate(BaseModel):
+    """Pass None to leave unchanged. Pass '' for host to revert to env fallback."""
+    host: str | None = None
+    port: int | None = None
+    user: str | None = None
+    password: str | None = None   # None = keep; "" = clear DB override
+    from_: str | None = None
+
+
+class EmailTestResult(BaseModel):
+    success: bool
+    error: str | None

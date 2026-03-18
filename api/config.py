@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     # Idempotent — skipped silently if the seed organisation already exists.
     SEED_ON_STARTUP: bool = False
 
+    # --- Email (Phase 13A) --------------------------------------------------
+    SMTP_HOST: str = ""                          # Empty = email disabled
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@templarc.io"
+    FRONTEND_URL: str = "http://localhost:5173"  # Used to build password reset links
+
     # --- AI assistant -------------------------------------------------------
     # Provider: "anthropic" | "openai" | "" (empty = disabled)
     AI_PROVIDER: str = ""

@@ -32,6 +32,7 @@ from sqlalchemy import text
 
 from api.config import get_settings
 from api.core.rate_limit import limiter
+from api.core.scheduler import start_scheduler, stop_scheduler
 from api.database import AsyncSessionLocal, engine
 from api.routers import ai, admin, auth, catalog, features, parameters, quickpads, render, sandbox, templates, webhooks
 from api.routers import settings as settings_router
@@ -80,9 +81,13 @@ async def lifespan(app: FastAPI):
             await session.commit()
         logger.info("Seed step complete")
 
+    # --- Background scheduler ---
+    start_scheduler(AsyncSessionLocal)
+
     yield
 
     # Shutdown
+    stop_scheduler()
     await engine.dispose()
     logger.info("Database engine disposed — shutdown complete")
 

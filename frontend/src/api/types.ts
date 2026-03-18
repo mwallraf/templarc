@@ -905,3 +905,49 @@ export interface WebhookTestResult {
   response_body: string | null
   error: string | null
 }
+
+// ── Org Settings & Stats ─────────────────────────────────────────────────────
+
+export interface OrgSettingsOut {
+  id: string
+  name: string
+  display_name: string | null
+  logo_url: string | null
+  timezone: string
+  retention_days: number | null
+}
+
+export interface OrgSettingsPatch {
+  display_name?: string | null
+  logo_url?: string | null
+  timezone?: string
+  retention_days?: number | null
+}
+
+export interface OrgStatsOut {
+  users_total: number
+  projects_total: number
+  templates_total: number
+  renders_total: number
+  renders_last_30d: number
+  renders_last_7d: number
+  api_keys_active: number
+  storage_templates_count: number
+}
+
+// ── Webhook Deliveries ───────────────────────────────────────────────────────
+
+export interface WebhookDeliveryOut {
+  id: string
+  webhook_id: number
+  event: string
+  status_code: number | null
+  error: string | null
+  duration_ms: number | null
+  created_at: string
+}
+
+export interface WebhookDeliveryListOut {
+  items: WebhookDeliveryOut[]
+  total: number
+}

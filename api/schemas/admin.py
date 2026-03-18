@@ -568,3 +568,64 @@ class GitRemoteTestOut(BaseModel):
     success: bool
     message: str
     branch_sha: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 13A — Org settings + stats
+# ---------------------------------------------------------------------------
+
+class OrgSettingsOut(BaseModel):
+    """Current organisation settings."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    name: str
+    display_name: str
+    description: str | None
+    logo_url: str | None
+    timezone: str
+    retention_days: int | None
+    is_active: bool
+
+
+class OrgSettingsPatch(BaseModel):
+    """Fields that org_admin may update."""
+    display_name: str | None = None
+    description: str | None = None
+    logo_url: str | None = None
+    timezone: str | None = None
+    retention_days: int | None = None
+
+
+class OrgStatsOut(BaseModel):
+    """Aggregate usage statistics for the caller's organisation."""
+    users_total: int
+    projects_total: int
+    templates_total: int
+    renders_total: int
+    renders_last_30d: int
+    renders_last_7d: int
+    api_keys_active: int
+    storage_templates_count: int
+
+
+# ---------------------------------------------------------------------------
+# Phase 13A — Webhook delivery log
+# ---------------------------------------------------------------------------
+
+class WebhookDeliveryOut(BaseModel):
+    """A single webhook delivery attempt."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    webhook_id: int
+    event: str
+    status_code: int | None
+    error: str | None
+    duration_ms: int | None
+    created_at: str
+
+
+class WebhookDeliveryListOut(BaseModel):
+    items: list[WebhookDeliveryOut]
+    total: int

@@ -53,3 +53,13 @@ export async function updateMe(data: MeUpdate): Promise<MeOut> {
   const res = await apiClient.patch<MeOut>('/auth/me', data)
   return res.data
 }
+
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const res = await apiClient.post<{ message: string }>('/auth/forgot-password', { email })
+  return res.data
+}
+
+export async function resetPassword(token: string, new_password: string): Promise<{ message: string }> {
+  const res = await apiClient.post<{ message: string }>('/auth/reset-password', { token, new_password })
+  return res.data
+}

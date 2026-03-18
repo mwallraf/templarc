@@ -737,3 +737,95 @@ async def delete_api_key(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
     await db.delete(api_key)
     await db.commit()
+
+
+# ===========================================================================
+# Phase 13A — Password reset via email
+# ===========================================================================
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post(
+    "/forgot-password",
+    summary="Request a password reset link",
+    description=(
+        "Send a password reset link to the given email address. "
+        "Always returns 200 — never reveals whether the address exists."
+    ),
+)
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    settings = get_settings()
+
+    # Look up user by email (no org scoping — email is globally unique)
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+
+    if user is not None:
+        from api.core.email import EmailService
+        from api.services import settings_service as _ss
+
+        now = datetime.now(timezone.utc)
+        payload = {
+            "sub": user.username,
+            "purpose": "password_reset",
+            "iat": now,
+            "exp": now + timedelta(minutes=15),
+        }
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+
+        cfg = await _ss.get_resolved_email_config(db, user.organization_id)
+        email_svc = EmailService(**cfg)
+        try:
+            email_svc.send_password_reset(body.email, reset_url)
+        except Exception:
+            pass  # Already logged inside EmailService; don't reveal failure
+
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@router.post(
+    "/reset-password",
+    summary="Reset password using a token",
+    description="Verify the reset token and update the user's password.",
+)
+async def reset_password(
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    settings = get_settings()
+
+    try:
+        payload = jwt.decode(body.token, settings.SECRET_KEY, algorithms=["HS256"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if payload.get("purpose") != "password_reset":
+        raise HTTPException(status_code=400, detail="Invalid token purpose")
+
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    if not body.new_password or len(body.new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+
+    user.password_hash = _bcrypt.hashpw(body.new_password.encode(), _bcrypt.gensalt()).decode()
+    await db.commit()
+
+    return {"message": "Password updated."}

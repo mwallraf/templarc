@@ -19,6 +19,7 @@ import asyncio
 import base64
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -30,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.secrets import SecretResolver
 from api.models.render_webhook import RenderWebhook
+from api.models.webhook_delivery import WebhookDelivery
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,7 @@ async def dispatch_one(
     webhook: RenderWebhook,
     ctx: WebhookContext,
     secret_resolver: SecretResolver,
+    db: AsyncSession | None = None,
 ) -> None:
     """
     Fire one webhook.
@@ -123,9 +126,12 @@ async def dispatch_one(
     - Renders payload (default JSON or payload_template)
     - Resolves auth header via SecretResolver
     - Sends HTTP request with httpx
+    - Records a WebhookDelivery row in DB if db is provided
     - Raises WebhookError on failure when on_error='block'
     - Logs at WARNING level on failure when on_error='warn'
     """
+    event = "render.completed"
+
     # Build payload
     try:
         if webhook.payload_template:
@@ -134,10 +140,13 @@ async def dispatch_one(
             payload_str = _build_default_payload(ctx)
     except Exception as exc:
         msg = f"Webhook {webhook.id} ({webhook.name!r}) payload render failed: {exc}"
+        await _record_delivery(db, webhook.id, event, {}, None, None, str(exc), None)
         if webhook.on_error == "block":
             raise WebhookError(msg) from exc
         logger.warning(msg)
         return
+
+    payload_dict = json.loads(payload_str)
 
     # Build headers
     headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -147,12 +156,14 @@ async def dispatch_one(
             headers["Authorization"] = f"Bearer {token}"
         except Exception as exc:
             msg = f"Webhook {webhook.id} ({webhook.name!r}) auth resolution failed: {exc}"
+            await _record_delivery(db, webhook.id, event, payload_dict, None, None, str(exc), None)
             if webhook.on_error == "block":
                 raise WebhookError(msg) from exc
             logger.warning(msg)
             return
 
     # Send HTTP request
+    t0 = time.monotonic()
     try:
         async with httpx.AsyncClient(timeout=webhook.timeout_seconds) as client:
             response = await client.request(
@@ -161,6 +172,11 @@ async def dispatch_one(
                 content=payload_str,
                 headers=headers,
             )
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        await _record_delivery(
+            db, webhook.id, event, payload_dict,
+            response.status_code, response.text[:2000], None, duration_ms,
+        )
         if response.is_success:
             logger.info(
                 "Webhook %d (%r) → %s %s",
@@ -178,10 +194,41 @@ async def dispatch_one(
     except WebhookError:
         raise
     except Exception as exc:
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        await _record_delivery(db, webhook.id, event, payload_dict, None, None, str(exc), duration_ms)
         msg = f"Webhook {webhook.id} ({webhook.name!r}) request failed: {exc}"
         if webhook.on_error == "block":
             raise WebhookError(msg) from exc
         logger.warning(msg)
+
+
+async def _record_delivery(
+    db: AsyncSession | None,
+    webhook_id: int,
+    event: str,
+    payload: dict,
+    status_code: int | None,
+    response_body: str | None,
+    error: str | None,
+    duration_ms: int | None,
+) -> None:
+    """Insert a WebhookDelivery row. Best-effort — never raises."""
+    if db is None:
+        return
+    try:
+        delivery = WebhookDelivery(
+            webhook_id=webhook_id,
+            event=event,
+            payload=payload,
+            status_code=status_code,
+            response_body=response_body,
+            error=error,
+            duration_ms=duration_ms,
+        )
+        db.add(delivery)
+        await db.flush()
+    except Exception as exc:
+        logger.warning("Failed to record webhook delivery: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -298,8 +345,8 @@ async def dispatch_webhooks(
 
     # Blocking webhooks — awaited; failure propagates as WebhookError → 502
     for w in block_webhooks:
-        await dispatch_one(w, ctx, secret_resolver)
+        await dispatch_one(w, ctx, secret_resolver, db=db)
 
     # Fire-and-forget webhooks
     for w in warn_webhooks:
-        asyncio.create_task(dispatch_one(w, ctx, secret_resolver))
+        asyncio.create_task(dispatch_one(w, ctx, secret_resolver, db=db))

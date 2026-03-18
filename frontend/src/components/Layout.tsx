@@ -174,7 +174,17 @@ const SYSTEM_LINKS = [
 ]
 
 // Route namespaces that have no standalone page — links to them would 404.
-const _NO_LINK_SEGMENTS = new Set(['render', 'history'])
+const _NO_LINK_SEGMENTS = new Set(['render', 'history', 'admin'])
+
+// Sub-paths under /admin/ that belong to the Studio section (not System/Admin).
+const _STUDIO_SUBPATHS = new Set(['templates', 'features', 'parameters', 'filters', 'webhooks', 'members'])
+
+function _segmentLabel(seg: string, segments: string[]): string {
+  if (seg === 'admin') {
+    return _STUDIO_SUBPATHS.has(segments[1]) ? 'Studio' : 'Admin'
+  }
+  return decodeURIComponent(seg)
+}
 
 function Breadcrumbs() {
   const { pathname } = useLocation()
@@ -190,16 +200,17 @@ function Breadcrumbs() {
         const to = '/' + segments.slice(0, i + 1).join('/')
         const isLast = i === segments.length - 1
         const isLinkable = !isLast && !_NO_LINK_SEGMENTS.has(seg)
+        const label = _segmentLabel(seg, segments)
         return (
           <span key={to} className="flex items-center gap-1.5">
             <span style={{ color: 'var(--c-border-bright)' }}>/</span>
             {isLinkable ? (
               <Link to={to} className="hover:text-slate-300 transition-colors capitalize">
-                {decodeURIComponent(seg)}
+                {label}
               </Link>
             ) : (
               <span className={isLast ? 'text-slate-300 font-medium capitalize' : 'capitalize'} style={isLast ? undefined : { color: 'var(--c-muted-3)' }}>
-                {decodeURIComponent(seg)}
+                {label}
               </span>
             )}
           </span>

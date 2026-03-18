@@ -1,9 +1,13 @@
 """
 System settings router.
 
-GET  /settings/ai        — read effective AI settings (admin only)
-PUT  /settings/ai        — save AI settings to DB (admin only)
-POST /settings/ai/test   — test current AI configuration (admin only)
+GET  /settings/ai         — read effective AI settings (admin only)
+PUT  /settings/ai         — save AI settings to DB (admin only)
+POST /settings/ai/test    — test current AI configuration (admin only)
+
+GET  /settings/email      — read effective SMTP settings (admin only)
+PUT  /settings/email      — save SMTP settings to DB (admin only)
+POST /settings/email/test — send a test email (admin only)
 
 Settings follow DB-wins-over-env precedence:
   env var  →  DB override  (DB wins when set)
@@ -16,7 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.auth import TokenData, require_org_admin
 from api.database import get_db
-from api.schemas.system_settings import AISettingsOut, AISettingsUpdate, AITestResult
+from api.schemas.system_settings import (
+    AISettingsOut, AISettingsUpdate, AITestResult,
+    EmailSettingsOut, EmailSettingsUpdate, EmailTestResult,
+)
 from api.services import settings_service
 from api.services.ai_service import get_provider_from_config
 
@@ -94,3 +101,73 @@ async def test_ai_settings(
         model=cfg["model"] if enabled else None,
         error=error,
     )
+
+
+# ---------------------------------------------------------------------------
+# Email / SMTP settings
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/email",
+    response_model=EmailSettingsOut,
+    summary="Get effective SMTP settings",
+)
+async def get_email_settings(
+    current_user: TokenData = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_db),
+) -> EmailSettingsOut:
+    return await settings_service.get_email_settings(db, current_user.org_id)
+
+
+@router.put(
+    "/email",
+    response_model=EmailSettingsOut,
+    summary="Save SMTP settings",
+)
+async def update_email_settings(
+    body: EmailSettingsUpdate,
+    current_user: TokenData = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_db),
+) -> EmailSettingsOut:
+    await settings_service.save_email_settings(
+        db=db,
+        org_id=current_user.org_id,
+        updated_by=current_user.sub,
+        host=body.host,
+        port=body.port,
+        user=body.user,
+        password=body.password,
+        from_=body.from_,
+    )
+    await db.commit()
+    return await settings_service.get_email_settings(db, current_user.org_id)
+
+
+@router.post(
+    "/email/test",
+    response_model=EmailTestResult,
+    summary="Send a test email",
+)
+async def test_email_settings(
+    current_user: TokenData = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_db),
+) -> EmailTestResult:
+    from api.core.email import EmailService
+    cfg = await settings_service.get_resolved_email_config(db, current_user.org_id)
+    svc = EmailService(**cfg)
+    if not svc.enabled:
+        return EmailTestResult(success=False, error="SMTP host is not configured.")
+    try:
+        # Find the current user's email to send the test to
+        from sqlalchemy import select
+        from api.models.user import User
+        result = await db.execute(
+            select(User).where(User.username == current_user.sub)
+        )
+        user = result.scalar_one_or_none()
+        to_email = user.email if user and user.email else current_user.sub
+        svc.send_password_reset(to_email, f"https://example.com/test-reset?token=test")
+        return EmailTestResult(success=True, error=None)
+    except Exception as exc:
+        return EmailTestResult(success=False, error=str(exc))

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func  # Integer already here
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,6 +42,14 @@ class SystemSettings(Base):
     ai_api_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_base_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    # ── SMTP / Email ─────────────────────────────────────────────────────────
+    # NULL means "use the env var fallback" for each field independently.
+    smtp_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    smtp_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    smtp_user: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    smtp_password: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    smtp_from: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # ── Audit ────────────────────────────────────────────────────────────────
     updated_at: Mapped[datetime] = mapped_column(

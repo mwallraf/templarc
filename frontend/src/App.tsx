@@ -22,6 +22,8 @@ import RequireOrgAdmin from './components/RequireOrgAdmin'
 import TemplateEditorPage from './pages/admin/TemplateEditorPage'
 import Profile from './pages/Profile'
 import Login from './pages/Login'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import QuickpadsPage from './pages/Quickpads'
 import Sandbox from './pages/Sandbox'
 
@@ -31,6 +33,8 @@ export default function App() {
       {/* Public routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Protected routes — RequireAuth redirects to /login if not authenticated */}
       <Route element={<RequireAuth />}>
