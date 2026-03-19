@@ -629,3 +629,33 @@ class WebhookDeliveryOut(BaseModel):
 class WebhookDeliveryListOut(BaseModel):
     items: list[WebhookDeliveryOut]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 — Render analytics
+# ---------------------------------------------------------------------------
+
+class RenderDayPoint(BaseModel):
+    """Daily render count point in a time series."""
+    date: str   # ISO date string "YYYY-MM-DD"
+    total: int
+    errors: int
+
+
+class RenderTimeSeriesOut(BaseModel):
+    """Response from GET /admin/stats/renders-over-time."""
+    days: int
+    series: list[RenderDayPoint]
+
+
+class TopTemplateItem(BaseModel):
+    """A single item in the top-templates ranking."""
+    template_id: str
+    display_name: str
+    render_count: int
+    error_count: int
+
+
+class TopTemplatesOut(BaseModel):
+    """Response from GET /admin/stats/top-templates."""
+    items: list[TopTemplateItem]

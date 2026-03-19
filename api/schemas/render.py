@@ -178,6 +178,9 @@ class RenderHistoryOut(BaseModel):
     display_label: str | None = None
     # Phase 10: username of the renderer (populated via JOIN in list endpoint)
     rendered_by_username: str | None = None
+    # Phase 14: render outcome
+    status: str = "success"
+    error_message: str | None = None
 
 
 class RenderHistoryListOut(BaseModel):

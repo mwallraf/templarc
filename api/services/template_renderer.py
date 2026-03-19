@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import re
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -551,6 +552,31 @@ class TemplateRenderer:
         try:
             rendered_body = env.from_string(template_body).render(**_to_nested(local_ctx))
         except jinja2.TemplateError as exc:
+            render_error_msg = traceback.format_exc()[:2000]
+            if persist and render_id is not None:
+                # Persist the failed render with status="error"
+                try:
+                    user_result = await self._db.execute(
+                        select(User.id).where(User.username == user)
+                    )
+                    rendered_by_id_err: str | None = user_result.scalar_one_or_none()
+                    history = RenderHistory(
+                        id=render_id,
+                        template_id=template_id,
+                        template_git_sha=git_sha,
+                        resolved_parameters=full_context,
+                        raw_output="",
+                        rendered_by=rendered_by_id_err,
+                        notes=notes,
+                        display_label=None,
+                        status="error",
+                        error_message=render_error_msg,
+                    )
+                    self._db.add(history)
+                    await self._db.flush()
+                    await self._db.commit()
+                except Exception as persist_exc:
+                    logger.warning("Failed to persist error render_history: %s", persist_exc)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Jinja2 rendering failed: {exc}",
@@ -615,6 +641,8 @@ class TemplateRenderer:
                 rendered_by=rendered_by_id,
                 notes=notes,
                 display_label=display_label,
+                status="success",
+                error_message=None,
             )
             self._db.add(history)
             await self._db.flush()

@@ -256,6 +256,7 @@ async def list_render_history(
     display_label: str | None = Query(None, description="Substring match on display_label"),
     rendered_by_me: bool = Query(False, description="Filter to current user's renders only"),
     grouped: bool = Query(False, description="Sort by (template_id, display_label, rendered_at DESC) for grouping"),
+    status_filter: str | None = Query(None, alias="status", description="Filter by render status: success | error | partial"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -276,6 +277,8 @@ async def list_render_history(
         q = q.where(RenderHistory.rendered_at <= date_to)
     if display_label:
         q = q.where(RenderHistory.display_label.ilike(f"%{display_label}%"))
+    if status_filter:
+        q = q.where(RenderHistory.status == status_filter)
     if search:
         search_pattern = f"%{search}%"
         q = q.where(

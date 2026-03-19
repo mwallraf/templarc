@@ -30,6 +30,7 @@ Secret values are never returned by any endpoint.  For db-type secrets the
 plaintext value is encrypted with Fernet before storage.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import bcrypt as _bcrypt
@@ -59,10 +60,13 @@ from api.core.auth import (
 from api.models.api_key import ApiKey
 from api.schemas.api_key import ApiKeyCreate, ApiKeyCreatedOut, ApiKeyOut
 from api.core.secrets import encrypt_secret
-from api.database import get_db
+from api.database import AsyncSessionLocal, get_db
 from api.models.secret import Secret, SecretType
 from api.models.user import User
 from api.schemas.secret import SecretCreate, SecretOut
+from api.services.audit_log_service import log_write
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -149,7 +153,7 @@ def _build_token(user: User) -> str:
     return jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
 
 
-async def _dispatch_login(username: str, password: str, db: AsyncSession) -> TokenOut:
+async def _dispatch_login(username: str, password: str, db: AsyncSession, ip: str = "unknown") -> TokenOut:
     """
     Authenticate using the active backend (LDAP or local) and return a JWT.
 
@@ -159,6 +163,7 @@ async def _dispatch_login(username: str, password: str, db: AsyncSession) -> Tok
     settings = get_settings()
 
     user_info: UserInfo | None
+    method = "ldap" if settings.LDAP_SERVER else "local"
 
     if settings.LDAP_SERVER:
         svc = LDAPAuthService(
@@ -173,10 +178,20 @@ async def _dispatch_login(username: str, password: str, db: AsyncSession) -> Tok
             # LocalAuthService only matches users with is_ldap=False + a password_hash,
             # so pure LDAP accounts cannot bypass LDAP via this path.
             user_info = await LocalAuthService.authenticate(username, password, db)
+            if user_info is not None:
+                method = "local"  # fell back to local
     else:
         user_info = await LocalAuthService.authenticate(username, password, db)
 
     if user_info is None:
+        # Log failed login using a standalone session (request session may roll back)
+        try:
+            async with AsyncSessionLocal() as audit_db:
+                await log_write(audit_db, username, "login_failed", "auth", None,
+                                {"method": method, "ip": ip, "reason": "invalid_credentials"})
+                await audit_db.commit()
+        except Exception as audit_exc:
+            logger.warning("Failed to write login_failed audit log: %s", audit_exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -188,6 +203,12 @@ async def _dispatch_login(username: str, password: str, db: AsyncSession) -> Tok
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Log successful login
+    try:
+        await log_write(db, username, "login", "auth", None, {"method": method, "ip": ip})
+    except Exception as audit_exc:
+        logger.warning("Failed to write login audit log: %s", audit_exc)
 
     # Update last_login
     user.last_login = datetime.now(timezone.utc)
@@ -239,7 +260,8 @@ async def login_json(
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenOut:
-    return await _dispatch_login(body.username, body.password, db)
+    ip = request.client.host if request.client else "unknown"
+    return await _dispatch_login(body.username, body.password, db, ip=ip)
 
 
 @router.post(
@@ -264,8 +286,16 @@ async def login_local(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Local login is disabled when LDAP is configured. Use POST /auth/login.",
         )
+    ip = request.client.host if request.client else "unknown"
     user_info = await LocalAuthService.authenticate(body.username, body.password, db)
     if user_info is None:
+        try:
+            async with AsyncSessionLocal() as audit_db:
+                await log_write(audit_db, body.username, "login_failed", "auth", None,
+                                {"method": "local", "ip": ip, "reason": "invalid_credentials"})
+                await audit_db.commit()
+        except Exception as audit_exc:
+            logger.warning("Failed to write login_failed audit log: %s", audit_exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -273,6 +303,10 @@ async def login_local(
         )
     result = await db.execute(select(User).where(User.username == body.username))
     user = result.scalar_one()
+    try:
+        await log_write(db, body.username, "login", "auth", None, {"method": "local", "ip": ip})
+    except Exception as audit_exc:
+        logger.warning("Failed to write login audit log: %s", audit_exc)
     user.last_login = datetime.now(timezone.utc)
     await db.commit()
     return TokenOut(access_token=_build_token(user))
@@ -770,6 +804,7 @@ async def forgot_password(
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
+    email_found = user is not None
     if user is not None:
         from api.core.email import EmailService
         from api.services import settings_service as _ss
@@ -790,6 +825,14 @@ async def forgot_password(
             email_svc.send_password_reset(body.email, reset_url)
         except Exception:
             pass  # Already logged inside EmailService; don't reveal failure
+
+    # Log password_reset_requested (use email address as user_sub — never log the actual email)
+    try:
+        await log_write(db, body.email if email_found else "unknown", "password_reset_requested",
+                        "auth", None, {"email_found": email_found})
+        await db.commit()
+    except Exception as audit_exc:
+        logger.warning("Failed to write password_reset_requested audit log: %s", audit_exc)
 
     return {"message": "If that email exists, a reset link has been sent."}
 
@@ -826,6 +869,10 @@ async def reset_password(
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
 
     user.password_hash = _bcrypt.hashpw(body.new_password.encode(), _bcrypt.gensalt()).decode()
+    try:
+        await log_write(db, user.username, "password_reset_completed", "auth", user.id, {})
+    except Exception as audit_exc:
+        logger.warning("Failed to write password_reset_completed audit log: %s", audit_exc)
     await db.commit()
 
     return {"message": "Password updated."}

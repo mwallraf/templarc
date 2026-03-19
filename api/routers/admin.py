@@ -24,7 +24,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.core.auth import TokenData, require_org_admin
@@ -70,6 +70,10 @@ from api.schemas.admin import (
     SyncStatusReport,
     WebhookDeliveryListOut,
     WebhookDeliveryOut,
+    RenderTimeSeriesOut,
+    RenderDayPoint,
+    TopTemplatesOut,
+    TopTemplateItem,
 )
 from api.core.secrets import SecretNotFoundError, SecretResolver
 from api.models.api_key import ApiKey
@@ -105,7 +109,7 @@ async def run_git_sync(
     body: GitSyncRequest = GitSyncRequest(),
     db: AsyncSession = Depends(get_db),
     git_svc: GitService = Depends(get_git_service),
-    _token: TokenData = Depends(require_org_admin),
+    token: TokenData = Depends(require_org_admin),
 ) -> SyncReport:
     report = await git_sync_service.run_git_sync(
         db,
@@ -114,6 +118,8 @@ async def run_git_sync(
         import_paths=body.import_paths,
         delete_paths=body.delete_paths,
     )
+    await log_write(db, token.sub, "sync", "git", project_id,
+                    {"templates_imported": report.imported})
     await db.commit()
     return report
 
@@ -968,7 +974,7 @@ async def clone_remote(
     except GitServiceError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
-    await log_write(db, token.sub, "create", "project", project_id, {"action": "git_clone", "remote_url": project.remote_url})
+    await log_write(db, token.sub, "clone", "git", project_id, {"remote_url": project.remote_url})
     await db.commit()
 
     return GitRemoteActionOut(success=True, message="Clone completed successfully.")
@@ -1011,7 +1017,8 @@ async def pull_remote(
     except GitServiceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    await log_write(db, token.sub, "update", "project", project_id, {"action": "git_pull", "new_sha": result["new_sha"]})
+    await log_write(db, token.sub, "pull", "git", project_id,
+                    {"branch": project.remote_branch or "main", "new_sha": result["new_sha"]})
     await db.commit()
 
     return GitRemoteActionOut(
@@ -1058,7 +1065,8 @@ async def push_remote(
     except GitServiceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    await log_write(db, token.sub, "update", "project", project_id, {"action": "git_push", "new_sha": result["new_sha"]})
+    await log_write(db, token.sub, "push", "git", project_id,
+                    {"branch": project.remote_branch or "main"})
     await db.commit()
 
     return GitRemoteActionOut(
@@ -1281,3 +1289,96 @@ async def list_webhook_deliveries(
         ],
         total=total,
     )
+
+
+# ===========================================================================
+# Phase 14 — Render analytics
+# ===========================================================================
+
+@router.get(
+    "/stats/renders-over-time",
+    response_model=RenderTimeSeriesOut,
+    summary="Render analytics — daily counts",
+    description=(
+        "Return daily render counts (total and errors) for the past N days.\n\n"
+        "Missing dates are gap-filled with zeros.\n\n"
+        "Requires org admin."
+    ),
+)
+async def renders_over_time(
+    days: int = Query(30, ge=1, le=90),
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_org_admin),
+) -> RenderTimeSeriesOut:
+    # Raw SQL for efficient date aggregation with gap-fill
+    sql = text("""
+        SELECT
+            DATE(rh.rendered_at AT TIME ZONE 'UTC') AS day,
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE rh.status = 'error') AS errors
+        FROM render_history rh
+        JOIN templates t ON t.id = rh.template_id
+        JOIN projects p ON p.id = t.project_id
+        WHERE p.organization_id = :org_id
+          AND rh.rendered_at >= NOW() - INTERVAL '1 day' * :days
+        GROUP BY 1
+        ORDER BY 1 ASC
+    """)
+    result = await db.execute(sql, {"org_id": token.org_id, "days": days})
+    rows = {str(r.day): (int(r.total), int(r.errors)) for r in result}
+
+    # Gap-fill: build complete date range
+    from datetime import date, timedelta
+    today = date.today()
+    series: list[RenderDayPoint] = []
+    for i in range(days):
+        day = today - timedelta(days=days - 1 - i)
+        day_str = day.isoformat()
+        total, errors = rows.get(day_str, (0, 0))
+        series.append(RenderDayPoint(date=day_str, total=total, errors=errors))
+
+    return RenderTimeSeriesOut(days=days, series=series)
+
+
+@router.get(
+    "/stats/top-templates",
+    response_model=TopTemplatesOut,
+    summary="Render analytics — top templates by render count",
+    description=(
+        "Return the top N templates ordered by render count for the past N days.\n\n"
+        "Requires org admin."
+    ),
+)
+async def top_templates(
+    days: int = Query(30, ge=1, le=90),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    token: TokenData = Depends(require_org_admin),
+) -> TopTemplatesOut:
+    sql = text("""
+        SELECT
+            rh.template_id,
+            t.display_name,
+            COUNT(*) AS render_count,
+            COUNT(*) FILTER (WHERE rh.status = 'error') AS error_count
+        FROM render_history rh
+        JOIN templates t ON t.id = rh.template_id
+        JOIN projects p ON p.id = t.project_id
+        WHERE p.organization_id = :org_id
+          AND rh.rendered_at >= NOW() - INTERVAL '1 day' * :days
+          AND rh.template_id IS NOT NULL
+        GROUP BY rh.template_id, t.display_name
+        ORDER BY render_count DESC
+        LIMIT :limit
+    """)
+    result = await db.execute(sql, {"org_id": token.org_id, "days": days, "limit": limit})
+    items = [
+        TopTemplateItem(
+            template_id=str(r.template_id),
+            display_name=r.display_name or r.template_id,
+            render_count=int(r.render_count),
+            error_count=int(r.error_count),
+        )
+        for r in result
+    ]
+    return TopTemplatesOut(items=items)

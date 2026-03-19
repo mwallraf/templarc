@@ -26,6 +26,8 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import QuickpadsPage from './pages/Quickpads'
 import Sandbox from './pages/Sandbox'
+import StatusPage from './pages/StatusPage'
+import AdminObservability from './pages/admin/AdminObservability'
 
 export default function App() {
   return (
@@ -35,6 +37,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/status" element={<StatusPage />} />
 
       {/* Protected routes — RequireAuth redirects to /login if not authenticated */}
       <Route element={<RequireAuth />}>
@@ -62,6 +65,7 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/api-keys" element={<AdminApiKeys />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/observability" element={<AdminObservability />} />
           </Route>
           <Route path="/profile" element={<Profile />} />
           <Route path="*" element={

@@ -171,6 +171,16 @@ const SYSTEM_LINKS = [
       </svg>
     ),
   },
+  {
+    to: '/admin/observability',
+    label: 'Observability',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 shrink-0">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
 ]
 
 // Route namespaces that have no standalone page — links to them would 404.
@@ -387,6 +397,15 @@ export default function Layout() {
               Sign in
             </Link>
           )}
+          <div className="mt-2 text-center">
+            <Link
+              to="/status"
+              className="text-xs transition-colors"
+              style={{ color: 'var(--c-muted-4)' }}
+            >
+              System status
+            </Link>
+          </div>
         </div>
       </aside>
 

@@ -87,6 +87,15 @@ class Settings(BaseSettings):
     # Default points to OpenAI; override for Azure, local Ollama, etc.
     AI_BASE_URL: str = "https://api.openai.com/v1"
 
+    # --- Logging (Phase 14) -------------------------------------------------
+    LOG_LEVEL: str = "INFO"   # DEBUG | INFO | WARNING | ERROR
+    LOG_FORMAT: str = "text"  # "text" for human-readable, "json" for log aggregators
+    LOG_FILE: str = ""        # Absolute path for rotating file output (empty = stdout only)
+
+    # --- Observability (Phase 14) -------------------------------------------
+    APP_VERSION: str = "dev"               # Override in Docker with env var
+    AUDIT_LOG_RETENTION_DAYS: int | None = None  # None = keep forever
+
     # -------------------------------------------------------------------------
     # Computed URL properties
     # -------------------------------------------------------------------------

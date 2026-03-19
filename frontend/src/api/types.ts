@@ -951,3 +951,45 @@ export interface WebhookDeliveryListOut {
   items: WebhookDeliveryOut[]
   total: number
 }
+
+// ── Health / Status (Phase 14) ───────────────────────────────────────────────
+
+export type ComponentStatus = 'ok' | 'warn' | 'error'
+
+export interface ComponentCheck {
+  name: string
+  status: ComponentStatus
+  message: string | null
+  latency_ms: number | null
+}
+
+export interface HealthOut {
+  status: ComponentStatus
+  version: string
+  uptime_seconds: number
+  components: ComponentCheck[]
+}
+
+// ── Render Analytics (Phase 14) ──────────────────────────────────────────────
+
+export interface RenderDayPoint {
+  date: string
+  total: number
+  errors: number
+}
+
+export interface RenderTimeSeriesOut {
+  days: number
+  series: RenderDayPoint[]
+}
+
+export interface TopTemplateItem {
+  template_id: string
+  display_name: string
+  render_count: number
+  error_count: number
+}
+
+export interface TopTemplatesOut {
+  items: TopTemplateItem[]
+}

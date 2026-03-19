@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,13 @@ class RenderHistory(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Phase 10: resolved value of template.history_label_param at render time (for fast search)
     display_label: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Phase 14: render outcome tracking
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="success")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('success', 'error', 'partial')", name="ck_render_history_status"),
+    )
 
     # Relationships — SET NULL FKs: history survives template/user deletion
     template: Mapped["Template | None"] = relationship(

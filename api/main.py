@@ -31,15 +31,19 @@ from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
 from api.config import get_settings
+from api.core.logging import configure_logging
 from api.core.rate_limit import limiter
 from api.core.scheduler import start_scheduler, stop_scheduler
 from api.database import AsyncSessionLocal, engine
 from api.routers import ai, admin, auth, catalog, features, parameters, quickpads, render, sandbox, templates, webhooks
+from api.routers import health as health_router
 from api.routers import settings as settings_router
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
+# Configure structured logging before anything else (reads LOG_LEVEL/LOG_FORMAT/LOG_FILE from env)
+_s = get_settings()
+configure_logging(level=_s.LOG_LEVEL, fmt=_s.LOG_FORMAT, log_file=_s.LOG_FILE)
 logger = logging.getLogger(__name__)
-settings = get_settings()
+settings = _s
 
 
 # ---------------------------------------------------------------------------
@@ -214,35 +218,5 @@ app.include_router(ai.router,         prefix="/ai",         tags=["AI Assistant"
 app.include_router(settings_router.router, prefix="/settings", tags=["Settings"])
 app.include_router(webhooks.router,   prefix="/webhooks",   tags=["Webhooks"])
 app.include_router(sandbox.router,    prefix="/sandbox",    tags=["Sandbox"])
-
-
-# ---------------------------------------------------------------------------
-# System endpoints
-# ---------------------------------------------------------------------------
-
-@app.get(
-    "/health",
-    tags=["System"],
-    summary="Health check",
-    description="Returns 200 if the API and database are reachable, 503 otherwise.",
-    response_description="Service health status",
-)
-async def health() -> dict[str, Any]:
-    """
-    Lightweight liveness + readiness check.
-
-    Runs a `SELECT 1` against the database. Use this endpoint for:
-    - Load balancer health checks
-    - Docker/k8s readiness probes
-    - Startup verification after `alembic upgrade head`
-    """
-    try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "ok", "version": app.version}
-    except Exception as exc:
-        logger.error("Health check failed: %s", exc)
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "error", "database": str(exc), "version": app.version},
-        )
+# Health router: mounted at root (no prefix) for load balancer probes
+app.include_router(health_router.router)

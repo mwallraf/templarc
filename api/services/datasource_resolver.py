@@ -203,10 +203,25 @@ class DataSourceResolver:
     secret_resolver:
         A ``SecretResolver`` bound to the current user's DB session and org_id.
         Pass ``None`` if no sources use auth (safe for tests that don't need it).
+    org_id:
+        Organization ID for audit logging datasource failures (optional).
+    user_sub:
+        JWT sub of the requesting user for audit logging (optional).
+    db:
+        Async DB session for audit logging (optional).
     """
 
-    def __init__(self, secret_resolver: SecretResolver | None = None) -> None:
+    def __init__(
+        self,
+        secret_resolver: SecretResolver | None = None,
+        org_id: str | None = None,
+        user_sub: str | None = None,
+        db: Any | None = None,
+    ) -> None:
         self._secrets = secret_resolver
+        self._org_id = org_id
+        self._user_sub = user_sub
+        self._db = db
 
     # ------------------------------------------------------------------
     # Public API
@@ -352,7 +367,30 @@ class DataSourceResolver:
                 data = response.json()
                 logger.info("[datasource] %r data: %s", source.id, str(data)[:200])
         except Exception as exc:
-            logger.warning("[datasource] Request failed for %r → %s: %s", source.id, url, exc)
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            logger.warning(
+                "datasource_fetch_failed",
+                extra={
+                    "datasource_id": source.id,
+                    "url": url,
+                    "status_code": status_code,
+                    "error": str(exc),
+                },
+            )
+            # Best-effort: persist to audit_log when org context is available
+            if self._db is not None and self._user_sub is not None:
+                try:
+                    from api.services.audit_log_service import log_write
+                    await log_write(
+                        self._db,
+                        self._user_sub,
+                        "fetch_error",
+                        "datasource",
+                        source.id,
+                        {"url": url, "status_code": status_code, "error": str(exc)[:500]},
+                    )
+                except Exception as audit_exc:
+                    logger.debug("audit log write failed for datasource error: %s", audit_exc)
             return self._handle_error(source, str(exc))
 
         _cache_set(cache_key, data, source.cache_ttl)

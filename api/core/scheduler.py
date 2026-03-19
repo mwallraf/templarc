@@ -5,6 +5,9 @@ Jobs:
   - purge_old_render_history: daily at 02:00 UTC
       Deletes render_history rows older than org.retention_days for each
       organisation that has a retention_days value set.
+  - purge_old_audit_log: daily at 03:00 UTC
+      Deletes audit_log rows older than AUDIT_LOG_RETENTION_DAYS.
+      Skipped when AUDIT_LOG_RETENTION_DAYS is None (keep forever).
 
 Started/stopped via the FastAPI lifespan handler in api/main.py.
 """
@@ -14,8 +17,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from api.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +74,34 @@ async def purge_old_render_history(session_factory: async_sessionmaker) -> None:
         await session.commit()
 
 
+async def purge_old_audit_log(session_factory: async_sessionmaker) -> None:
+    """
+    Delete audit_log rows older than AUDIT_LOG_RETENTION_DAYS.
+
+    Skips when AUDIT_LOG_RETENTION_DAYS is None (keep forever).
+    Logs the number of rows deleted.
+    """
+    from api.models.audit_log import AuditLog
+
+    settings = get_settings()
+    if settings.AUDIT_LOG_RETENTION_DAYS is None:
+        logger.debug("Audit log retention: AUDIT_LOG_RETENTION_DAYS is None — skipping purge")
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.AUDIT_LOG_RETENTION_DAYS)
+    async with session_factory() as session:
+        del_result = await session.execute(
+            delete(AuditLog).where(AuditLog.timestamp < cutoff)
+        )
+        deleted = del_result.rowcount
+        if deleted:
+            logger.info(
+                "Audit log retention purge: deleted %d rows older than %s (%d days)",
+                deleted, cutoff.date().isoformat(), settings.AUDIT_LOG_RETENTION_DAYS,
+            )
+        await session.commit()
+
+
 def start_scheduler(session_factory: async_sessionmaker) -> AsyncIOScheduler:
     """Create and start the background scheduler. Call from lifespan startup."""
     global _scheduler
@@ -85,8 +118,20 @@ def start_scheduler(session_factory: async_sessionmaker) -> AsyncIOScheduler:
         id="purge_render_history",
         replace_existing=True,
     )
+    scheduler.add_job(
+        purge_old_audit_log,
+        trigger="cron",
+        hour=3,
+        minute=0,
+        args=[session_factory],
+        id="purge_audit_log",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info("Background scheduler started (purge_render_history runs daily at 02:00 UTC)")
+    logger.info(
+        "Background scheduler started "
+        "(purge_render_history at 02:00 UTC, purge_audit_log at 03:00 UTC)"
+    )
     _scheduler = scheduler
     return scheduler
 

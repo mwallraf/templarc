@@ -32,6 +32,9 @@ import type {
   OrgSettingsPatch,
   OrgStatsOut,
   WebhookDeliveryListOut,
+  RenderTimeSeriesOut,
+  TopTemplatesOut,
+  HealthOut,
 } from './types'
 
 // ── API Keys ────────────────────────────────────────────────────────────────
@@ -164,3 +167,28 @@ export const getOrgStats = () =>
 
 export const getWebhookDeliveries = (webhookId: number, params?: { skip?: number; limit?: number }) =>
   apiClient.get<WebhookDeliveryListOut>(`/admin/webhooks/${webhookId}/deliveries`, { params }).then((r) => r.data)
+
+// ── Audit Log ────────────────────────────────────────────────────────────────
+
+export interface AuditLogParams {
+  user_sub?: string
+  resource_type?: string
+  date_from?: string
+  date_to?: string
+  skip?: number
+  limit?: number
+}
+
+export const getAuditLog = (params?: AuditLogParams) =>
+  apiClient.get('/admin/audit-log', { params }).then((r) => r.data)
+
+// ── Render Analytics (Phase 14) ──────────────────────────────────────────────
+
+export const getRendersOverTime = (days: number) =>
+  apiClient.get<RenderTimeSeriesOut>('/admin/stats/renders-over-time', { params: { days } }).then((r) => r.data)
+
+export const getTopTemplates = (days: number, limit = 10) =>
+  apiClient.get<TopTemplatesOut>('/admin/stats/top-templates', { params: { days, limit } }).then((r) => r.data)
+
+export const getHealthDetail = () =>
+  apiClient.get<HealthOut>('/health/detail').then((r) => r.data)

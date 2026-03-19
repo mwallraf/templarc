@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from api.core.scheduler import purge_old_render_history
+from api.core.scheduler import purge_old_render_history, purge_old_audit_log
 
 
 # ===========================================================================
@@ -96,3 +96,46 @@ async def test_zero_rows_deleted_no_error():
     await purge_old_render_history(factory)
 
     assert session.execute.call_count == 2
+
+
+# ===========================================================================
+# purge_old_audit_log tests (Phase 14)
+# ===========================================================================
+
+def _make_audit_factory(delete_rowcount: int = 0):
+    """Build a mock session factory for audit log purge tests."""
+    mock_session = AsyncMock()
+    delete_result = MagicMock()
+    delete_result.rowcount = delete_rowcount
+    mock_session.execute.return_value = delete_result
+
+    factory = MagicMock()
+    factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    factory.return_value.__aexit__ = AsyncMock(return_value=False)
+    return factory, mock_session
+
+
+@pytest.mark.asyncio
+async def test_purge_audit_log_skipped_when_none(monkeypatch):
+    """When AUDIT_LOG_RETENTION_DAYS is None, no DELETE is issued."""
+    from unittest.mock import patch, MagicMock
+    mock_settings = MagicMock()
+    mock_settings.AUDIT_LOG_RETENTION_DAYS = None
+    with patch("api.core.scheduler.get_settings", return_value=mock_settings):
+        factory, session = _make_audit_factory()
+        await purge_old_audit_log(factory)
+    # No DB interaction expected
+    session.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_purge_audit_log_deletes_when_set(monkeypatch):
+    """When AUDIT_LOG_RETENTION_DAYS=90, DELETE is issued."""
+    from unittest.mock import patch, MagicMock
+    mock_settings = MagicMock()
+    mock_settings.AUDIT_LOG_RETENTION_DAYS = 90
+    with patch("api.core.scheduler.get_settings", return_value=mock_settings):
+        factory, session = _make_audit_factory(delete_rowcount=12)
+        await purge_old_audit_log(factory)
+    session.execute.assert_called_once()
+    session.commit.assert_called_once()
