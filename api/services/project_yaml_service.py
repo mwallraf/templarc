@@ -74,6 +74,14 @@ async def write_project_yaml(
     try:
         git_svc.write_project_yaml(proj.git_path, project_data, author=author)
     except Exception as exc:
-        logger.warning(
-            "Failed to write project.yaml for project %s: %s", project_id, exc
+        # project.yaml is a best-effort write-back (DB is authoritative), so we
+        # never raise here. But this is logged at ERROR — a silent failure means
+        # Git and the DB are now out of sync, which an operator MUST investigate.
+        # Common causes: git ownership mismatch, disk full, repo corruption.
+        logger.error(
+            "project.yaml write-back failed for project %s — Git is out of sync "
+            "with the DB. Check git repository health at: %s. Error: %s",
+            project_id,
+            proj.git_path,
+            exc,
         )

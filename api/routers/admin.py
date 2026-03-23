@@ -19,6 +19,7 @@ Auth: all endpoints require admin privileges.
 from __future__ import annotations
 
 import inspect
+import logging
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -86,6 +87,7 @@ from api.services.audit_log_service import log_write
 from api.services.git_service import GitService, GitServiceError, parse_frontmatter
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -822,6 +824,10 @@ async def promote_parameter(
                     replacements=0,
                 ))
         except Exception as exc:
+            logger.warning(
+                "promote: git rewrite failed for template %s (%s): %s",
+                row.template_name, row.git_path, exc,
+            )
             template_rewrites.append(PromoteTemplateRewrite(
                 template_id=row.template_id,
                 template_name=row.template_name,
@@ -972,7 +978,7 @@ async def clone_remote(
             credential=credential,
         )
     except GitServiceError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     await log_write(db, token.sub, "clone", "git", project_id, {"remote_url": project.remote_url})
     await db.commit()

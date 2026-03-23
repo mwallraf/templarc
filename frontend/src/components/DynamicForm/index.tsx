@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation } from '@tanstack/react-query'
 import type { AvailableFeatureOut, EnrichedParameterOut, FeatureParamOut, FormDefinitionOut, RenderOut, VisibleWhenCondition } from '../../api/types'
@@ -13,6 +13,11 @@ interface DynamicFormProps {
   prefillValues?: Record<string, unknown>
   user?: string
   persist?: boolean
+}
+
+export interface DynamicFormHandle {
+  /** Returns the current form values keyed by parameter name. */
+  getCurrentValues: () => Record<string, unknown>
 }
 
 type EnrichmentOverrides = Record<string, Partial<EnrichedParameterOut>>
@@ -485,13 +490,13 @@ function FeaturesSection({ features, enabledIds, onToggle, register }: FeaturesS
 
 // ── Main DynamicForm ──────────────────────────────────────────────────────────
 
-export default function DynamicForm({
+const DynamicForm = forwardRef<DynamicFormHandle, DynamicFormProps>(function DynamicForm({
   templateId,
   definition,
   prefillValues,
   user = 'anonymous',
   persist = true,
-}: DynamicFormProps) {
+}, ref) {
   const [enrichmentOverrides, setEnrichmentOverrides] = useState<EnrichmentOverrides>({})
   const [loadingFields, setLoadingFields] = useState<Set<string>>(new Set())
   const [renderResult, setRenderResult] = useState<RenderOut | null>(null)
@@ -530,6 +535,16 @@ export default function DynamicForm({
     defaultValues: buildDefaultValues(definition.parameters, prefillValues),
     mode: 'onBlur',
   })
+
+  useImperativeHandle(ref, () => ({
+    getCurrentValues() {
+      const values: Record<string, unknown> = {}
+      for (const p of effectiveParams) {
+        values[p.name] = getValues(p.name as never)
+      }
+      return values
+    },
+  }))
 
   useEffect(() => {
     setEnrichmentOverrides({})
@@ -741,4 +756,6 @@ export default function DynamicForm({
       {renderResult && <RenderOutput result={renderResult} />}
     </div>
   )
-}
+})
+
+export default DynamicForm

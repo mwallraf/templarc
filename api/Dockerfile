@@ -15,6 +15,17 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
+# Configure git system-wide (applies to ALL users and any UID the container runs as).
+#  safe.directory '*'    — allows git to operate on bind-mounted dirs even when the
+#                          host directory owner UID differs from the container UID.
+#                          This is mandatory on servers where the host user ≠ container user.
+#  user.email / name     — identity for any commit that doesn't come via GitPython Actor.
+#  init.defaultBranch    — suppresses the "master vs main" warning on git init.
+RUN git config --system --add safe.directory '*' \
+    && git config --system user.email "templarc@localhost" \
+    && git config --system user.name "Templarc" \
+    && git config --system init.defaultBranch "main"
+
 # Install uv for fast, deterministic dependency installation.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 

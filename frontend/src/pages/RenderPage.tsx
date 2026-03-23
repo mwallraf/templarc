@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useLocation, Link } from 'react-router-dom'
-import { resolveParams, listPresets, createPreset } from '../api/render'
+import { resolveParams, listPresets, createPreset, deletePreset } from '../api/render'
 import { getTemplate, getTemplateVariables } from '../api/templates'
 import type { RenderPresetOut } from '../api/types'
-import DynamicForm from '../components/DynamicForm'
+import DynamicForm, { type DynamicFormHandle } from '../components/DynamicForm'
 import ApiCodePanel, { getApiBase } from '../components/ApiCodePanel'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -106,21 +106,24 @@ function SavePresetDialog({ onSave, onCancel, isPending, error }: SavePresetDial
 interface PresetToolbarProps {
   presets: RenderPresetOut[]
   onLoadPreset: (preset: RenderPresetOut) => void
+  onDeletePreset: (preset: RenderPresetOut) => void
   onSavePreset: () => void
+  isDeleting: boolean
 }
 
-function PresetToolbar({ presets, onLoadPreset, onSavePreset }: PresetToolbarProps) {
-  const [selected, setSelected] = useState('')
+function PresetToolbar({ presets, onLoadPreset, onDeletePreset, onSavePreset, isDeleting }: PresetToolbarProps) {
+  const [selectedId, setSelectedId] = useState('')
 
-  function handleSelect(e: React.ChangeEvent<HTMLSelectElement>) {
-    const val = e.target.value
-    setSelected(val)
-    if (val) {
-      const preset = presets.find((p) => String(p.id) === val)
-      if (preset) {
-        onLoadPreset(preset)
-        setSelected('')
-      }
+  const selectedPreset = presets.find((p) => String(p.id) === selectedId) ?? null
+
+  function handleLoad() {
+    if (selectedPreset) onLoadPreset(selectedPreset)
+  }
+
+  function handleDelete() {
+    if (selectedPreset && window.confirm(`Delete preset "${selectedPreset.name}"?`)) {
+      onDeletePreset(selectedPreset)
+      setSelectedId('')
     }
   }
 
@@ -137,19 +140,47 @@ function PresetToolbar({ presets, onLoadPreset, onSavePreset }: PresetToolbarPro
       {presets.length === 0 ? (
         <span className="flex-1 text-xs italic" style={{ color: 'var(--c-dim)' }}>No presets saved yet</span>
       ) : (
-        <select
-          value={selected}
-          onChange={handleSelect}
-          className="flex-1 text-xs rounded-lg px-3 py-1.5 border appearance-none outline-none"
-          style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)', color: 'var(--c-muted-1)' }}
-        >
-          <option value="">Load a preset…</option>
-          {presets.map((p) => (
-            <option key={p.id} value={String(p.id)}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <>
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="flex-1 text-xs rounded-lg px-3 py-1.5 border appearance-none outline-none"
+            style={{ backgroundColor: 'var(--c-base)', borderColor: 'var(--c-border)', color: 'var(--c-muted-1)' }}
+          >
+            <option value="">Select a preset…</option>
+            {presets.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            disabled={!selectedPreset}
+            onClick={handleLoad}
+            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: 'var(--c-muted-1)', borderColor: 'var(--c-border)', backgroundColor: 'var(--c-base)' }}
+          >
+            Load
+          </button>
+
+          <button
+            type="button"
+            disabled={!selectedPreset || isDeleting}
+            onClick={handleDelete}
+            title="Delete selected preset"
+            className="flex-shrink-0 p-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: '#f87171', borderColor: 'rgba(248,113,113,0.2)', backgroundColor: 'rgba(248,113,113,0.07)' }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+            </svg>
+          </button>
+        </>
       )}
 
       <button
@@ -208,6 +239,7 @@ export default function RenderPage() {
 
   // Key to force DynamicForm re-mount when a preset is loaded (resets form values)
   const [formKey, setFormKey] = useState(0)
+  const formRef = useRef<DynamicFormHandle>(null)
   const [activePrefill, setActivePrefill] = useState<Record<string, unknown> | undefined>(
     (location.state as { prefill?: Record<string, unknown> })?.prefill,
   )
@@ -250,12 +282,19 @@ export default function RenderPage() {
     enabled: !!id,
   })
 
+  const deleteMut = useMutation({
+    mutationFn: (presetId: number) => deletePreset(id, presetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['presets', id] })
+    },
+  })
+
   const saveMut = useMutation({
     mutationFn: (data: { name: string; description: string }) =>
       createPreset(id, {
         name: data.name,
         description: data.description || undefined,
-        params: activePrefill ?? {},
+        params: formRef.current?.getCurrentValues() ?? activePrefill ?? {},
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['presets', id] })
@@ -352,6 +391,8 @@ export default function RenderPage() {
         <PresetToolbar
           presets={presets}
           onLoadPreset={handleLoadPreset}
+          onDeletePreset={(preset) => deleteMut.mutate(preset.id)}
+          isDeleting={deleteMut.isPending}
           onSavePreset={() => {
             setSaveError(null)
             setShowSaveDialog(true)
@@ -372,6 +413,7 @@ export default function RenderPage() {
 
       <DynamicForm
         key={formKey}
+        ref={formRef}
         templateId={id}
         definition={filteredDefinition!}
         prefillValues={activePrefill}

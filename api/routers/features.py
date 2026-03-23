@@ -24,6 +24,7 @@ Mounted at /features in main.py. Routes:
 Auth: read endpoints require get_current_user; write endpoints require require_admin.
 """
 
+import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -51,9 +52,10 @@ from api.schemas.feature import (
     TemplateFeatureOut,
     TemplateFeatureUpdate,
 )
-from api.services.git_service import GitService, TemplateNotFoundError
+from api.services.git_service import GitService, GitServiceError, TemplateNotFoundError
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -267,12 +269,18 @@ async def update_feature_body(
     abs_path = os.path.join(git_service._repo.working_dir, feature.snippet_path)
     os.makedirs(os.path.dirname(abs_path), exist_ok=True)
 
-    git_service.write_template(
-        git_path=feature.snippet_path,
-        content=body.body,
-        message=body.commit_message,
-        author=body.author,
-    )
+    try:
+        git_service.write_template(
+            git_path=feature.snippet_path,
+            content=body.body,
+            message=body.commit_message,
+            author=body.author,
+        )
+    except GitServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Git repository unavailable — feature body not saved: {exc}",
+        ) from exc
     return {"snippet_path": feature.snippet_path, "ok": True}
 
 

@@ -65,6 +65,7 @@ export default function AdminSecrets() {
       {showForm && (
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
+          autoComplete="off"
           className="rounded-xl border p-5 mb-6 space-y-4"
           style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
@@ -123,6 +124,7 @@ export default function AdminSecrets() {
               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Secret value (stored in DB)</label>
               <input
                 type="password"
+                autoComplete="new-password"
                 className={inputClass}
                 style={inputStyle}
                 {...register('value')}

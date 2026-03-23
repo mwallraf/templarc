@@ -43,7 +43,7 @@ from api.schemas.catalog import (
     TemplateOut,
     VariableRefOut,
 )
-from api.services.git_service import GitService, TemplateNotFoundError
+from api.services.git_service import GitService, GitServiceError, TemplateNotFoundError
 from api.services.jinja_parser import extract_variables
 
 
@@ -158,12 +158,18 @@ async def create_project(
     await db.flush()  # get proj.id assigned
 
     # Initialize the Git subdirectory with a .gitkeep
-    git_svc.write_template(
-        f"{git_path}/.gitkeep",
-        "",
-        message=f"Initialize project directory: {data.name}",
-        author="api",
-    )
+    try:
+        git_svc.write_template(
+            f"{git_path}/.gitkeep",
+            "",
+            message=f"Initialize project directory: {data.name}",
+            author="api",
+        )
+    except GitServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Git repository unavailable — project not created: {exc}",
+        ) from exc
 
     return proj
 
@@ -268,12 +274,18 @@ async def create_template(
 
     initial_content = data.content if data.content.strip() else _build_initial_content(data.name)
 
-    git_svc.write_template(
-        git_path,
-        initial_content,
-        message=f"Add template: {data.name}",
-        author=data.author,
-    )
+    try:
+        git_svc.write_template(
+            git_path,
+            initial_content,
+            message=f"Add template: {data.name}",
+            author=data.author,
+        )
+    except GitServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Git repository unavailable — template not created: {exc}",
+        ) from exc
 
     tmpl = Template(
         project_id=data.project_id,
@@ -324,7 +336,13 @@ async def update_template(
                 detail="Template has no git_path; cannot write content.",
             )
         message = data.commit_message or f"Update template: {tmpl.name}"
-        git_svc.write_template(tmpl.git_path, data.content, message=message, author=data.author)
+        try:
+            git_svc.write_template(tmpl.git_path, data.content, message=message, author=data.author)
+        except GitServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Git repository unavailable — template content not saved: {exc}",
+            ) from exc
 
         # Extract variables from the new body and annotate with registration
         _, body = git_svc.parse_frontmatter(data.content)
@@ -374,6 +392,11 @@ async def delete_template(
         except TemplateNotFoundError:
             # File already absent from disk — still remove the DB record
             pass
+        except GitServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Git repository unavailable — template not deleted: {exc}",
+            ) from exc
 
     await db.delete(tmpl)
     await db.flush()

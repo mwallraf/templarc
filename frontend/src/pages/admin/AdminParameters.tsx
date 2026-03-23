@@ -565,6 +565,7 @@ function PromoteDialog({ group, onConfirm, onCancel, isPending, result }: Promot
           <label className="block text-xs mb-1.5" style={{ color: 'var(--c-muted-3)' }}>New parameter name</label>
           <input
             type="text"
+            autoComplete="off"
             value={toName}
             onChange={(e) => setToName(e.target.value)}
             className="w-full rounded-lg px-3 py-2 text-sm font-mono border focus:outline-none"
@@ -1126,6 +1127,7 @@ export default function AdminParameters() {
       <div className="flex gap-3 mb-6 flex-wrap">
         <input
           type="text"
+          autoComplete="off"
           placeholder="Search by name or label…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

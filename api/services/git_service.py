@@ -115,10 +115,58 @@ class GitService:
         self._root = Path(repo_path).resolve()
         if not self._root.exists():
             self._root.mkdir(parents=True)
+        self._repo = self._open_or_init_repo(self._root)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _open_or_init_repo(path: Path) -> git.Repo:
+        """
+        Open the git repo at *path*, initialising it if it doesn't exist yet.
+
+        Handles two extra failure modes that bare ``git.Repo()`` does not:
+
+        * **Dubious ownership** (Git 2.35.2+): git refuses to operate on a
+          directory whose owner UID differs from the current process UID.
+          This is common when a bind-mounted host directory is owned by the
+          host user while the container runs as root (or vice-versa). We
+          detect the error, mark the path as safe, and retry — so the
+          application is self-healing rather than requiring sysadmin
+          intervention after every fresh install.
+
+        * **GitCommandError on other transient failures**: surfaced as
+          ``GitServiceError`` with the original message preserved.
+        """
         try:
-            self._repo = git.Repo(str(self._root))
+            return git.Repo(str(path))
         except git.InvalidGitRepositoryError:
-            self._repo = git.Repo.init(str(self._root))
+            repo = git.Repo.init(str(path))
+            # Ensure git identity is set locally so commits never fail due to
+            # missing global config (belt-and-suspenders alongside the system
+            # config set in the Dockerfile).
+            with repo.config_writer() as cfg:
+                if not cfg.has_option("user", "email"):
+                    cfg.set_value("user", "email", "templarc@localhost")
+                if not cfg.has_option("user", "name"):
+                    cfg.set_value("user", "name", "Templarc")
+            return repo
+        except git.GitCommandError as exc:
+            msg = str(exc)
+            if "dubious ownership" in msg.lower():
+                # Self-heal: register this path as safe and retry.
+                git.cmd.Git().config("--global", "--add", "safe.directory", str(path))
+                try:
+                    return git.Repo(str(path))
+                except git.InvalidGitRepositoryError:
+                    return git.Repo.init(str(path))
+                except git.GitCommandError as retry_exc:
+                    raise GitServiceError(
+                        f"Git repository at {path} is still inaccessible after "
+                        f"adding safe.directory: {retry_exc}"
+                    ) from retry_exc
+            raise GitServiceError(f"Failed to open git repository at {path}: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -375,14 +423,12 @@ class GitService:
 
         The subdirectory is expected to be a self-contained Git repository
         (i.e. cloned from a remote). If it is not yet a repo, one is
-        initialised (useful before the first clone).
+        initialised (useful before the first clone). Ownership mismatches
+        are auto-healed via ``safe.directory`` — see ``_open_or_init_repo``.
         """
         abs_dir = self._abs(project_git_path)
         abs_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            return git.Repo(str(abs_dir))
-        except git.InvalidGitRepositoryError:
-            return git.Repo.init(str(abs_dir))
+        return self._open_or_init_repo(abs_dir)
 
     def clone_from_remote(
         self,

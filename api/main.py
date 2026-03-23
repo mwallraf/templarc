@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
         if commits:
             logger.info("Git repository accessible — HEAD: %s", commits[0].hexsha[:8])
         else:
-            logger.warning("templates_repo has no commits — templates will not render")
+            logger.info("Git repository initialised — no commits yet (fresh install)")
     except Exception as exc:
         logger.warning("Git repository check failed: %s", exc)
 

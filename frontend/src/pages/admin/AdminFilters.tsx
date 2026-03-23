@@ -215,6 +215,7 @@ function FiltersTab() {
       {showForm && (
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
+          autoComplete="off"
           className="rounded-xl border p-5 mb-6 space-y-4"
           style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
@@ -257,6 +258,7 @@ function FiltersTab() {
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--c-muted-4)' }}>Test</p>
             <div className="flex gap-2 items-center">
               <input
+                autoComplete="off"
                 className="flex-1 rounded-lg px-3 py-1.5 text-sm font-mono border focus:outline-none"
                 style={inputStyle}
                 value={testInput}
@@ -357,6 +359,7 @@ function FiltersTab() {
                             <div>
                               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
                               <input
+                                autoComplete="off"
                                 className={inputClass}
                                 style={inputStyle}
                                 value={editDescription}
@@ -502,6 +505,7 @@ function ObjectsTab() {
       {showForm && (
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
+          autoComplete="off"
           className="rounded-xl border p-5 mb-6 space-y-4"
           style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
@@ -610,6 +614,7 @@ function ObjectsTab() {
                             <div>
                               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
                               <input
+                                autoComplete="off"
                                 className={inputClass}
                                 style={inputStyle}
                                 value={editDescription}
@@ -732,6 +737,7 @@ function MacrosTab() {
       {showForm && (
         <form
           onSubmit={handleSubmit((data) => createMut.mutate(data))}
+          autoComplete="off"
           className="rounded-xl border p-5 mb-6 space-y-4"
           style={{ backgroundColor: 'var(--c-surface)', borderColor: 'var(--c-border)' }}
         >
@@ -848,6 +854,7 @@ function MacrosTab() {
                             <div>
                               <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--c-muted-2)' }}>Description</label>
                               <input
+                                autoComplete="off"
                                 className={inputClass}
                                 style={inputStyle}
                                 value={editDescription}
