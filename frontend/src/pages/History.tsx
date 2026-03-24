@@ -89,7 +89,7 @@ function PreviewPanel({
   onClose,
   templateName,
 }: {
-  historyId: number
+  historyId: string
   onClose: () => void
   templateName: string
 }) {
@@ -234,8 +234,8 @@ function CompareModal({
   templateMap,
   onClose,
 }: {
-  ids: [number, number]
-  templateMap: Map<number, TemplateOut>
+  ids: [string, string]
+  templateMap: Map<string, TemplateOut>
   onClose: () => void
 }) {
   const { data: left, isLoading: leftLoading } = useQuery({
@@ -370,11 +370,11 @@ function CompareModal({
 interface GroupRowProps {
   label: string
   items: RenderHistoryOut[]
-  templateMap: Map<number, TemplateOut>
-  compareSelected: number[]
-  onCompareToggle: (id: number) => void
-  onPreview: (id: number) => void
-  onCopyRow: (id: number) => void
+  templateMap: Map<string, TemplateOut>
+  compareSelected: string[]
+  onCompareToggle: (id: string) => void
+  onPreview: (id: string) => void
+  onCopyRow: (id: string) => void
 }
 
 function GroupRow({ label, items, templateMap, compareSelected, onCompareToggle, onPreview, onCopyRow }: GroupRowProps) {
@@ -442,10 +442,10 @@ interface HistoryRowProps {
   tpl: TemplateOut | null | undefined
   isLast: boolean
   isSubRow?: boolean
-  compareSelected: number[]
-  onCompareToggle: (id: number) => void
-  onPreview: (id: number) => void
-  onCopyRow: (id: number) => void
+  compareSelected: string[]
+  onCompareToggle: (id: string) => void
+  onPreview: (id: string) => void
+  onCopyRow: (id: string) => void
 }
 
 function HistoryRow({ item, tpl, isLast, isSubRow, compareSelected, onCompareToggle, onPreview, onCopyRow }: HistoryRowProps) {
@@ -588,8 +588,8 @@ export default function History() {
   const [myRendersOnly, setMyRendersOnly] = useState(false)
   const [grouped, setGrouped] = useState(false)
   const [page, setPage] = useState(0)
-  const [previewId, setPreviewId] = useState<number | null>(null)
-  const [compareSelected, setCompareSelected] = useState<number[]>([])
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [compareSelected, setCompareSelected] = useState<string[]>([])
   const [showCompare, setShowCompare] = useState(false)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -671,7 +671,7 @@ export default function History() {
   const hasFilters = projectId || templateId || dateFrom || dateTo || debouncedSearch || myRendersOnly
 
   // Compare toggle: FIFO-2
-  function handleCompareToggle(id: number) {
+  function handleCompareToggle(id: string) {
     setCompareSelected((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       if (prev.length >= 2) return [prev[1], id]
@@ -680,8 +680,8 @@ export default function History() {
   }
 
   // Copy row: fetch detail lazily, copy raw_output
-  const copyingRef = useRef<Set<number>>(new Set())
-  function handleCopyRow(id: number) {
+  const copyingRef = useRef<Set<string>>(new Set())
+  function handleCopyRow(id: string) {
     if (copyingRef.current.has(id)) return
     copyingRef.current.add(id)
     getRenderHistory(id)

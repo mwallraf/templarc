@@ -39,7 +39,7 @@ const inputSty = { backgroundColor: 'var(--c-card)', borderColor: 'var(--c-borde
 // ── Parameters sub-panel ─────────────────────────────────────────────────────
 
 interface ParamsPanelProps {
-  featureId: number
+  featureId: string
 }
 
 const WIDGET_TYPES = ['text', 'number', 'textarea', 'select', 'readonly', 'hidden']
@@ -51,11 +51,11 @@ function ParamsPanel({ featureId }: ParamsPanelProps) {
 
   const { data: params = [], isLoading } = useQuery({
     queryKey: ['feature-params', featureId],
-    queryFn: () => listFeatureParameters(featureId),
+    queryFn: () => listFeatureParameters(Number(featureId)),
   })
 
   const addMut = useMutation({
-    mutationFn: () => createFeatureParameter(featureId, {
+    mutationFn: () => createFeatureParameter(Number(featureId), {
       name: newParam.name,
       label: newParam.label || undefined,
       widget_type: newParam.widget_type,
@@ -71,7 +71,7 @@ function ParamsPanel({ featureId }: ParamsPanelProps) {
   })
 
   const delMut = useMutation({
-    mutationFn: (paramId: number) => deleteFeatureParameter(featureId, paramId),
+    mutationFn: (paramId: number) => deleteFeatureParameter(Number(featureId), paramId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['feature-params', featureId] })
       qc.invalidateQueries({ queryKey: ['features'] })
@@ -239,7 +239,7 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
   // Load body lazily when switching to snippet tab
   const { isFetching: bodyFetching } = useQuery({
     queryKey: ['feature-body', feature.id],
-    queryFn: () => getFeatureBody(feature.id),
+    queryFn: () => getFeatureBody(Number(feature.id)),
     enabled: activeTab === 'snippet' && !bodyLoaded,
     onSuccess: (data: { body: string }) => {
       setBody(data.body)
@@ -248,7 +248,7 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
   } as Parameters<typeof useQuery>[0])
 
   const saveBodyMut = useMutation({
-    mutationFn: () => updateFeatureBody(feature.id, { body, commit_message: `Update ${feature.name} snippet` }),
+    mutationFn: () => updateFeatureBody(Number(feature.id), { body, commit_message: `Update ${feature.name} snippet` }),
     onSuccess: () => {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -256,12 +256,12 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
   })
 
   const updateMut = useMutation({
-    mutationFn: () => updateFeature(feature.id, { label }),
+    mutationFn: () => updateFeature(Number(feature.id), { label }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['features'] }),
   })
 
   const deleteMut = useMutation({
-    mutationFn: () => deleteFeature(feature.id),
+    mutationFn: () => deleteFeature(Number(feature.id)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['features'] })
       onDeleted()
@@ -472,7 +472,7 @@ function EditorPanel({ feature, onDeleted }: EditorPanelProps) {
 // ── Create feature form ──────────────────────────────────────────────────────
 
 interface CreateFormProps {
-  projectId: number
+  projectId: string
   onCreated: (feature: FeatureOut) => void
   onCancel: () => void
 }
@@ -555,7 +555,7 @@ export default function AdminFeatures() {
 
   const { data: featureList, isLoading } = useQuery({
     queryKey: ['features', selectedProjectId],
-    queryFn: () => listFeatures(selectedProjectId ?? undefined, true),
+    queryFn: () => listFeatures(selectedProjectId != null ? Number(selectedProjectId) : undefined, true),
     enabled: selectedProjectId != null,
   })
 

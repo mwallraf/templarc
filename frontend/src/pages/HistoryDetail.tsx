@@ -212,7 +212,7 @@ function ReRenderResult({ result, label }: { result: RenderOut; label: string })
 
 // ── API example builder ───────────────────────────────────────────────────────
 
-function buildHistoryExamples(renderId: number, _resolvedParams: Record<string, unknown>) {
+function buildHistoryExamples(renderId: string, _resolvedParams: Record<string, unknown>) {
   const base = getApiBase()
 
   const curl = `# Fetch stored render

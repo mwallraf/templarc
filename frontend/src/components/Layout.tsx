@@ -397,7 +397,7 @@ export default function Layout() {
               Sign in
             </Link>
           )}
-          <div className="mt-2 text-center">
+          <div className="mt-2 flex items-center justify-center gap-3">
             <Link
               to="/status"
               className="text-xs transition-colors"
@@ -405,6 +405,20 @@ export default function Layout() {
             >
               System status
             </Link>
+            <span style={{ color: 'var(--c-border-bright)' }}>·</span>
+            <a
+              href="/docs/"
+              className="text-xs transition-colors flex items-center gap-1"
+              style={{ color: 'var(--c-muted-4)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-muted-1)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-muted-4)')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 shrink-0">
+                <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+              </svg>
+              Docs
+            </a>
           </div>
         </div>
       </aside>

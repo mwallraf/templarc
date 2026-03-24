@@ -617,7 +617,7 @@ function PromoteDialog({ group, onConfirm, onCancel, isPending, result }: Promot
 
 // ── Duplicates panel ─────────────────────────────────────────────────────────
 
-function DuplicatesPanel({ projectId }: { projectId: number | undefined }) {
+function DuplicatesPanel({ projectId }: { projectId: string | undefined }) {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
   const [promotingGroup, setPromotingGroup] = useState<DuplicateParameterGroup | null>(null)
   const [promoteResult, setPromoteResult] = useState<PromoteReport | null>(null)
@@ -921,17 +921,17 @@ export default function AdminParameters() {
   const isFiltered = Boolean(search || scopeFilter || projectFilter || templateFilter)
 
   // Build name lookup maps
-  const projectMap = new Map<number, string>(
+  const projectMap = new Map<string, string>(
     (projects ?? []).map((p: ProjectOut) => [p.id, p.display_name])
   )
-  const templateMap = new Map<number, { name: string; projectName: string }>(
-    (templates ?? []).map((t: TemplateOut) => [t.id, { name: t.display_name, projectName: projectMap.get(t.project_id ?? 0) ?? '' }])
+  const templateMap = new Map<string, { name: string; projectName: string }>(
+    (templates ?? []).map((t: TemplateOut) => [t.id, { name: t.display_name, projectName: projectMap.get(t.project_id ?? '') ?? '' }])
   )
 
   // Build groups for project scope
-  const projectGroupMap = new Map<number, ParameterOut[]>()
+  const projectGroupMap = new Map<string, ParameterOut[]>()
   for (const p of projectParams) {
-    const pid = p.project_id ?? 0
+    const pid = p.project_id ?? ''
     if (!projectGroupMap.has(pid)) projectGroupMap.set(pid, [])
     projectGroupMap.get(pid)!.push(p)
   }
@@ -942,9 +942,9 @@ export default function AdminParameters() {
   }))
 
   // Build groups for template scope
-  const templateGroupMap = new Map<number, ParameterOut[]>()
+  const templateGroupMap = new Map<string, ParameterOut[]>()
   for (const p of templateParams) {
-    const tid = p.template_id ?? 0
+    const tid = p.template_id ?? ''
     if (!templateGroupMap.has(tid)) templateGroupMap.set(tid, [])
     templateGroupMap.get(tid)!.push(p)
   }

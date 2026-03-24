@@ -631,7 +631,7 @@ const DynamicForm = forwardRef<DynamicFormHandle, DynamicFormProps>(function Dyn
     mutationFn: (params: Record<string, unknown>) =>
       renderTemplate(
         templateId,
-        { params, feature_ids: [...enabledFeatureIds] },
+        { params, feature_ids: [...enabledFeatureIds].map(Number) },
         { persist, user },
       ),
     onSuccess: (result) => setRenderResult(result),

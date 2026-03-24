@@ -736,12 +736,6 @@ function EmailSection({ current }: { current: EmailSettingsOut }) {
   )
 }
 
-// ── Divider ───────────────────────────────────────────────────────────────────
-
-function Divider() {
-  return <hr style={{ borderColor: 'var(--c-border)' }} />
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AdminSettings() {

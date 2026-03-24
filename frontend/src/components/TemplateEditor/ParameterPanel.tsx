@@ -18,7 +18,7 @@ import type { SecretOut } from '../../api/types'
 function DraggableParam({ param }: { param: ParameterOut }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `param-${param.id}`,
-    data: { paramName: param.name, paramId: param.id },
+    data: { paramName: param.name, paramId: param.id, param },
   })
 
   return (
@@ -177,7 +177,6 @@ export function ParameterPanel({
 }: ParameterPanelProps) {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
-  const [searchFocused, setSearchFocused] = useState(false)
 
   // Local sorted copy — optimistically updated on drag, synced when assignedParams changes
   const [sortedParams, setSortedParams] = useState<ParameterOut[]>(() =>
@@ -228,7 +227,7 @@ export function ParameterPanel({
 
   const assignedIds = new Set(assignedParams.map((p) => p.id))
   const filteredResults = (searchResults?.items ?? []).filter((p) => !assignedIds.has(p.id))
-  const showResults = searchFocused || search.length > 0
+  const showResults = true
 
   function handleAddDs(ds: DataSourceDef) {
     if (editingDs) {
@@ -258,31 +257,31 @@ export function ParameterPanel({
   // Features data
   const { data: allFeaturesData } = useQuery({
     queryKey: ['features', projectId],
-    queryFn: () => listFeatures(projectId),
+    queryFn: () => listFeatures(Number(projectId)),
     enabled: activeSection === 'features',
   })
   const allFeatures: FeatureOut[] = (allFeaturesData?.items ?? []).filter((f) => f.is_active)
 
   const { data: attachedFeatures = [] } = useQuery<TemplateFeatureOut[]>({
     queryKey: ['template-features', templateId],
-    queryFn: () => listTemplateFeatures(templateId),
+    queryFn: () => listTemplateFeatures(Number(templateId)),
     enabled: activeSection === 'features',
   })
   const attachedFeatureIds = new Set(attachedFeatures.map((tf) => tf.feature_id))
 
   const attachMut = useMutation({
-    mutationFn: ({ featureId }: { featureId: number }) => attachFeature(templateId, featureId),
+    mutationFn: ({ featureId }: { featureId: number }) => attachFeature(Number(templateId), featureId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['template-features', templateId] }),
   })
 
   const detachMut = useMutation({
-    mutationFn: ({ featureId }: { featureId: number }) => detachFeature(templateId, featureId),
+    mutationFn: ({ featureId }: { featureId: number }) => detachFeature(Number(templateId), featureId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['template-features', templateId] }),
   })
 
   const toggleDefaultMut = useMutation({
     mutationFn: ({ featureId, isDefault }: { featureId: number; isDefault: boolean }) =>
-      updateTemplateFeature(templateId, featureId, { is_default: isDefault }),
+      updateTemplateFeature(Number(templateId), featureId, { is_default: isDefault }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['template-features', templateId] }),
   })
 
@@ -369,8 +368,6 @@ export function ParameterPanel({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                 placeholder="Search parameters…"
                 className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2"
               />
@@ -398,13 +395,6 @@ export function ParameterPanel({
                     ))
                   )}
                 </div>
-              )}
-
-              {!showResults && (
-                <p className="text-xs text-gray-400 italic text-center py-4">
-                  Click to browse or search. Drag into editor to insert{' '}
-                  <code className="bg-gray-100 px-1 rounded">{'{{ name }}'}</code>
-                </p>
               )}
             </div>
           </>
@@ -505,9 +495,9 @@ export function ParameterPanel({
                       disabled={isBusy}
                       onChange={() => {
                         if (isAttached) {
-                          detachMut.mutate({ featureId: feature.id })
+                          detachMut.mutate({ featureId: Number(feature.id) })
                         } else {
-                          attachMut.mutate({ featureId: feature.id })
+                          attachMut.mutate({ featureId: Number(feature.id) })
                         }
                       }}
                       className="mt-0.5 accent-emerald-600"
@@ -526,7 +516,7 @@ export function ParameterPanel({
                             checked={isDefault}
                             disabled={isBusy}
                             onChange={() =>
-                              toggleDefaultMut.mutate({ featureId: feature.id, isDefault: !isDefault })
+                              toggleDefaultMut.mutate({ featureId: Number(feature.id), isDefault: !isDefault })
                             }
                             className="accent-indigo-600"
                           />

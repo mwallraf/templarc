@@ -405,7 +405,7 @@ function ScopeBadge({ scope, projectId }: { scope: string; projectId?: number | 
     queryFn: () => listProjects(),
   })
   const projectName = projectId
-    ? (projects.find((p) => p.id === projectId)?.display_name ?? `#${projectId}`)
+    ? (projects.find((p) => p.id === String(projectId))?.display_name ?? `#${projectId}`)
     : null
 
   return (

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
-import { DndContext, type DragEndEvent, type DragOverEvent, DragOverlay } from '@dnd-kit/core'
+import { DndContext, type DragEndEvent, type DragOverEvent, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { useDroppable } from '@dnd-kit/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { editor as MonacoEditor, IPosition } from 'monaco-editor'
@@ -74,16 +74,20 @@ function buildFrontmatter(
 
 // ── Monaco droppable wrapper ──────────────────────────────────────────────────
 
-function MonacoDropZone({ children, isOver }: { children: React.ReactNode; isOver: boolean }) {
+function MonacoDropZone({ children, isOver, isDragging }: { children: React.ReactNode; isOver: boolean; isDragging: boolean }) {
   const { setNodeRef } = useDroppable({ id: 'monaco-editor' })
   return (
-    <div
-      ref={setNodeRef}
-      className={`h-full transition-colors ${
-        isOver ? 'ring-2 ring-inset ring-indigo-400' : ''
-      }`}
-    >
+    <div ref={setNodeRef} className="relative h-full">
       {children}
+      {/* Transparent overlay during drag prevents Monaco from absorbing pointer events,
+          allowing dnd-kit collision detection to work correctly over the editor area. */}
+      {isDragging && (
+        <div
+          className={`absolute inset-0 z-10 transition-colors ${
+            isOver ? 'ring-2 ring-inset ring-indigo-400 bg-indigo-400/5' : ''
+          }`}
+        />
+      )}
     </div>
   )
 }
@@ -833,7 +837,10 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   const [showSnippetPanel, setShowSnippetPanel] = useState(false)
   const [showMacroPanel, setShowMacroPanel] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
+  const isDragOverRef = useRef(false)
   const [activeDragParam, setActiveDragParam] = useState<string | null>(null)
+  const activeDragParamObjRef = useRef<ParameterOut | null>(null)
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const [toast, setToast] = useState<ToastState | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const snippetBtnRef = useRef<HTMLButtonElement>(null)
@@ -1004,7 +1011,10 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   const insertAtCursor = useCallback((text: string) => {
     const editor = editorRef.current
     if (!editor) return
-    const pos = lastCursorRef.current ?? editor.getPosition()
+    const model = editor.getModel()
+    const pos = lastCursorRef.current ?? editor.getPosition() ?? (model
+      ? { lineNumber: model.getLineCount(), column: model.getLineMaxColumn(model.getLineCount()) }
+      : { lineNumber: 1, column: 1 })
     if (!pos) return
     editor.executeEdits('template-editor', [
       {
@@ -1017,7 +1027,6 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
         text,
       },
     ])
-    editor.focus()
   }, [])
 
   const insertSnippetInclude = useCallback((gitPath: string) => {
@@ -1033,23 +1042,28 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
   // ── dnd-kit handlers ──────────────────────────────────────────────────────
 
   function handleDragStart(event: DragOverEvent) {
-    setActiveDragParam((event.active.data.current as { paramName?: string })?.paramName ?? null)
+    const data = event.active.data.current as { paramName?: string; param?: ParameterOut } | undefined
+    setActiveDragParam(data?.paramName ?? null)
+    activeDragParamObjRef.current = data?.param ?? null
   }
 
   function handleDragOver(event: DragOverEvent) {
-    setIsDragOver(event.over?.id === 'monaco-editor')
+    const over = event.over?.id === 'monaco-editor'
+    isDragOverRef.current = over
+    setIsDragOver(over)
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  function handleDragEnd(_event: DragEndEvent) {
+    const wasOverMonaco = isDragOverRef.current
+    const paramObj = activeDragParamObjRef.current
+    isDragOverRef.current = false
+    activeDragParamObjRef.current = null
     setIsDragOver(false)
     setActiveDragParam(null)
 
-    const paramName = event.active.data.current?.paramName as string | undefined
-    if (!paramName) return
+    if (!wasOverMonaco || !paramObj) return
 
-    if (event.over?.id === 'monaco-editor') {
-      insertAtCursor(`{{ ${paramName} }}`)
-    }
+    handleAssignParam(paramObj)
   }
 
   // ── Parameter panel callbacks ─────────────────────────────────────────────
@@ -1102,6 +1116,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
 
   return (
     <DndContext
+      sensors={dndSensors}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -1250,7 +1265,7 @@ export default function TemplateEditor({ template, initialContent = '' }: Templa
           {/* Left: Monaco editor — grows to fill remaining space */}
           <div className="flex-1 flex flex-col min-h-0 min-w-0">
             <SnippetToolbar onInsert={insertAtCursor} />
-            <MonacoDropZone isOver={isDragOver}>
+            <MonacoDropZone isOver={isDragOver} isDragging={activeDragParam !== null}>
               <Editor
                 height="100%"
                 language="python"

@@ -28,10 +28,10 @@ interface TreeRow {
   hasChildren: boolean
 }
 
-function buildProjectTree(templates: TemplateOut[], projectId: number): TreeRow[] {
+function buildProjectTree(templates: TemplateOut[], projectId: string): TreeRow[] {
   const projectTemplates = templates.filter((t) => t.project_id === projectId && !t.is_snippet)
-  const byParent = new Map<number | null, TemplateOut[]>()
-  const childCount = new Map<number, number>()
+  const byParent = new Map<string | null, TemplateOut[]>()
+  const childCount = new Map<string, number>()
 
   for (const t of projectTemplates) {
     const key = t.parent_template_id ?? null
@@ -48,7 +48,7 @@ function buildProjectTree(templates: TemplateOut[], projectId: number): TreeRow[
 
   const result: TreeRow[] = []
 
-  function dfs(parentId: number | null, depth: number, continuations: boolean[]) {
+  function dfs(parentId: string | null, depth: number, continuations: boolean[]) {
     const children = byParent.get(parentId) ?? []
     children.forEach((child, idx) => {
       const isLast = idx === children.length - 1
@@ -123,7 +123,7 @@ export default function AdminTemplates() {
   })
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteTemplate(id),
+    mutationFn: (id: string) => deleteTemplate(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['templates'] })
       setConfirmDeleteId(null)
@@ -131,12 +131,12 @@ export default function AdminTemplates() {
   })
 
   const toggleFlagMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: TemplateUpdate }) => updateTemplate(id, data),
+    mutationFn: ({ id, data }: { id: string; data: TemplateUpdate }) => updateTemplate(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['templates'] }),
   })
 
   const uploadMut = useMutation({
-    mutationFn: ({ file, projectId }: { file: File; projectId: number }) =>
+    mutationFn: ({ file, projectId }: { file: File; projectId: string }) =>
       uploadTemplate(file, projectId),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['templates'] })
@@ -156,7 +156,7 @@ export default function AdminTemplates() {
     if (locationState?.openCreate) {
       setShowForm(true)
       if (locationState.projectId) {
-        setValue('project_id', locationState.projectId)
+        setValue('project_id', String(locationState.projectId))
       }
       // Clear the state so a refresh doesn't re-open the form
       window.history.replaceState({}, '')
@@ -197,14 +197,14 @@ export default function AdminTemplates() {
     e.target.value = ''
   }
 
-  function onToggleFlag(id: number, data: TemplateUpdate) {
+  function onToggleFlag(id: string, data: TemplateUpdate) {
     toggleFlagMut.mutate({ id, data })
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
   const projectMap = useMemo(
-    () => new Map<number, ProjectOut>((projects ?? []).map((p) => [p.id, p])),
+    () => new Map<string, ProjectOut>((projects ?? []).map((p) => [p.id, p])),
     [projects],
   )
 
@@ -644,7 +644,7 @@ export default function AdminTemplates() {
             <button
               type="button"
               disabled={!importFile || importProjectId === '' || uploadMut.isPending}
-              onClick={() => importFile && importProjectId !== '' && uploadMut.mutate({ file: importFile, projectId: importProjectId as number })}
+              onClick={() => importFile && importProjectId !== '' && uploadMut.mutate({ file: importFile, projectId: importProjectId })}
               className="px-4 py-2 text-sm font-semibold text-white rounded-lg disabled:opacity-40 transition-all"
               style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '0 4px 14px rgba(99,102,241,0.3)' }}
             >
@@ -787,7 +787,7 @@ export default function AdminTemplates() {
               <p className="px-4 py-10 text-center text-sm" style={{ color: 'var(--c-muted-3)' }}>No templates found.</p>
             </div>
           ) : projectGroups.map(({ project, rows, snippets }) => {
-            const pid = project?.id ?? 0
+            const pid = project?.id ?? ''
             const snippetsExpanded = expandedSnippetProjects.has(pid)
             function toggleSnippets() {
               setExpandedSnippetProjects((prev) => {
@@ -1025,7 +1025,7 @@ function TemplateFlagBadges({
   onToggle,
 }: {
   t: TemplateOut
-  onToggle: (id: number, data: TemplateUpdate) => void
+  onToggle: (id: string, data: TemplateUpdate) => void
 }) {
   return (
     <div className="flex items-center gap-1">
@@ -1069,10 +1069,10 @@ function RowActions({
   onDelete,
   isDeleting,
 }: {
-  id: number
-  confirmId: number | null
-  onConfirmDelete: (id: number | null) => void
-  onDelete: (id: number) => void
+  id: string
+  confirmId: string | null
+  onConfirmDelete: (id: string | null) => void
+  onDelete: (id: string) => void
   isDeleting: boolean
 }) {
   if (confirmId === id) {

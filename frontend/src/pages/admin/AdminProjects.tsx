@@ -227,7 +227,7 @@ interface CreateFormProps {
 function CreateForm({ onClose, onSuccess }: CreateFormProps) {
   const [showRemote, setShowRemote] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<ProjectCreate>({
-    defaultValues: { organization_id: 1, output_comment_style: '#', remote_branch: 'main' },
+    defaultValues: { organization_id: '1', output_comment_style: '#', remote_branch: 'main' },
   })
 
   const mut = useMutation({
@@ -246,7 +246,7 @@ function CreateForm({ onClose, onSuccess }: CreateFormProps) {
         className="grid grid-cols-1 sm:grid-cols-2 gap-3"
       >
         {/* Hidden org_id — hard-coded to 1 for single-tenant */}
-        <input type="hidden" {...register('organization_id', { valueAsNumber: true })} />
+        <input type="hidden" {...register('organization_id')} />
 
         <div>
           <label className="block text-xs text-slate-400 mb-1">Name <span style={{ color: '#f87171' }}>*</span></label>
@@ -409,7 +409,7 @@ function EditForm({ project, onClose, onSuccess }: EditFormProps) {
   })
 
   const mut = useMutation({
-    mutationFn: (data: ProjectUpdate) => updateProject(project.id, data),
+    mutationFn: (data: ProjectUpdate) => updateProject(Number(project.id), data),
     onSuccess,
   })
 
@@ -580,7 +580,7 @@ function ProjectRow({ project, templateCount, paramCount, filterCount, objectCou
   const [confirming, setConfirming] = useState(false)
 
   const deleteMut = useMutation({
-    mutationFn: () => deleteProject(project.id),
+    mutationFn: () => deleteProject(Number(project.id)),
     onSuccess: onMutated,
   })
 
@@ -779,7 +779,7 @@ export default function AdminProjects() {
 
   // Per-project counts
   const templateCounts = useMemo(() => {
-    const counts = new Map<number, number>()
+    const counts = new Map<string, number>()
     for (const t of templates ?? []) {
       counts.set(t.project_id, (counts.get(t.project_id) ?? 0) + 1)
     }
@@ -787,7 +787,7 @@ export default function AdminProjects() {
   }, [templates])
 
   const paramCounts = useMemo(() => {
-    const counts = new Map<number, number>()
+    const counts = new Map<string, number>()
     for (const p of projParams?.items ?? []) {
       if (p.project_id != null) {
         counts.set(p.project_id, (counts.get(p.project_id) ?? 0) + 1)
@@ -927,9 +927,9 @@ export default function AdminProjects() {
             project={project}
             templateCount={templateCounts.get(project.id) ?? 0}
             paramCount={paramCounts.get(project.id) ?? 0}
-            filterCount={filterCounts.get(project.id) ?? 0}
-            objectCount={objectCounts.get(project.id) ?? 0}
-            macroCount={macroCounts.get(project.id) ?? 0}
+            filterCount={filterCounts.get(Number(project.id)) ?? 0}
+            objectCount={objectCounts.get(Number(project.id)) ?? 0}
+            macroCount={macroCounts.get(Number(project.id)) ?? 0}
             onMutated={handleMutated}
           />
         ))}

@@ -190,7 +190,7 @@ export default function AdminSecrets() {
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => {
-                            if (confirm(`Delete secret "${s.name}"?`)) deleteMut.mutate(s.id)
+                            if (confirm(`Delete secret "${s.name}"?`)) deleteMut.mutate(Number(s.id))
                           }}
                           className="text-xs font-medium transition-colors"
                           style={{ color: '#ef4444' }}
