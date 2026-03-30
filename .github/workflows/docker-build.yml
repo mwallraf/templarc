@@ -5,16 +5,15 @@ on:
     branches: [main]
   workflow_dispatch:          # allow manual trigger from the GitHub UI
 
-permissions:
-  contents: read
-  packages: write             # needed to push to ghcr.io
-
 env:
   REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write           # needed to push to ghcr.io
 
     steps:
       # ── Checkout ──────────────────────────────────────────────────────────────
