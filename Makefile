@@ -21,18 +21,24 @@ API_URL    ?= http://localhost:8000
 SMOKE_USER ?= admin
 SMOKE_PASS ?= admin
 
+# Registry push defaults (override on CLI: make push REGISTRY=ghcr.io/you VERSION=1.2.3)
+REGISTRY ?= ghcr.io/mwallraf
+VERSION  ?= latest
+
 .DEFAULT_GOAL := help
 
 .PHONY: help \
 	env-prod env-dev \
 	dev dev-d dev-down dev-clean \
-	prod prod-down \
+	prod prod-down prod-pull prod-remote \
 	status logs logs-frontend logs-ldap logs-db logs-all \
 	shell frontend-shell psql ldap-search \
-	migrate \
+	migrate create-admin \
 	test test-unit test-int \
 	smoke \
-	build build-dev
+	build build-dev push \
+	docs-build docs-serve \
+	openapi python-docs screenshots
 
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
@@ -51,7 +57,7 @@ help: ## Show this help
 	@printf "  Login      admin / admin  (LDAP)\n"
 	@printf "  Frontend   http://localhost:5173\n"
 	@printf "  API        $(API_URL)\n"
-	@printf "  Docs       $(API_URL)/docs\n\n"
+	@printf "  API Docs   $(API_URL)/docs\n\n"
 
 
 # ─── Environment setup ────────────────────────────────────────────────────────
@@ -100,6 +106,17 @@ prod: .env ## Build and start production stack in background
 prod-down: ## Stop production stack
 	$(PROD) down
 
+prod-pull: .env ## Pull latest production images from $(REGISTRY) (no build)
+	$(PROD) pull api frontend
+
+prod-remote: prod-pull ## Pull images from $(REGISTRY) and start production stack (no build)
+	$(PROD) up -d
+	@echo ""
+	@echo "Stack started from remote images ($(REGISTRY), version: $(VERSION))"
+	@echo "  make logs       — tail API logs"
+	@echo "  make smoke      — verify the stack is healthy"
+	@echo "  make prod-down  — stop the stack"
+
 
 # ─── Status & logs ────────────────────────────────────────────────────────────
 
@@ -146,6 +163,14 @@ ldap-search: ## List LDAP users in the dev directory (runs ldapsearch inside the
 migrate: ## Run Alembic migrations in the API container (upgrade head)
 	$(DEV) exec api alembic upgrade head
 
+create-admin: ## Create or reset a local admin user in the running prod stack
+	@printf "Username [admin]: "; read u; [ -z "$$u" ] && u=admin; \
+	 printf "Password: "; read -s p; echo ""; \
+	 $(PROD) exec -T \
+	   -e _ADMIN_USER="$$u" \
+	   -e _ADMIN_PASS="$$p" \
+	   api python - < scripts/create_admin.py
+
 
 # ─── Tests (local — requires activated .venv) ─────────────────────────────────
 
@@ -166,6 +191,56 @@ build: ## Build all production Docker images without starting containers
 
 build-dev: ## Build all dev Docker images without starting containers
 	$(DEV) build
+
+
+# ─── Registry push ────────────────────────────────────────────────────────────
+# Build production images and push to a container registry.
+# Set REGISTRY and VERSION on the CLI or export them as env vars:
+#   make push REGISTRY=ghcr.io/yourname VERSION=1.2.3
+#
+# One-time login:  echo $PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+
+push: ## Build and push production images to $(REGISTRY) (set REGISTRY and VERSION)
+	@echo "Building production images..."
+	$(PROD) build
+	@echo ""
+	@echo "Tagging as $(REGISTRY)/templarc-api:$(VERSION) and $(REGISTRY)/templarc-frontend:$(VERSION)"
+	docker tag templarc-api      $(REGISTRY)/templarc-api:$(VERSION)
+	docker tag templarc-frontend $(REGISTRY)/templarc-frontend:$(VERSION)
+	@echo ""
+	@echo "Pushing to $(REGISTRY)..."
+	docker push $(REGISTRY)/templarc-api:$(VERSION)
+	docker push $(REGISTRY)/templarc-frontend:$(VERSION)
+	@echo ""
+	@echo "Done. Images pushed:"
+	@echo "  $(REGISTRY)/templarc-api:$(VERSION)"
+	@echo "  $(REGISTRY)/templarc-frontend:$(VERSION)"
+
+
+# ─── Smoke test ───────────────────────────────────────────────────────────────
+# Sends four requests to verify the running stack is healthy end-to-end.
+# Override defaults:  make smoke API_URL=http://localhost:8000 SMOKE_USER=admin SMOKE_PASS=admin
+
+docs-build: ## Build static Docusaurus site into docs/build/
+	cd docs && npm run build
+
+docs-serve: ## Build and serve the docs site locally
+	cd docs && npm run build && npm run serve
+
+openapi: ## Regenerate openapi.json from the FastAPI app
+	@echo "Regenerating openapi.json..."
+	@uv run python -c "import json,os; \
+	  os.environ.setdefault('DATABASE_URL','x'); \
+	  os.environ.setdefault('SECRET_KEY','x'); \
+	  os.environ.setdefault('TEMPLATES_REPO_PATH','./templates_repo'); \
+	  from api.main import app; print(json.dumps(app.openapi(),indent=2))" > openapi.json
+	@echo "Done — openapi.json updated"
+
+python-docs: ## Generate Python module docs via pdoc (requires: uv pip install pdoc)
+	uv run pdoc api/ --output-dir docs/static/python-api/
+
+screenshots: ## Capture tutorial screenshots (requires running app on BASE_URL)
+	cd docs && npx ts-node scripts/capture-screenshots.ts
 
 
 # ─── Smoke test ───────────────────────────────────────────────────────────────

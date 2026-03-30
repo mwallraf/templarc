@@ -1,0 +1,6 @@
+FROM node:20-alpine
+WORKDIR /docs
+COPY package*.json ./
+RUN npm ci
+EXPOSE 3001
+CMD ["npm", "start", "--", "--host", "0.0.0.0"]

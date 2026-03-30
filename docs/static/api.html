@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Templarc API Reference</title>
+  <style>
+    body { margin: 0; padding: 0; background: #080a12; }
+    .redoc-wrap { font-family: 'Inter', system-ui, sans-serif; }
+    #back-link {
+      position: fixed;
+      top: 12px;
+      right: 20px;
+      z-index: 9999;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #818cf8;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: system-ui, sans-serif;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    #back-link:hover { background: rgba(99, 102, 241, 0.25); }
+  </style>
+</head>
+<body>
+  <a id="back-link" href="/docs/">← Back to Docs</a>
+  <redoc spec-url="/openapi.json"
+         theme='{
+           "colors": {
+             "primary": { "main": "#6366f1" },
+             "background": { "main": "#080a12", "secondary": "#0d1021" }
+           },
+           "sidebar": { "backgroundColor": "#0d1021", "textColor": "#e2e8f4" },
+           "rightPanel": { "backgroundColor": "#080a12" },
+           "typography": {
+             "fontFamily": "Inter, system-ui, sans-serif",
+             "code": { "fontFamily": "JetBrains Mono, ui-monospace, monospace" }
+           }
+         }'
+  ></redoc>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+</body>
+</html>

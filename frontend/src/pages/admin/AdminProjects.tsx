@@ -6,6 +6,7 @@ import { listProjects, createProject, updateProject, deleteProject } from '../..
 import { listTemplates } from '../../api/templates'
 import { listParameters } from '../../api/parameters'
 import { listFilters, listObjects, listMacros, getRemoteStatus, cloneRemote, pullRemote, pushRemote, testRemoteConnection } from '../../api/admin'
+import { getMe } from '../../api/auth'
 import type { ProjectOut, ProjectCreate, ProjectUpdate } from '../../api/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -226,9 +227,13 @@ interface CreateFormProps {
 
 function CreateForm({ onClose, onSuccess }: CreateFormProps) {
   const [showRemote, setShowRemote] = useState(false)
-  const { register, handleSubmit, formState: { errors } } = useForm<ProjectCreate>({
-    defaultValues: { organization_id: '1', output_comment_style: '#', remote_branch: 'main' },
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe })
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ProjectCreate>({
+    defaultValues: { organization_id: '', output_comment_style: '#', remote_branch: 'main' },
   })
+
+  // Set organization_id once the current user's org is known
+  if (me?.org_id) setValue('organization_id', me.org_id)
 
   const mut = useMutation({
     mutationFn: createProject,
@@ -245,7 +250,6 @@ function CreateForm({ onClose, onSuccess }: CreateFormProps) {
         onSubmit={handleSubmit((data) => mut.mutate(data))}
         className="grid grid-cols-1 sm:grid-cols-2 gap-3"
       >
-        {/* Hidden org_id — hard-coded to 1 for single-tenant */}
         <input type="hidden" {...register('organization_id')} />
 
         <div>

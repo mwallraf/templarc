@@ -33,6 +33,7 @@ services:
       - backend
 
   api:
+    image: ${REGISTRY:-ghcr.io/mwallraf}/templarc-api:${VERSION:-latest}
     build:
       context: .
       dockerfile: api/Dockerfile
@@ -64,9 +65,10 @@ services:
       - backend
 
   frontend:
+    image: ${REGISTRY:-ghcr.io/mwallraf}/templarc-frontend:${VERSION:-latest}
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
       target: production      # nginx serving the Vite build output
       args:
         HTTP_PROXY:  ${HTTP_PROXY:-}

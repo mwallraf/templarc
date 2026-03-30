@@ -6,9 +6,17 @@ __pycache__/
 *.pyo
 .DS_Store
 tests/
-frontend/
-*.md
 .env
 .gitignore
-
 templates_repo/
+
+# Frontend: exclude build artefacts and local deps but keep source
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+
+# Docs: exclude build artefacts and local deps but keep source + content
+docs/node_modules/
+docs/build/
+docs/.docusaurus/

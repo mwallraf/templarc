@@ -120,16 +120,15 @@ services:
   # ── Frontend: Vite dev server with HMR ────────────────────────────────────
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
       target: dev        # Vite dev server; no nginx, no static build
       args:
         HTTP_PROXY:  ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY:    ${NO_PROXY:-}
     environment:
-      # Vite reads this at server-start time (not build time) to point the
-      # /api proxy at the 'api' Docker service instead of localhost.
+      # Vite reads these at server-start time (not build time).
       API_PROXY_TARGET: http://api:8000
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
