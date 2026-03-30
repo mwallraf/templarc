@@ -11,10 +11,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write           # needed to push to ghcr.io
-
     steps:
       # ── Checkout ──────────────────────────────────────────────────────────────
       - name: Checkout
@@ -29,7 +25,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}   # no PAT needed — GITHUB_TOKEN is sufficient
+          password: ${{ secrets.GHCR_PAT }}
 
       # ── Image tags ────────────────────────────────────────────────────────────
       # Produces: latest (on main) + sha-<short-sha> (always)
